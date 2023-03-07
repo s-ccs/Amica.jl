@@ -1,0 +1,13 @@
+name = "Amica"
+uuid = "5c2eb853-6fc5-4f26-86bb-b4eb873bb098"
+authors = ["Alexander Lulkin", "Benedikt V. Ehinger"]
+version = "0.1.0"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
