@@ -3,6 +3,12 @@ uuid = "5c2eb853-6fc5-4f26-86bb-b4eb873bb098"
 authors = ["Alexander Lulkin", "Benedikt V. Ehinger"]
 version = "0.1.0"
 
+[deps]
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+GaussianMixtures = "cc18c42c-b769-54ff-9e2a-b28141a64aae"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
+
 [compat]
 julia = "1"
 
