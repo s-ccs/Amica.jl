@@ -41,12 +41,13 @@ function amica(x, M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_
 	eye = Matrix{Float64}(I, n, n)
 
 	for h in 1:M #todo: wieder randomisieren
-		A[:,:,h] = eye[n] .+ 0.1*rand(n,n)
+		#A[:,:,h] = eye[n] .+ 0.1*rand(n,n)
 		# for i in 1:n
 		# 	A[:,i,h] = A[:,i,h] / norm(A[:,i,h])
 		# end
-		A[:,:,1] = [1.0 0.003; -0.05 1.0]
-		A[:,:,2] = [2.0 0.003; -0.05 1.0]
+		# A[:,:,1] = [1.0 0.003; -0.05 1.0]
+		# A[:,:,2] = [2.0 0.003; -0.05 1.0]
+		A = [1.0 0.003; -0.05 1.0]
 		c[:,h] = zeros(n,1)
 	end
 
@@ -54,16 +55,17 @@ function amica(x, M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_
 	alpha = (1/m) * ones(m,n,M)
 	
 	if m > 1
-		mu = 0.1 * randn(m, n, M)
-		mu[:,:,1] = [0.1 0.9; -0.01 0.0; 0.0 -0.02] #todo: wieder rnd mu einfürgen
-		mu[:,:,2] = [0.2 1; -0.01 0.0; 0.0 -0.03]
+		mu = [0.1 0.9; -0.01 0.0; 0.0 -0.02]
+		#mu = 0.1 * randn(m, n, M)
+		# mu[:,:,1] = [0.1 0.9; -0.01 0.0; 0.0 -0.02] #todo: wieder rnd mu einfürgen
+		# mu[:,:,2] = [0.2 1; -0.01 0.0; 0.0 -0.03]
 	else
 		mu = zeros(m, n, M)
 	end
-
-	beta = ones(m, n, M) + 0.1 * randn(m, n, M) #todo: wieder rnd beta einfügen
-	beta[:,:,1] = [1.1 0.9; 1.0 0.9; 0.9 0.8]
-	beta[:,:,2] = [1.2 0.9; 1.1 0.8; 0.9 0.7]
+	beta = [1.1 0.9; 1.0 0.9; 0.9 0.8]
+	# beta = ones(m, n, M) + 0.1 * randn(m, n, M) #todo: wieder rnd beta einfügen
+	# beta[:,:,1] = [1.1 0.9; 1.0 0.9; 0.9 0.8]
+	# beta[:,:,2] = [1.2 0.9; 1.1 0.8; 0.9 0.7]
 	rho = rho0 * ones(m, n, M)
 
 	#initialize variables
