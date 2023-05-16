@@ -35,7 +35,7 @@ function get_sources!(b,A,x,h,M,n)
 	for i in 1:n 
 		if M > 1
 			Wh = pinv(A[:,:,h])
-			b[i,:,h] .= Wh[i,:]' * x #musste transponiert werden
+			b[i,:,h] = Wh[i,:]' * x #musste transponiert werden
 		end
 	end
 	return b
