@@ -28,14 +28,14 @@ function calculate_lrate(dLL, lrate, lratefact, lnatrate, lratemax, mindll, iter
 return lrate
 end
 
-function get_sources!(b,A,x,h,M,n)
+function get_sources!(b,A,x,h,M,n,c)
 	if M == 1
 		b = pinv(A[:,:,h]) * x
 	end
 	for i in 1:n 
 		if M > 1
 			Wh = pinv(A[:,:,h])
-			b[i,:,h] = Wh[i,:]' * x #musste transponiert werden
+			b[i,:,h] = Wh[i,:]' * x .- Wh[i,:]' * c[:,h]
 		end
 	end
 	return b

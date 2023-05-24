@@ -1,3 +1,10 @@
+mutable struct GGParameters
+	α::AbstractArray{Float64} #source density mixture proportions
+	β::AbstractArray{Float64} #source density inverse scale parameter
+	μ::AbstractArray{Float64} #source density location parameter
+	ρ::AbstractArray{Float64} #source density shape paramters
+end
+
 function calculate_LL(Lt, M, N, n) #lines 225 - 231
 	if M > 1
 		Ltmax = ones(size(Lt))
@@ -27,11 +34,11 @@ function loglikelihoodMMGG(μ::AbstractVector,α::AbstractVector,ρ::AbstractVec
     return loglikelihood.(MM,x) # apply the loglikelihood to each sample individually (note the "." infront of .(MM,x))
 end
 
-function calculate_Lt(Lt_h, Q, y, n, m, h, beta, rho, alpha)
+function calculate_Lt!(Lt_h, Q, y, n, m, h, learnedParameters::GGParameters)
 	Lt_h = Lt_h'
 	for i in 1:n
 		for j in 1:m
-			Q[j,:] = log.(alpha[j,i,h]) + 0.5*log.(beta[j,i,h]) .+ logpfun(y[i,:,j,h],rho[j,i,h])
+			Q[j,:] = log.(learnedParameters.α[j,i,h]) + 0.5*log.(learnedParameters.β[j,i,h]) .+ logpfun(y[i,:,j,h],learnedParameters.ρ[j,i,h])
 		end
 		if m > 1
 			Qmax = ones(m,1).*maximum(Q,dims=1);

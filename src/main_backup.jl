@@ -37,7 +37,7 @@ function amica(x, M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_
 	end
 	#initialize parameters
 	A = zeros(n,n,M)
-	centers = zeros(n,M)
+	c = zeros(n,M)
 	eye = Matrix{Float64}(I, n, n)
 
 	for h in 1:M #todo: wieder randomisieren
@@ -48,10 +48,10 @@ function amica(x, M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_
 		A[:,:,1] = [1.0 0.003; -0.05 1.0]
 		A[:,:,2] = [2.0 0.003; -0.05 1.0]
 		#A = [1.0 0.003; -0.05 1.0]
-		centers[:,h] = zeros(n,1)
+		c[:,h] = zeros(n,1)
 	end
 
-	proportions = (1/M) * ones(M,1)
+	gm = (1/M) * ones(M,1)
 	alpha = (1/m) * ones(m,n,M)
 	
 	if m > 1
@@ -86,33 +86,31 @@ function amica(x, M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_
 	kappa = zeros(n,1)
 	sigma2 = zeros(n,1)
 
-	learnedParameters = GGParameters(alpha,beta,mu,rho)
-
 	#originally initialized inside the loop
 	LL = zeros(1,maxiter)
 	ldet = zeros(M)
 	dLL = zeros(1,maxiter)
-	source_signals = zeros(n,N,M)
+	b = zeros(n,N,M)
 
 	for iter in 1:maxiter
         @show iter
 		for h in 1:M
 			ldet[h] =  -log(abs(det(A[:,:,h]))) #todo: in die get_ll funktion stecken
-			Lt[h,:] .= log(proportions[h]) + ldet[h] #todo: same
-			source_signals[:,:,:] = get_sources!(source_signals,A,x,h,M,n,centers)
-			#Lt[iter,:] = get_likelihood_time(A, proportions, mu, beta, rho, alpha, b, h)
+			Lt[h,:] .= log(gm[h]) + ldet[h] #todo: same
+			b[:,:,:] = get_sources!(b,A,x,h,M,n,c)
+			#Lt[iter,:] = get_likelihood_time(A, gm, mu, beta, rho, alpha, b, h)
 			#Lt[1,:] = [-84.2453 -40.6495 -9.3180 -7.9679 -38.9525 -83.2213]
-			z, y = calculate_z_y!(m,n,learnedParameters,h,source_signals,y,Q,z)
-			#Lt[h,:] = sum(loglikelihoodMMGG.(eachcol(mu[:,:,h]),eachcol(beta[:,:,h]),eachcol(rho[:,:,h]),eachrow(source_signals[:,:,h]),eachcol(alpha[:,:,h])))
-			Lt[h,:] = calculate_Lt!(Lt[h,:], Q, y, n, m, h, learnedParameters)
+			z, y = calculate_z_y!(m,n,beta,mu,alpha,rho,h,b,y,Q,z)
+			#Lt[h,:] = sum(loglikelihoodMMGG.(eachcol(mu[:,:,h]),eachcol(beta[:,:,h]),eachcol(rho[:,:,h]),eachrow(b[:,:,h]),eachcol(alpha[:,:,h])))
+			Lt[h,:] = calculate_Lt!(Lt[h,:], Q, y, n, m, h, beta, rho, alpha)
 			LL[iter] = calculate_LL(Lt, M, N, n)
+			#todo: parameter alle in objekt packen
 		end
-		@show Lt
 		if iter > 1
 			dLL[iter] = LL[iter] - LL[iter-1]
 		end
 		if iter > iterwin +1 #todo:testen
-			lrate = calculate_lrate(dLL, lrate, lratefact, lnatrate, lratemax, mindll, iter,newt_start_iter, do_newton, iterwin)
+			lrate = calculate_lrate(dLL, lrate, lratefact, lnatrate,lratemax,mindll,iter,newt_start_iter,do_newton, iterwin)
 			#lrate < 0 ? break : ""
 			sdll = sum(dLL[iter-iterwin+1:iter])/iterwin
            # @show sdll
@@ -126,30 +124,30 @@ function amica(x, M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_
 		vsum = zeros(M)
 		for h in 1:M
 			#update parameters
-			if M > 1
+			if M > 1 #todo: testen
 				Lh = ones(M,N)
 				for i in 1:M
 					Lh[i,:] = Lt[h,:]
 				end
 				v[h,:] = 1 ./ sum(exp.(Lt-Lh),dims=1)
 				vsum[h] = sum(v[h,:])
-				proportions[h] = vsum[h] / N
+				gm[h] = vsum[h] / N
 			
-				if proportions[h] == 0
+				if gm[h] == 0
 					continue
 				end
 			end
-			g, vsum, z, learnedParameters, kappa, lambda = update_parameters_and_other_stuff!(iter, v, proportions, vsum, h, M, N, m, n, Lt, fp, z, learnedParameters, lambda, rhomin, rhomax, update_rho, y, rholrate)
+			g, vsum, z, alpha, beta, kappa, lambda, mu, rho = update_parameters_and_other_stuff(iter, v, gm, vsum, h, M, N, m, n, Lt, fp, z, alpha, beta, lambda, mu, rho, rhomin, rhomax, update_rho, y, rholrate)
             
-			if any(isnan, kappa) || any(isnan, source_signals) || any(isnan, lambda) || any(isnan, g) || any(isnan, alpha)
+			if any(isnan, kappa) || any(isnan, b) || any(isnan, lambda) || any(isnan, g) || any(isnan, alpha)
 				println("NaN detected. Better stop.")
 				@goto escape_from_NaN
 			end
 			#Newton
-			A = newton_method(v, M, A, vsum, h, iter, source_signals, n, g, kappa, do_newton, newt_start_iter, lrate, lnatrate, N, sigma2, lambda)
+			A = newton_method(v, M, A, vsum, h, iter, b, n, g, kappa, do_newton, newt_start_iter, lrate, lnatrate, N, sigma2, lambda)
 		end
 	
-		A, learnedParameters, centers = reparameterize!(A, x, M, learnedParameters, v, centers, proportions, n)
+		A, mu, beta, c = reparameterize!(A, x, M, mu, beta, v, c, gm, n)
 
 		@show A
 		#@show LL[iter]
@@ -160,7 +158,7 @@ function amica(x, M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_
 
 	for h in 1:M
 		if M > 1
-			centers[:,h] = centers[:,h] + mn #add mean back to model centers
+			c[:,h] = c[:,h] + mn #add mean back to model centers
 		end
 	end
 
@@ -170,11 +168,11 @@ end
 
 # #calculate z (which is u at first) lines 202 - 218
 				#if M > 1 && m > 1
-function calculate_z_y!(m,n,learnedParameters::GGParameters,h,source_signals,y,Q,z)
+function calculate_z_y!(m,n,beta,mu,alpha,rho,h,b,y,Q,z)
     for i in 1:n
         for j in 1:m
-            y[i,:,j,h] = sqrt(learnedParameters.β[j,i,h]) * (source_signals[i,:,h] .- learnedParameters.μ[j,i,h])
-            Q[j,:] .= log(learnedParameters.α[j,i,h]) + 0.5*log(learnedParameters.β[j,i,h]) .+ logpfun(y[i,:,j,h],learnedParameters.ρ[j,i,h])
+            y[i,:,j,h] = sqrt(beta[j,i,h]) * (b[i,:,h] .- mu[j,i,h])
+            Q[j,:] .= log(alpha[j,i,h]) + 0.5*log(beta[j,i,h]) .+ logpfun(y[i,:,j,h],rho[j,i,h])
         end
         if m > 1
             #hier ist eig. noch berechnung von Qmax und Lt
@@ -188,13 +186,13 @@ function calculate_z_y!(m,n,learnedParameters::GGParameters,h,source_signals,y,Q
 end
 
 
-function newton_method(v, M, A, vsum, h, iter, source_signals, n, g, kappa, do_newton, newt_start_iter, lrate, lnatrate, N, sigma2, lambda)
+function newton_method(v, M, A, vsum, h, iter, b, n, g, kappa, do_newton, newt_start_iter, lrate, lnatrate, N, sigma2, lambda)
 	if M > 1
-		sigma2 = source_signals[:,:,h].^2 * v[h,:] /vsum[h]
+		sigma2 = b[:,:,h].^2 * v[h,:] /vsum[h]
 	else
-		sigma2 = sum(source_signals.^2,dims=2) / N
+		sigma2 = sum(b.^2,dims=2) / N
 	end
-	dA = Matrix{Float64}(I, n, n) - g * source_signals[:,:,h]' 
+	dA = Matrix{Float64}(I, n, n) - g * b[:,:,h]' 
 	bflag = 0
 	# if iter == 55
 	# 	@show g
@@ -225,13 +223,16 @@ function newton_method(v, M, A, vsum, h, iter, source_signals, n, g, kappa, do_n
 	return A
 end
 
+# ╔═╡ b3637deb-985f-4fea-bf99-d956ad4a2877
 
-function reparameterize!(A, x, M, learnedParameters::GGParameters, v, centers, proportions, n)
-	mu = learnedParameters.μ
-	beta = learnedParameters.β
-
+#function reparameterize(A::AbstractArray,...)
+#    for h in 1:size(A,4)
+#        A[:,:,:,h],... = reparameterize(A[:,:,:,h],...)
+#    end
+#end
+function reparameterize!(A, x, M, mu, beta, v, c, gm, n)
 	for h = 1:M
-		if proportions[h] == 0
+		if gm[h] == 0
 			continue
 		end
 		for i in 1:n
@@ -245,26 +246,17 @@ function reparameterize!(A, x, M, learnedParameters::GGParameters, v, centers, p
 			cnew = x * v[h,:] /(sum(v[h,:]))
 			for i in 1:n
 				Wh = pinv(A[:,:,h])
-				mu[:,i,h] = mu[:,i,h] .- Wh[i,:]' * (cnew-centers[:,h])
+				mu[:,i,h] = mu[:,i,h] .- Wh[i,:]' * (cnew-c[:,h])
 			end
-			centers[:,h] = cnew
+			c[:,h] = cnew
 		end
 	end
-
-	learnedParameters.μ = mu
-	learnedParameters.β = beta
-
-	return A, learnedParameters, centers
+	return A, mu, beta, c
 end
 
 
-function update_parameters_and_other_stuff!(iter, v, proportions, vsum, h, M, N, m, n, Lt, fp, z, learnedParameters::GGParameters, lambda, rhomin, rhomax, update_rho, y, rholrate)
+function update_parameters_and_other_stuff(iter, v, gm, vsum, h, M, N, m, n, Lt, fp, z, alpha, beta, lambda, mu, rho, rhomin, rhomax, update_rho, y, rholrate)
 	#it doesnt need iter, just there for test purposes
-	alpha = learnedParameters.α
-	beta = learnedParameters.β
-	mu = learnedParameters.μ
-	rho = learnedParameters.ρ
-
 	g = zeros(n,N)
 	kappa = zeros(n,1)
 	eta = zeros(n,1)
@@ -356,11 +348,5 @@ function update_parameters_and_other_stuff!(iter, v, proportions, vsum, h, M, N,
 			end
 		end
 	end
-
-	learnedParameters.α = alpha
-	learnedParameters.β = beta
-	learnedParameters.μ = mu
-	learnedParameters.ρ = rho
-
-	return g, vsum, z, learnedParameters, kappa, lambda
+	return g, vsum, z, alpha, beta, kappa, lambda, mu, rho
 end
