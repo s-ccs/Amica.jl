@@ -28,15 +28,19 @@ function calculate_lrate(dLL, lrate, lratefact, lnatrate, lratemax, mindll, iter
 return lrate
 end
 
-function get_sources!(b,A,x,h,M,n,c)
+function get_sources!(myAmica,x,h)
+	b = myAmica.source_signals
+	M = myAmica.M
+	n = myAmica.n
 	if M == 1
-		b = pinv(A[:,:,h]) * x
+		b = pinv(myAmica.A[:,:,h]) * x
 	end
 	for i in 1:n 
 		if M > 1
-			Wh = pinv(A[:,:,h])
-			b[i,:,h] = Wh[i,:]' * x .- Wh[i,:]' * c[:,h]
+			Wh = pinv(myAmica.A[:,:,h])
+			b[i,:,h] = Wh[i,:]' * x .- Wh[i,:]' * myAmica.centers[:,h]
 		end
 	end
-	return b
+	myAmica.source_signals[:,:,:] = b
+	return myAmica
 end

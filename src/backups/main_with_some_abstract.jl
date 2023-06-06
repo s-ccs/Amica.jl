@@ -86,6 +86,7 @@ function amica(x, M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_
 	kappa = zeros(n,1)
 	sigma2 = zeros(n,1)
 
+	learnedParameters = GGParameters(alpha,beta,mu,rho)
 
 	#originally initialized inside the loop
 	LL = zeros(1,maxiter)
@@ -93,22 +94,22 @@ function amica(x, M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_
 	dLL = zeros(1,maxiter)
 	source_signals = zeros(n,N,M)
 
-	myAmica = MultiModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),M,n,m,N,A,z,y,Q,centers,Lt,LL,ldet,proportions)
-
 	for iter in 1:maxiter
         @show iter
 		for h in 1:M
-			myAmica = get_sources!(myAmica, x, h)
+			ldet[h] =  -log(abs(det(A[:,:,h]))) #todo: in die get_ll funktion stecken
+			Lt[h,:] .= log(proportions[h]) + ldet[h] #todo: same
+			source_signals[:,:,:] = get_sources!(source_signals,A,x,h,M,n,centers)
 			#Lt[iter,:] = get_likelihood_time(A, proportions, mu, beta, rho, alpha, b, h)
 			#Lt[1,:] = [-84.2453 -40.6495 -9.3180 -7.9679 -38.9525 -83.2213]
-			myAmica = calculate_z_y!(myAmica,h)
+			z, y = calculate_z_y!(m,n,learnedParameters,h,source_signals,y,Q,z)
 			#Lt[h,:] = sum(loglikelihoodMMGG.(eachcol(mu[:,:,h]),eachcol(beta[:,:,h]),eachcol(rho[:,:,h]),eachrow(source_signals[:,:,h]),eachcol(alpha[:,:,h])))
-			myAmica = calculate_Lt!(myAmica, h)
-			myAmica = calculate_LL(myAmica, iter)
+			Lt[h,:] = calculate_Lt!(Lt[h,:], Q, y, n, m, h, learnedParameters)
+			LL[iter] = calculate_LL(Lt, M, N, n)
 		end
 		@show Lt
 		if iter > 1
-			dLL[iter] = myAmica.LL[iter] - myAmica.LL[iter-1]
+			dLL[iter] = LL[iter] - LL[iter-1]
 		end
 		if iter > iterwin +1 #todo:testen
 			lrate = calculate_lrate(dLL, lrate, lratefact, lnatrate, lratemax, mindll, iter,newt_start_iter, do_newton, iterwin)
@@ -128,29 +129,29 @@ function amica(x, M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_
 			if M > 1
 				Lh = ones(M,N)
 				for i in 1:M
-					Lh[i,:] = myAmica.Lt[h,:]
+					Lh[i,:] = Lt[h,:]
 				end
-				v[h,:] = 1 ./ sum(exp.(myAmica.Lt-Lh),dims=1)
+				v[h,:] = 1 ./ sum(exp.(Lt-Lh),dims=1)
 				vsum[h] = sum(v[h,:])
-				myAmica.proportions[h] = vsum[h] / N
+				proportions[h] = vsum[h] / N
 			
-				if myAmica.proportions[h] == 0
-					continue #das continue ist der grund wieso es außerhalb der funktion ist
+				if proportions[h] == 0
+					continue
 				end
 			end
-			myAmica, g, vsum, kappa, lambda = update_parameters_and_other_stuff!(myAmica, v, vsum, h, fp, lambda, rhomin, rhomax, update_rho, rholrate)
+			g, vsum, z, learnedParameters, kappa, lambda = update_parameters_and_other_stuff!(iter, v, proportions, vsum, h, M, N, m, n, Lt, fp, z, learnedParameters, lambda, rhomin, rhomax, update_rho, y, rholrate)
             
-			if any(isnan, kappa) || any(isnan, myAmica.source_signals) || any(isnan, lambda) || any(isnan, g) || any(isnan, myAmica.learnedParameters.α)
+			if any(isnan, kappa) || any(isnan, source_signals) || any(isnan, lambda) || any(isnan, g) || any(isnan, alpha)
 				println("NaN detected. Better stop.")
 				@goto escape_from_NaN
 			end
 			#Newton
-			myAmica = newton_method(myAmica, v, vsum, h, iter, g, kappa, do_newton, newt_start_iter, lrate, lnatrate, sigma2, lambda)
+			A = newton_method(v, M, A, vsum, h, iter, source_signals, n, g, kappa, do_newton, newt_start_iter, lrate, lnatrate, N, sigma2, lambda)
 		end
 	
-		myAmica = reparameterize!(myAmica, x, v)
+		A, learnedParameters, centers = reparameterize!(A, x, M, learnedParameters, v, centers, proportions, n)
 
-		#@show A
+		@show A
 		#@show LL[iter]
         
 	end
@@ -159,48 +160,41 @@ function amica(x, M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_
 
 	for h in 1:M
 		if M > 1
-			myAmica.centers[:,h] = myAmica.centers[:,h] + mn #add mean back to model centers
+			centers[:,h] = centers[:,h] + mn #add mean back to model centers
 		end
 	end
 
-	return myAmica.z, myAmica.A, myAmica.Lt, myAmica.LL
+	return z, A, Lt, LL
 end
 
 
 # #calculate z (which is u at first) lines 202 - 218
 				#if M > 1 && m > 1
-function calculate_z_y!(myAmica,h)
-	n = myAmica.n
-	m = myAmica.m
-
+function calculate_z_y!(m,n,learnedParameters::GGParameters,h,source_signals,y,Q,z)
     for i in 1:n
         for j in 1:m
-            myAmica.y[i,:,j,h] = sqrt(myAmica.learnedParameters.β[j,i,h]) * (myAmica.source_signals[i,:,h] .- myAmica.learnedParameters.μ[j,i,h])
-            myAmica.Q[j,:] .= log(myAmica.learnedParameters.α[j,i,h]) + 0.5*log(myAmica.learnedParameters.β[j,i,h]) .+ logpfun(myAmica.y[i,:,j,h],myAmica.learnedParameters.ρ[j,i,h])
+            y[i,:,j,h] = sqrt(learnedParameters.β[j,i,h]) * (source_signals[i,:,h] .- learnedParameters.μ[j,i,h])
+            Q[j,:] .= log(learnedParameters.α[j,i,h]) + 0.5*log(learnedParameters.β[j,i,h]) .+ logpfun(y[i,:,j,h],learnedParameters.ρ[j,i,h])
         end
         if m > 1
             #hier ist eig. noch berechnung von Qmax und Lt
             for j in 1:m
-                Qj = ones(m,1) .* myAmica.Q[j,:]'
-                myAmica.z[i,:,j,h] = 1 ./ sum(exp.(myAmica.Q-Qj),dims = 1)
+                Qj = ones(m,1) .* Q[j,:]'
+                z[i,:,j,h] = 1 ./ sum(exp.(Q-Qj),dims = 1)
             end
         end
     end
-    return myAmica
+    return z, y
 end
 
 
-function newton_method(myAmica, v, vsum, h, iter, g, kappa, do_newton, newt_start_iter, lrate, lnatrate, sigma2, lambda)
-	M = myAmica.M
-	n = myAmica.n
-	N = myAmica.N
-
+function newton_method(v, M, A, vsum, h, iter, source_signals, n, g, kappa, do_newton, newt_start_iter, lrate, lnatrate, N, sigma2, lambda)
 	if M > 1
-		sigma2 = myAmica.source_signals[:,:,h].^2 * v[h,:] /vsum[h]
+		sigma2 = source_signals[:,:,h].^2 * v[h,:] /vsum[h]
 	else
-		sigma2 = sum(myAmica.source_signals.^2,dims=2) / N
+		sigma2 = sum(source_signals.^2,dims=2) / N
 	end
-	dA = Matrix{Float64}(I, n, n) - g * myAmica.source_signals[:,:,h]' 
+	dA = Matrix{Float64}(I, n, n) - g * source_signals[:,:,h]' 
 	bflag = 0
 	# if iter == 55
 	# 	@show g
@@ -224,27 +218,25 @@ function newton_method(myAmica, v, vsum, h, iter, g, kappa, do_newton, newt_star
 		end		
 	end
 	if (bflag == 0) && (do_newton == 1) && (iter > newt_start_iter)
-		myAmica.A[:,:,h] = myAmica.A[:,:,h] + lrate * myAmica.A[:,:,h] * B
+		A[:,:,h] = A[:,:,h] + lrate * A[:,:,h] * B
 	else
-		myAmica.A[:,:,h] = myAmica.A[:,:,h] - lnatrate * myAmica.A[:,:,h] * dA
+		A[:,:,h] = A[:,:,h] - lnatrate * A[:,:,h] * dA
 	end
-	return myAmica
+	return A
 end
 
 
-function reparameterize!(myAmica, x, v)
-	n = myAmica.n
-	M = myAmica.M
-	mu = myAmica.learnedParameters.μ
-	beta = myAmica.learnedParameters.β
+function reparameterize!(A, x, M, learnedParameters::GGParameters, v, centers, proportions, n)
+	mu = learnedParameters.μ
+	beta = learnedParameters.β
 
 	for h = 1:M
-		if myAmica.proportions[h] == 0
+		if proportions[h] == 0
 			continue
 		end
 		for i in 1:n
-			tau = norm(myAmica.A[:,i,h])
-			myAmica.A[:,i,h] = myAmica.A[:,i,h] / tau
+			tau = norm(A[:,i,h])
+			A[:,i,h] = A[:,i,h] / tau
 			mu[:,i,h] = mu[:,i,h] * tau
 			beta[:,i,h] = beta[:,i,h] / tau^2
 		end
@@ -252,30 +244,26 @@ function reparameterize!(myAmica, x, v)
 		if M > 1
 			cnew = x * v[h,:] /(sum(v[h,:]))
 			for i in 1:n
-				Wh = pinv(myAmica.A[:,:,h])
-				mu[:,i,h] = mu[:,i,h] .- Wh[i,:]' * (cnew-myAmica.centers[:,h])
+				Wh = pinv(A[:,:,h])
+				mu[:,i,h] = mu[:,i,h] .- Wh[i,:]' * (cnew-centers[:,h])
 			end
-			myAmica.centers[:,h] = cnew
+			centers[:,h] = cnew
 		end
 	end
 
-	myAmica.learnedParameters.μ = mu
-	myAmica.learnedParameters.β = beta
+	learnedParameters.μ = mu
+	learnedParameters.β = beta
 
-	return myAmica
+	return A, learnedParameters, centers
 end
 
 
-function update_parameters_and_other_stuff!(myAmica, v, vsum, h, fp, lambda, rhomin, rhomax, update_rho, rholrate)
+function update_parameters_and_other_stuff!(iter, v, proportions, vsum, h, M, N, m, n, Lt, fp, z, learnedParameters::GGParameters, lambda, rhomin, rhomax, update_rho, y, rholrate)
 	#it doesnt need iter, just there for test purposes
-	M = myAmica.M
-	N = myAmica.N
-	n = myAmica.n 
-	m = myAmica.m
-	alpha = myAmica.learnedParameters.α
-	beta = myAmica.learnedParameters.β
-	mu = myAmica.learnedParameters.μ
-	rho = myAmica.learnedParameters.ρ
+	alpha = learnedParameters.α
+	beta = learnedParameters.β
+	mu = learnedParameters.μ
+	rho = learnedParameters.ρ
 
 	g = zeros(n,N)
 	kappa = zeros(n,1)
@@ -291,16 +279,16 @@ function update_parameters_and_other_stuff!(myAmica, v, vsum, h, fp, lambda, rho
 			sumz = 0
 			if M > 1 #todo: testen
 				if m > 1
-					myAmica.z[i,:,j,h] .= v[h,:] .* myAmica.z[i,:,j,h]
-					sumz = sum(myAmica.z[i,:,j,h])
+					z[i,:,j,h] .= v[h,:] .* z[i,:,j,h]
+					sumz = sum(z[i,:,j,h])
 					alpha[j,i,h] = sumz / vsum[h]
 				else
-					myAmica.z[i,:,j,h] = v[h,:]
-					sumz = sum(myAmica.z[i,:,j,h])
+					z[i,:,j,h] = v[h,:]
+					sumz = sum(z[i,:,j,h])
 				end
 			else
 				if m > 1
-					sumz = sum(myAmica.z[i,:,j,h])
+					sumz = sum(z[i,:,j,h])
 					alpha[j,i,h] = sumz / N
 				else
 					sumz = N
@@ -309,31 +297,31 @@ function update_parameters_and_other_stuff!(myAmica, v, vsum, h, fp, lambda, rho
 	
 			if sumz > 0
 				if (M > 1) | (m > 1)
-					myAmica.z[i,:,j,h] .= myAmica.z[i,:,j,h] / sumz
+					z[i,:,j,h] .= z[i,:,j,h] / sumz
 				end
 			else
 				continue
 			end
 			#line 311
-			fp[j,:] = ffun(myAmica.y[i,:,j,h], rho[j,i,h])
-			zfp[j,:] = myAmica.z[i,:,j,h] .* fp[j,:]
+			fp[j,:] = ffun(y[i,:,j,h], rho[j,i,h])
+			zfp[j,:] = z[i,:,j,h] .* fp[j,:]
 			g[i,:] = g[i,:] .+ alpha[j,i,h] .* sqrt(beta[j,i,h]) .*zfp[j,:]
 	
 			kp = beta[j,i,h] .* sum(zfp[j,:].*fp[j,:])
 	
 			kappa[i] = kappa[i]  + alpha[j,i,h] * kp
 	
-			lambda[i] = lambda[i] + alpha[j,i,h] * (sum(myAmica.z[i,:,j,h].*(fp[j,:].*myAmica.y[i,:,j,h] .-1).^2) + mu[j,i,h]^2 * kp)
+			lambda[i] = lambda[i] + alpha[j,i,h] * (sum(z[i,:,j,h].*(fp[j,:].*y[i,:,j,h] .-1).^2) + mu[j,i,h]^2 * kp)
 	
 			if rho[j,i,h] <= 2
 				if (m > 1) | (M > 1)
-					dm = sum(zfp[j,:]./myAmica.y[i,:,j,h])
+					dm = sum(zfp[j,:]./y[i,:,j,h])
 					if dm > 0
 						mu[j,i,h] = mu[j,i,h] + (1/sqrt(beta[j,i,h])) * sum(zfp[j,:]) / dm
 					end
 				end
 	
-				db = sum(zfp[j,:].*myAmica.y[i,:,j,h])
+				db = sum(zfp[j,:].*y[i,:,j,h])
 				if db > 0
 					beta[j,i,h] = beta[j,i,h] / db
 				end
@@ -343,13 +331,13 @@ function update_parameters_and_other_stuff!(myAmica, v, vsum, h, fp, lambda, rho
 						mu[j,i,h] = mu[j,i,h] + sqrt(beta[j,i,h]) * sum(zfp[j,:]) / kp #only difference is sqrt instead of 1/sqrt
 					end
 				end
-				db = (rho[j,i,h] * sum(myAmica.z[i,:,j,h].*abs.(myAmica.y[i,:,j,h]).^rho[j,i,h]))^(-2 / rho[j,i,h])
+				db = (rho[j,i,h] * sum(z[i,:,j,h].*abs.(y[i,:,j,h]).^rho[j,i,h]))^(-2 / rho[j,i,h])
 				beta[j,i,h] = beta[j,i,h] * db
 			end
 	
 			if update_rho == 1
-				ytmp = abs.(myAmica.y[i,:,j,h]).^rho[j,i,h]
-				dr = sum(myAmica.z[i,:,j,h].*log.(ytmp).*ytmp)
+				ytmp = abs.(y[i,:,j,h]).^rho[j,i,h]
+				dr = sum(z[i,:,j,h].*log.(ytmp).*ytmp)
 	
 				#todo: dieses if testen, wird bei ersten iteration nicht ausgeführt
 				if rho[j,i,h] > 2
@@ -369,10 +357,10 @@ function update_parameters_and_other_stuff!(myAmica, v, vsum, h, fp, lambda, rho
 		end
 	end
 
-	myAmica.learnedParameters.α = alpha
-	myAmica.learnedParameters.β = beta
-	myAmica.learnedParameters.μ = mu
-	myAmica.learnedParameters.ρ = rho
+	learnedParameters.α = alpha
+	learnedParameters.β = beta
+	learnedParameters.μ = mu
+	learnedParameters.ρ = rho
 
-	return myAmica, g, vsum, kappa, lambda
+	return g, vsum, z, learnedParameters, kappa, lambda
 end
