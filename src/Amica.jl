@@ -1,10 +1,10 @@
 module Amica
-
     using LinearAlgebra
 	using GaussianMixtures
 	using Distributions
 	using SpecialFunctions
 
+    include("types.jl")
     include("helper.jl")
     include("likelihood.jl")
     include("main.jl")
