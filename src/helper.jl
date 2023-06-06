@@ -28,7 +28,8 @@ function calculate_lrate(dLL, lrate, lratefact, lnatrate, lratemax, mindll, iter
 return lrate
 end
 
-function get_sources!(myAmica,x,h)
+
+function get_sources!(myAmica::AbstractAmica,x,h)
 	b = myAmica.source_signals
 	M = myAmica.M
 	n = myAmica.n

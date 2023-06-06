@@ -2,98 +2,66 @@
 Main AMICA algorithm
 
 """
-function amica(x, M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_mean)
-	#As
-	#cs
-	#Variables
-	(n, N) = size(x)
-	lrate0 = 0.1
-	lratemax = 1.0
-	lnatrate = 0.1
-	newt_start_iter = 1 #eig. 25
-	lratefact = 0.5
+function fit!(amica::AbstractAmica,x;kwargs...)
 
-	lrate = lrate0
+	amica!(amica,x;kwargs...)
+end
+function fit(amicaType::Type{T},x;M=1,remove_mean = true,kwargs...) where {T<:AbstractAmica}
+	if remove_mean
+		removeMean(x) # TODO: removeMean! as it is inplace
+	end
+	amica = T(x;M=1)
+	fit!(amica,x;kwargs...)
+	return amica.z, amica.A, amica.Lt, amica.LL
+end
 
-	dispinterval = 50
+function amica!(myAmica::AbstractAmica,
+	x;
+	lrate = LearningRate(),
+	rholrate = LearningRate(;lrate = 0.1,minimum=0.5,maximum=5,init=1.5),
+	dispinterval = 50,
+	showLL = 1,
+	plotfig = 1,
+	plothist = 1,
+	nbins = 50,
+	maxiter = 50,
+	do_newton = 1,
+	iterwin = 10,
+	update_rho = 1,
+	mindll = 1e-8,
+
+	kwargs...)
 	
-	showLL = 1
-	plotfig = 1
+	myAmica.learnedParameters.ρ .= rholrate.init .*myAmica.learnedParameters.ρ
+	#learnedParameters(m::AbstractAmica) = m.learnedParameters
+	
 
-	Mx = maximum(abs.(x)) #maximum and max are not the same
+	M = myAmica.M
+	n = myAmica.n
+	N = myAmica.N
+	m = myAmica.m
 
-	rholrate = 0.1
-	rhomin = 1.0/2
-	rhomax = 5
-	rho0 = 1.5 #usually depends on update_rho
 
-	plothist = 1
-	nbins = 50
+	#Mx = maximum(abs.(x)) #maximum and max are not the same
 
 	mn = mean(x, dims = 2) #should be zeros if remove_mean = 0
-
-	if remove_mean == 1
-		removeMean(x)
-	end
-	#initialize parameters
-	A = zeros(n,n,M)
-	centers = zeros(n,M)
-	eye = Matrix{Float64}(I, n, n)
-
-	for h in 1:M #todo: wieder randomisieren
-		A[:,:,h] = eye[n] .+ 0.1*rand(n,n)
-		for i in 1:n
-			A[:,i,h] = A[:,i,h] / norm(A[:,i,h])
-		end
-		A[:,:,1] = [1.0 0.003; -0.05 1.0]
-		A[:,:,2] = [2.0 0.003; -0.05 1.0]
-		#A = [1.0 0.003; -0.05 1.0]
-		centers[:,h] = zeros(n,1)
-	end
-
-	proportions = (1/M) * ones(M,1)
-	alpha = (1/m) * ones(m,n,M)
-	
-	if m > 1
-		#mu = [0.1 0.9; -0.01 0.0; 0.0 -0.02]
-		mu = 0.1 * randn(m, n, M)
-		mu[:,:,1] = [0.1 0.9; -0.01 0.0; 0.0 -0.02] #todo: wieder rnd mu einfürgen
-		mu[:,:,2] = [0.2 1; -0.01 0.0; 0.0 -0.03]
-	else
-		mu = zeros(m, n, M)
-	end
-	#beta = [1.1 0.9; 1.0 0.9; 0.9 0.8]
-	beta = ones(m, n, M) + 0.1 * randn(m, n, M) #todo: wieder rnd beta einfügen
-	beta[:,:,1] = [1.1 0.9; 1.0 0.9; 0.9 0.8]
-	beta[:,:,2] = [1.2 0.9; 1.1 0.8; 0.9 0.7]
-	rho = rho0 * ones(m, n, M)
-
-	#initialize variables
-	a = 0
+	#a = 0
 	g = zeros(n,N)
-	
-	y = zeros(n,N,m,M)
-	fp = zeros(m,N)
-	Q = zeros(m,N)
-	
-	Lt = zeros(M,N)
 	v = ones(M,N)
-	z = ones(n,N,m,M)/N
-	
-	r = zeros(n,N,m,M)
+	lambda = zeros(n,1)
+	kappa = zeros(n,1)
+	sigma2 = zeros(n,1)
+
+	dLL = zeros(1,maxiter)
+
+	fp = zeros(m,N)
+
+	#r = zeros(n,N,m,M)
 	
 	lambda = zeros(n,1)
 	kappa = zeros(n,1)
 	sigma2 = zeros(n,1)
 
-
-	#originally initialized inside the loop
-	LL = zeros(1,maxiter)
-	ldet = zeros(M)
-	dLL = zeros(1,maxiter)
-	source_signals = zeros(n,N,M)
-
-	myAmica = MultiModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),M,n,m,N,A,z,y,Q,centers,Lt,LL,ldet,proportions)
 
 	for iter in 1:maxiter
         @show iter
@@ -106,7 +74,7 @@ function amica(x, M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_
 			myAmica = calculate_Lt!(myAmica, h)
 			myAmica = calculate_LL(myAmica, iter)
 		end
-		@show Lt
+		@show myAmica.Lt
 		if iter > 1
 			dLL[iter] = myAmica.LL[iter] - myAmica.LL[iter-1]
 		end
@@ -133,13 +101,18 @@ function amica(x, M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_
 				v[h,:] = 1 ./ sum(exp.(myAmica.Lt-Lh),dims=1)
 				vsum[h] = sum(v[h,:])
 				myAmica.proportions[h] = vsum[h] / N
-			
+				
 				if myAmica.proportions[h] == 0
 					continue #das continue ist der grund wieso es außerhalb der funktion ist
 				end
 			end
-			myAmica, g, vsum, kappa, lambda = update_parameters_and_other_stuff!(myAmica, v, vsum, h, fp, lambda, rhomin, rhomax, update_rho, rholrate)
-            
+			try
+				myAmica, g, vsum, kappa, lambda = update_parameters_and_other_stuff!(myAmica, v, vsum, h, fp, lambda, rhomin, rhomax, update_rho, rholrate)
+            catch e
+				isa(e,AmicaProportionsZeroException) ? continue : rethrow()
+			end
+			
+
 			if any(isnan, kappa) || any(isnan, myAmica.source_signals) || any(isnan, lambda) || any(isnan, g) || any(isnan, myAmica.learnedParameters.α)
 				println("NaN detected. Better stop.")
 				@goto escape_from_NaN
@@ -163,7 +136,7 @@ function amica(x, M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_
 		end
 	end
 
-	return myAmica.z, myAmica.A, myAmica.Lt, myAmica.LL
+	return myAmica
 end
 
 

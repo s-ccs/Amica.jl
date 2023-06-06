@@ -11,4 +11,6 @@ module Amica
     include("simulate.jl")
     # Write your package code here.
     export amica
+    export fit,fit!
+    export AbstractAmica,MultiModelAmica
 end
