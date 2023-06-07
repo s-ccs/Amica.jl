@@ -11,6 +11,7 @@ Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [compat]
+Parameters = "0.12"
 julia = "1"
 
 [extras]
