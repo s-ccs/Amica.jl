@@ -18,11 +18,16 @@ module Amica
     import Base.show
 
     function Base.show(io::Core.IO,m::AbstractAmica)
+        try
+            global like = m.LL[findlast(m.LL .!= 0)]
+        catch
+            global like = "not run"
+        end
         println(io,"""
         Amica with:
             - models: $(m.M)
             - signal-size: $(size(m.source_signals))
-            - likelihood: $(m.Lt) 
+            - likelihood: $(like) 
         """)
     end
 

@@ -85,7 +85,7 @@ function MultiModelAmica(x::Array;maxiter=500,m=3,M=1,A=nothing,mu=nothing,beta=
 
 
 	#originally initialized inside the loop
-	maxiter = 500
+	maxiter = 5000
 	LL = zeros(1,maxiter)
 	ldet = zeros(M)
 	source_signals = zeros(n,N,M)

@@ -12,7 +12,7 @@ function fit(amicaType::Type{T},x;M=1,remove_mean = true,kwargs...) where {T<:Ab
 	end
 	amica = T(x;M=1)
 	fit!(amica,x;kwargs...)
-	return amica.z, amica.A, amica.Lt, amica.LL
+	return amica
 end
 
 function amica!(myAmica::AbstractAmica,
@@ -25,7 +25,7 @@ function amica!(myAmica::AbstractAmica,
 	plothist = 1,
 	nbins = 50,
 	show_progress = true,
-	maxiter = 50,
+	maxiter = 500,
 	do_newton = 1,
 	newt_start_iter = 1,# TODO Check
 	iterwin = 10,

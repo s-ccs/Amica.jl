@@ -26,7 +26,30 @@ fit!(amica,x)
 #z, A, Lt, LL = amica(x, M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_mean)
 
 
+t = range(0,20*π,length=1000)
+#s = sin.(t * collect(0.5:0.8:pi)')'#rand(10,10000)
+using SignalAnalysis
+s =rand(PinkGaussian(length(t)),4)'
+s = s .* [1,2,3,4]
+#A = rand(size(s,1),size(s,1))
+A = [1 1 0 0; 0 1 1 0; 0 0 1 1; 1 0 1 0]
+x = A*s
 
-x = rand(10,10000)
+f = Figure()
+series(f[1,1],s)
+series(f[2,1],x)
+heatmap(f[1,2],A)
+heatmap(f[2,2],inv(A))
+f
 
-fit(MultiModelAmica,x;remove_mean = true)
+am = fit(MultiModelAmica,x;maxiter=500)
+W = am.A[:,:,1]
+
+series(f[3,1],inv(W)*x)
+heatmap(f[3,2],inv(W))
+series(f[4,1],(W)*x)
+heatmap(f[4,2],(W))
+f
+#series(f[4,1],inv(W)'*x)
+#series(f[6,1],W'*x)
+f
