@@ -9,8 +9,11 @@ function removeMean(input)
 end
 
 
-function calculate_lrate(dLL, lrate, lratefact, lnatrate, lratemax, mindll, iter, newt_start_iter, do_newton, iterwin)
-    sdll = sum(dLL[iter-iterwin+1:iter])/iterwin
+function calculate_lrate!(dLL, lrateType::LearningRate,mindll, iter, newt_start_iter, do_newton, iterwin)
+
+	lratefact,lnatrate,lratemax, = lrateType.decreaseFactor, lrateType.natural_rate, lrateType.maximum
+	lrate = lrateType.lrate
+	sdll = sum(dLL[iter-iterwin+1:iter])/iterwin
     if (sdll > 0) && (sdll < mindll)
         return -1
     end
@@ -25,7 +28,9 @@ function calculate_lrate(dLL, lrate, lratefact, lnatrate, lratemax, mindll, iter
             lrate = min(lnatrate,lrate + min(0.1,lrate))
         end
     end
-return lrate
+	lrateType.lrate = lrate
+
+return lrateType
 end
 
 

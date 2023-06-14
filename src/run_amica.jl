@@ -24,3 +24,9 @@ Amica.amica!(amica,x;maxiter=5,mindll = 1e-8,iterwin = 1)
 fit(MultiModelAmica,x;remove_mean = true)
 fit!(amica,x)
 #z, A, Lt, LL = amica(x, M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_mean)
+
+
+
+x = rand(10,10000)
+
+fit(MultiModelAmica,x;remove_mean = true)

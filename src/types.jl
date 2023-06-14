@@ -30,7 +30,7 @@ mutable struct MultiModelAmica <:AbstractAmica
 	proportions::AbstractMatrix
 end
 using Parameters
-@with_kw struct LearningRate
+@with_kw mutable struct LearningRate
 	lrate::Real = 0.
 	init::Float64 = 0.1
 	minimum::Float64 = 0.

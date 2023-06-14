@@ -24,8 +24,10 @@ function amica!(myAmica::AbstractAmica,
 	plotfig = 1,
 	plothist = 1,
 	nbins = 50,
+	show_progress = true,
 	maxiter = 50,
 	do_newton = 1,
+	newt_start_iter = 1,# TODO Check
 	iterwin = 10,
 	update_rho = 1,
 	mindll = 1e-8,
@@ -62,9 +64,10 @@ function amica!(myAmica::AbstractAmica,
 	kappa = zeros(n,1)
 	sigma2 = zeros(n,1)
 
+    prog = ProgressUnknown("Minimizing"; showspeed=true)
 
 	for iter in 1:maxiter
-        @show iter
+        
 		for h in 1:M
 			myAmica = get_sources!(myAmica, x, h)
 			#Lt[iter,:] = get_likelihood_time(A, proportions, mu, beta, rho, alpha, b, h)
@@ -72,14 +75,14 @@ function amica!(myAmica::AbstractAmica,
 			myAmica = calculate_z_y!(myAmica,h)
 			#Lt[h,:] = sum(loglikelihoodMMGG.(eachcol(mu[:,:,h]),eachcol(beta[:,:,h]),eachcol(rho[:,:,h]),eachrow(source_signals[:,:,h]),eachcol(alpha[:,:,h])))
 			myAmica = calculate_Lt!(myAmica, h)
-			myAmica = calculate_LL(myAmica, iter)
+			myAmica = calculate_LL!(myAmica, iter)
 		end
-		@show myAmica.Lt
+		
 		if iter > 1
 			dLL[iter] = myAmica.LL[iter] - myAmica.LL[iter-1]
 		end
 		if iter > iterwin +1 #todo:testen
-			lrate = calculate_lrate(dLL, lrate, lratefact, lnatrate, lratemax, mindll, iter,newt_start_iter, do_newton, iterwin)
+			lrate = calculate_lrate!(dLL, lrate, mindll, iter,newt_start_iter, do_newton, iterwin)
 			#lrate < 0 ? break : ""
 			sdll = sum(dLL[iter-iterwin+1:iter])/iterwin
            # @show sdll
@@ -107,7 +110,7 @@ function amica!(myAmica::AbstractAmica,
 				end
 			end
 			try
-				myAmica, g, vsum, kappa, lambda = update_parameters_and_other_stuff!(myAmica, v, vsum, h, fp, lambda, rhomin, rhomax, update_rho, rholrate)
+				myAmica, g, vsum, kappa, lambda = update_parameters_and_other_stuff!(myAmica, v, vsum, h, fp, lambda, rholrate,update_rho)
             catch e
 				isa(e,AmicaProportionsZeroException) ? continue : rethrow()
 			end
@@ -118,14 +121,15 @@ function amica!(myAmica::AbstractAmica,
 				@goto escape_from_NaN
 			end
 			#Newton
-			myAmica = newton_method(myAmica, v, vsum, h, iter, g, kappa, do_newton, newt_start_iter, lrate, lnatrate, sigma2, lambda)
+			myAmica = newton_method(myAmica, v, vsum, h, iter, g, kappa, do_newton, newt_start_iter, lrate, lambda)
 		end
 	
 		myAmica = reparameterize!(myAmica, x, v)
 
 		#@show A
 		#@show LL[iter]
-        
+		show_progress && ProgressMeter.next!(prog; showvalues=[(:LL, myAmica.LL[iter])])
+ 
 	end
 
     @label escape_from_NaN
@@ -163,7 +167,10 @@ function calculate_z_y!(myAmica,h)
 end
 
 
-function newton_method(myAmica, v, vsum, h, iter, g, kappa, do_newton, newt_start_iter, lrate, lnatrate, sigma2, lambda)
+function newton_method(myAmica, v, vsum, h, iter, g, kappa, do_newton, newt_start_iter, lrate::LearningRate, lambda)
+	
+	lnatrate = lrate.natural_rate
+	lrate = lrate.lrate
 	M = myAmica.M
 	n = myAmica.n
 	N = myAmica.N
@@ -232,15 +239,17 @@ function reparameterize!(myAmica, x, v)
 		end
 	end
 
-	myAmica.learnedParameters.μ = mu
-	myAmica.learnedParameters.β = beta
+	myAmica.learnedParameters.μ .= mu
+	myAmica.learnedParameters.β .= beta
 
 	return myAmica
 end
 
 
-function update_parameters_and_other_stuff!(myAmica, v, vsum, h, fp, lambda, rhomin, rhomax, update_rho, rholrate)
+function update_parameters_and_other_stuff!(myAmica, v, vsum, h, fp, lambda, lrate_rho::LearningRate, update_rho)
 	#it doesnt need iter, just there for test purposes
+	rhomin, rhomax, rholrate = lrate_rho.minimum, lrate_rho.maximum, lrate_rho.lrate
+
 	M = myAmica.M
 	N = myAmica.N
 	n = myAmica.n 
