@@ -10,7 +10,7 @@ function fit(amicaType::Type{T},x;M=1,remove_mean = true,kwargs...) where {T<:Ab
 	if remove_mean
 		removeMean(x) # TODO: removeMean! as it is inplace
 	end
-	amica = T(x;M=1)
+	amica = T(x;M=M)
 	fit!(amica,x;kwargs...)
 	return amica
 end
