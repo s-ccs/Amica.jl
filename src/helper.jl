@@ -33,7 +33,7 @@ function calculate_lrate!(dLL, lrateType::LearningRate,mindll, iter, newt_start_
 return lrateType
 end
 
-
+	
 function get_sources!(myAmica::AbstractAmica,x,h)
 	b = myAmica.source_signals
 	M = myAmica.M

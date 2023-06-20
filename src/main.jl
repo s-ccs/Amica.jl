@@ -3,9 +3,9 @@ Main AMICA algorithm
 
 """
 function fit!(amica::AbstractAmica,x;kwargs...)
-
 	amica!(amica,x;kwargs...)
 end
+
 function fit(amicaType::Type{T},x;M=1,remove_mean = true,kwargs...) where {T<:AbstractAmica}
 	if remove_mean
 		removeMean(x) # TODO: removeMean! as it is inplace
@@ -88,7 +88,6 @@ function amica!(myAmica::AbstractAmica,
            # @show sdll
 			if (sdll > 0) && (sdll < mindll)
 				break
-				
 			end
 		end
    
