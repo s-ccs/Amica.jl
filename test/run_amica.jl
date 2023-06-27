@@ -66,7 +66,7 @@ using LinearAlgebra
 
 #______________________________________________________________________________________________________________________
 
-file = matopen("run_amica/pink_sinus_data.mat")
+file = matopen("test/pink_sinus_data.mat")
 x = read(file, "x")
 s = read(file, "s")
 A = read(file, "A")
