@@ -7,6 +7,8 @@ module Amica
     include("types.jl")
     include("helper.jl")
     include("likelihood.jl")
+    include("parameters.jl")
+    include("newton.jl")
     include("main.jl")
     include("simulate.jl")
     # Write your package code here.

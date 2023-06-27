@@ -28,7 +28,9 @@ mutable struct MultiModelAmica <:AbstractAmica
 	LL::AbstractMatrix #log likelihood over iterations
 	ldet::AbstractArray
 	proportions::AbstractMatrix
+	maxiter::Integer #maximum number of iterations
 end
+
 using Parameters
 @with_kw mutable struct LearningRate
 	lrate::Real = 0.1
@@ -40,11 +42,9 @@ using Parameters
 end
 
 
-
-function MultiModelAmica(x::Array;maxiter=500,m=3,M=1,A=nothing,mu=nothing,beta=nothing,kwargs...)
-
-# M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_mean
-	(n, N) = size(x)
+function MultiModelAmica(data::Array; m=3, M=1, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...)
+	# M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_mean
+	(n, N) = size(data)
 	
 
 	#initialize parameters
@@ -53,7 +53,7 @@ function MultiModelAmica(x::Array;maxiter=500,m=3,M=1,A=nothing,mu=nothing,beta=
 	eye = Matrix{Float64}(I, n, n)
 	if isnothing(A)
 		A = zeros(n,n,M)
-		for h in 1:M #todo: wieder randomisieren
+		for h in 1:M
 			A[:,:,h] = eye[n] .+ 0.1*rand(n,n)
 			for i in 1:n
 				A[:,i,h] = A[:,i,h] / norm(A[:,i,h])
@@ -71,7 +71,7 @@ function MultiModelAmica(x::Array;maxiter=500,m=3,M=1,A=nothing,mu=nothing,beta=
 		end
 	end
 	if isnothing(beta)
-		beta = ones(m, n, M) + 0.1 * randn(m, n, M) #todo: wieder rnd beta einfügen
+		beta = ones(m, n, M) + 0.1 * randn(m, n, M)
 	end
 	rho = ones(m, n, M)
 
@@ -85,12 +85,11 @@ function MultiModelAmica(x::Array;maxiter=500,m=3,M=1,A=nothing,mu=nothing,beta=
 
 
 	#originally initialized inside the loop
-	maxiter = 5000
 	LL = zeros(1,maxiter)
 	ldet = zeros(M)
 	source_signals = zeros(n,N,M)
 
-	return MultiModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),M,n,m,N,A,z,y,Q,centers,Lt,LL,ldet,proportions)
+	return MultiModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),M,n,m,N,A,z,y,Q,centers,Lt,LL,ldet,proportions,maxiter)
 end
 
 import Base.getproperty

@@ -18,7 +18,7 @@ x = A*s
 
 am = fit(MultiModelAmica,x;maxiter=500,M=1)
 size(am.A)
-W = inv(am.A[:,:,2])
+W = inv(am.A[:,:,1]) #previously [:,:,2]
 
 
 #---
