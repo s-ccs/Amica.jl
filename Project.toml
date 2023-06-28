@@ -16,6 +16,7 @@ SignalAnalysis = "df1fea92-c066-49dd-8b36-eace3378ea47"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [compat]
+MAT = "0.10"
 julia = "1"
 
 [extras]
