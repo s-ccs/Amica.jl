@@ -29,13 +29,14 @@ mutable struct MultiModelAmica <:AbstractAmica
 	ldet::AbstractArray
 	proportions::AbstractMatrix
 	maxiter::Integer #maximum number of iterations
+	lrate_over_iterations::AbstractArray #not needed for anything
 end
 
 using Parameters
 @with_kw mutable struct LearningRate
 	lrate::Real = 0.1
 	init::Float64 = 0.1
-	minimum::Float64 = 0.
+	minimum::Float64 = 0. #is currently not used
 	maximum::Float64 = 1.0
 	natural_rate::Float64 = 0.1
 	decreaseFactor::Float64 = 0.5
@@ -89,7 +90,10 @@ function MultiModelAmica(data::Array; m=3, M=1, maxiter=500, A=nothing, mu=nothi
 	ldet = zeros(M)
 	source_signals = zeros(n,N,M)
 
-	return MultiModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),M,n,m,N,A,z,y,Q,centers,Lt,LL,ldet,proportions,maxiter)
+	lrate_over_iterations = zeros(maxiter)
+
+
+	return MultiModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),M,n,m,N,A,z,y,Q,centers,Lt,LL,ldet,proportions,maxiter,lrate_over_iterations)
 end
 
 import Base.getproperty

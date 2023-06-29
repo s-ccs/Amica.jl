@@ -7,7 +7,7 @@ function fit(amicaType::Type{T}, data; M = 1, m = 3, maxiter = 500, remove_mean 
 		removeMean!(data)
 	end
 	amica = T(data; M = M, m = m, maxiter = maxiter, mu = mu, beta = beta, A = A)
-	fit!(amica,data; kwargs...)
+	fit!(amica, data; kwargs...)
 	return amica
 end
 
@@ -27,7 +27,7 @@ function amica!(myAmica::AbstractAmica,
 	show_progress = true,
 	maxiter = myAmica.maxiter,
 	do_newton = 1,
-	newt_start_iter = 1,# TODO Check
+	newt_start_iter = 25,# TODO Check
 	iterwin = 10,
 	update_rho = 1,
 	mindll = 1e-8,
@@ -66,6 +66,7 @@ function amica!(myAmica::AbstractAmica,
 
     prog = ProgressUnknown("Minimizing"; showspeed=true)
 
+
 	for iter in 1:maxiter
 		for h in 1:M
 			myAmica = get_sources!(myAmica, data, h)
@@ -82,13 +83,15 @@ function amica!(myAmica::AbstractAmica,
 			dLL[iter] = myAmica.LL[iter] - myAmica.LL[iter-1]
 		end
 		if iter > iterwin +1 #todo:testen
-			lrate = calculate_lrate!(dLL, lrate, mindll, iter,newt_start_iter, do_newton, iterwin)
+			lrate = calculate_lrate!(dLL, lrate, mindll, iter,newt_start_iter, do_newton, iterwin, myAmica)
 			#lrate < 0 ? break : ""
 			sdll = sum(dLL[iter-iterwin+1:iter])/iterwin
            # @show sdll
 			if (sdll > 0) && (sdll < mindll)
+				println("LL increase to low. Stop at iteration ", iter)
 				break
 			end
+			println("Iteration: ", iter, ". lrate = ", lrate.lrate, ". LL = ", myAmica.LL[iter])
 		end
    
 
@@ -116,7 +119,7 @@ function amica!(myAmica::AbstractAmica,
 			
 
 			if any(isnan, kappa) || any(isnan, myAmica.source_signals) || any(isnan, lambda) || any(isnan, g) || any(isnan, myAmica.learnedParameters.α)
-				println("NaN detected. Better stop.")
+				println("NaN detected. Better stop. Current iteration: ", iter)
 				@goto escape_from_NaN
 			end
 			#Newton
@@ -138,6 +141,5 @@ function amica!(myAmica::AbstractAmica,
 			myAmica.centers[:,h] = myAmica.centers[:,h] + mn #add mean back to model centers
 		end
 	end
-
 	return myAmica
 end

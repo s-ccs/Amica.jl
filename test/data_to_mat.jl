@@ -14,7 +14,7 @@ A = [1 1 0 0; 0 1 1 0; 0 0 1 1; 1 0 1 0]
 
 x = A*s
 m = 3
-M = 1
+M = 2
 n = 4
 
 #initialise random parameters before saving them
@@ -35,7 +35,7 @@ for h in 1:M
     end
 end
 
-file = matopen("run_amica/pink_sinus_data.mat", "w")
+file = matopen("test/pink_sinus_data.mat", "w")
 write(file, "x", x)
 write(file, "s", s)
 write(file, "A", A)

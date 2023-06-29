@@ -40,7 +40,7 @@ function calculate_Lt!(myAmica, h)
 	myAmica.ldet[h] =  -log(abs(det(myAmica.A[:,:,h])))
 	myAmica.Lt[h,:] .= log(myAmica.proportions[h]) + myAmica.ldet[h]
 
-	Lt_h = myAmica.Lt[h]'
+	Lt_h = myAmica.Lt[h,:]'
 	n = myAmica.n
 	m = myAmica.m
 	for i in 1:n

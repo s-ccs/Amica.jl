@@ -9,7 +9,7 @@ function removeMean!(input)
 end
 
 
-function calculate_lrate!(dLL, lrateType::LearningRate,mindll, iter, newt_start_iter, do_newton, iterwin)
+function calculate_lrate!(dLL, lrateType::LearningRate,mindll, iter, newt_start_iter, do_newton, iterwin, myAmica::AbstractAmica)
 
 	lratefact,lnatrate,lratemax, = lrateType.decreaseFactor, lrateType.natural_rate, lrateType.maximum
 	lrate = lrateType.lrate
@@ -29,7 +29,7 @@ function calculate_lrate!(dLL, lrateType::LearningRate,mindll, iter, newt_start_
         end
     end
 	lrateType.lrate = lrate
-
+	#myAmica.lrate_over_iterations[iter] = lrate
 	return lrateType
 end
 
@@ -59,7 +59,7 @@ function calculate_z_y_Lt!(myAmica,h)
 	myAmica.ldet[h] =  -log(abs(det(myAmica.A[:,:,h])))
 	myAmica.Lt[h,:] .= log(myAmica.proportions[h]) + myAmica.ldet[h]
 
-	Lt_h = myAmica.Lt[h]'
+	Lt_h = myAmica.Lt[h,:]'
 	n = myAmica.n
 	m = myAmica.m
 	for i in 1:n

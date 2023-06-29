@@ -77,26 +77,26 @@ A_init = read(file, "A_init")
 
 close(file)
 
-am = fit(MultiModelAmica,x;maxiter=1000,M=1, m=3, beta=beta_init, mu=mu_init, A=A_init)
+am = fit(MultiModelAmica,x;maxiter=1000,M=2, m=3, beta=beta_init, mu=mu_init, A=A_init)
 size(am.A)
 W = pinv(am.A[:,:,1]) #previously [:,:,2]
 
 
 #---
 f = Figure()
-series(f[1,1],s)
+series(f[1,1],s[:,1:100])
 ax,h = heatmap(f[1,2],A)
 Colorbar(f[1,3],h)
 
-series(f[2,1],W*x)
+series(f[2,1],x[:,1:100])
 ax,h = heatmap(f[2,2],am.A[:,:,1])
 Colorbar(f[2,3],h)
 
-series(f[3,2],am.Lt)
-series(f[3,1],am.LL)
+series(f[3,1],W*x[:,1:100])
+series(f[4,1],am.Lt)
+series(f[4,2],am.LL)
 
-series(f[4,1],x[:,1:500])
-series(f[4,2],(W*x)[:,1:500])
+#series(f[4,2],(W*x)[:,1:100])
 
 f
 #series(f[4,1],pinv(W)'*x)
