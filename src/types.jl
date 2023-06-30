@@ -36,7 +36,7 @@ using Parameters
 @with_kw mutable struct LearningRate
 	lrate::Real = 0.1
 	init::Float64 = 0.1
-	minimum::Float64 = 0. #is currently not used
+	minimum::Float64 = 0.
 	maximum::Float64 = 1.0
 	natural_rate::Float64 = 0.1
 	decreaseFactor::Float64 = 0.5

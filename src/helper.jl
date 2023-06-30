@@ -9,7 +9,7 @@ function removeMean!(input)
 end
 
 
-function calculate_lrate!(dLL, lrateType::LearningRate,mindll, iter, newt_start_iter, do_newton, iterwin, myAmica::AbstractAmica)
+function calculate_lrate!(dLL, lrateType::LearningRate,mindll, iter, newt_start_iter, do_newton, iterwin)
 
 	lratefact,lnatrate,lratemax, = lrateType.decreaseFactor, lrateType.natural_rate, lrateType.maximum
 	lrate = lrateType.lrate
@@ -21,7 +21,6 @@ function calculate_lrate!(dLL, lrateType::LearningRate,mindll, iter, newt_start_
         println("Likelihood decreasing!")
         lrate = lrate * lratefact
     else
-        #lrate über zeit nochmal anschauen. wird sie größer??
         if (iter > newt_start_iter) && do_newton == 1
             lrate = min(lratemax,lrate + min(0.1,lrate))
         else

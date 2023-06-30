@@ -83,7 +83,7 @@ function amica!(myAmica::AbstractAmica,
 			dLL[iter] = myAmica.LL[iter] - myAmica.LL[iter-1]
 		end
 		if iter > iterwin +1 #todo:testen
-			lrate = calculate_lrate!(dLL, lrate, mindll, iter,newt_start_iter, do_newton, iterwin, myAmica)
+			lrate = calculate_lrate!(dLL, lrate, mindll, iter,newt_start_iter, do_newton, iterwin)
 			#lrate < 0 ? break : ""
 			sdll = sum(dLL[iter-iterwin+1:iter])/iterwin
            # @show sdll
@@ -91,7 +91,7 @@ function amica!(myAmica::AbstractAmica,
 				println("LL increase to low. Stop at iteration ", iter)
 				break
 			end
-			println("Iteration: ", iter, ". lrate = ", lrate.lrate, ". LL = ", myAmica.LL[iter])
+			#println("Iteration: ", iter, ". lrate = ", lrate.lrate, ". LL = ", myAmica.LL[iter])
 		end
    
 
