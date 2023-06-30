@@ -26,15 +26,30 @@ function ffun(x,rho) #taken from amica.m
 	return rho * sign.(x) .* abs.(x) .^(rho-1)
 end
 
+
+function loglikelihoodMMGG(loc::AbstractMatrix,scale::AbstractMatrix,shape::AbstractMatrix,mixtureproportions::AbstractMatrix,data::AbstractMatrix)
+	return hcat(loglikelihoodMMGG.( eachcol(loc),
+                    eachcol(scale),
+                    eachcol(shape),
+                    eachcol(mixtureproportions),
+                    eachrow(data))...)
+
+end
+function loglikelihoodMMGG(location::AbstractVector,scale::AbstractVector,shape::AbstractVector,mixtureproportions::AbstractVector,data::AbstractVector)
+	MM = MMGG(location,scale,shape,mixtureproportions,data)
+	return loglikelihood.(MM,data)
+end
 # calculate loglikelihood for each sample in vector x, given a parameterization of a mixture of PGeneralizedGaussians
-function loglikelihoodMMGG(μ::AbstractVector,α::AbstractVector,ρ::AbstractVector,data::AbstractVector,π::AbstractVector)
+function MMGG(location::AbstractVector,scale::AbstractVector,shape::AbstractVector,mixtureproportions::AbstractVector,data::AbstractVector)
 	# take the vectors of μ,α,ρ and generate a GG from each
-    GGvec = PGeneralizedGaussian.(μ,α,ρ)
-    MM = MixtureModel(GGvec,Vector(π)) # make it a mixture model with prior probabilities π
-    return loglikelihood.(MM,data) # apply the loglikelihood to each sample individually (note the "." infront of .(MM,x))
+    GGvec = PGeneralizedGaussian.(location,scale,shape)
+    MM = MixtureModel(GGvec,Vector(mixtureproportions)) # make it a mixture model with prior probabilities π
+	return MM
+  #  return loglikelihood.(MM,data) # apply the loglikelihood to each sample individually (note the "." infront of .(MM,x))
 end
 
 
+GMM()
 
 function calculate_Lt!(myAmica, h)
 	myAmica.ldet[h] =  -log(abs(det(myAmica.A[:,:,h])))

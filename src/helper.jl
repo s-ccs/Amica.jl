@@ -83,16 +83,17 @@ function calculate_z_y_Lt!(myAmica,h)
 end
 	
 function get_sources!(myAmica::AbstractAmica, data, h)
-	b = myAmica.source_signals
+	#b = myAmica.source_signals
 	M = myAmica.M
 	n = myAmica.n
 	if M == 1
 		b = pinv(myAmica.A[:,:,h]) * data
-	end
-	for i in 1:n 
-		if M > 1
-			Wh = pinv(myAmica.A[:,:,h])
-			b[i,:,h] = Wh[i,:]' * data .- Wh[i,:]' * myAmica.centers[:,h]
+	else
+		for i in 1:n 
+		
+				Wh = pinv(myAmica.A[:,:,h])
+				b[i,:,h] = Wh[i,:]' * data .- Wh[i,:]' * myAmica.centers[:,h]
+		
 		end
 	end
 	myAmica.source_signals[:,:,:] = b

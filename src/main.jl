@@ -86,7 +86,8 @@ function amica!(myAmica::AbstractAmica,
 			lrate = calculate_lrate!(dLL, lrate, mindll, iter,newt_start_iter, do_newton, iterwin)
 			#lrate < 0 ? break : ""
 			sdll = sum(dLL[iter-iterwin+1:iter])/iterwin
-           # @show sdll
+			
+            
 			if (sdll > 0) && (sdll < mindll)
 				println("LL increase to low. Stop at iteration ", iter)
 				break
@@ -130,7 +131,7 @@ function amica!(myAmica::AbstractAmica,
 
 		#@show A
 		#@show LL[iter]
-		show_progress && ProgressMeter.next!(prog; showvalues=[(:LL, myAmica.LL[iter])])
+		show_progress && ProgressMeter.next!(prog; showvalues=[(:LL, myAmica.LL[iter]),(:lrate, lrate.lrate)])
  
 	end
 
