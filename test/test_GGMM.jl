@@ -1,15 +1,22 @@
 #---
-
 using CairoMakie
 using SignalAnalysis
 using Amica
-t = range(0,20*π,length=1000)
+#t = range(0,20*π,length=1000)
 s =rand(PinkGaussian(length(t)),4)'
-s[2,:] = sin.(t)
-s[3,:] = sin.(2 .* t)
-s[4,:] = sin.(10 .* t)
-s = s .* [1,2,3,4]
+#s[2,:] = sin.(t)
+#s[3,:] = sin.(2 .* t)
+#s[4,:] = sin.(10 .* t)
+#s = s .* [1,2,3,4]
+function fill_gmm(n)
+gm = rand(GMM,3,2)
+return Vector(rand(MixtureModel(gm),n)[1,:])
+end
 #A = rand(size(s,1),size(s,1))
+s[2,:] = fill_gmm(1000)
+s[3,:] = fill_gmm(1000)
+s[4,:] = fill_gmm(1000)
+
 A = [1 1 0 0; 0 1 1 0; 0 0 1 1; 1 0 1 0]
 
 x = A*s
@@ -42,32 +49,21 @@ mixtureproportions[:,1,1],
 data[1,:,1])
 
 #---
-
-n = 1
+f = Figure()
+ax =f[1,1] =  Axis(f)
+for n = 1:4
 MM = Amica.MMGG( location[:,n,1],
-       scale[:,n,1],
+       (scale[:,n,1]),
+       #[1,1,1.],
        shape[:,n,1],
-       mixtureproportions[:,n,1],
-       data[n,:,1])
+       mixtureproportions[:,n,1])
 
-#=
-MM = Amica.MMGG( location[:,1,1],
-[0.2,1,1.],
-[3,2,2],
-[0.1,0.45,0.45],#]#mixtureproportions[:,1,1],
-data[1,:,1])
-=#
-
-
-#gm = GMM(3,1)
-#gm.μ .= [-1,0,1]
-#lGM = em!(gm,data[1,:,1:1])
-
-#MM = MixtureModel(gm)
 x_t = -5:0.1:5
 
-lines(x_t,pdf.(Ref(MM),x_t),color=:red)
-hist!(data[n,:,1],bins=x_t;normalization=:pdf)
+lines!(x_t,pdf.(Ref(MM),x_t))
+end
+n = 2
+hist!(data[n,:,1],bins=x_t;normalization=:pdf,color=RGBAf(1,0,0,0.2))
 current_figure()
 #---
 #=
