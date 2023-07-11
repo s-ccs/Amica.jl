@@ -34,7 +34,7 @@ function amica!(myAmica::AbstractAmica,
 
 	kwargs...)
 	
-	myAmica.learnedParameters.ρ .= rholrate.init .*myAmica.learnedParameters.ρ
+	myAmica.learnedParameters.shape .= rholrate.init .*myAmica.learnedParameters.shape
 	#learnedParameters(m::AbstractAmica) = m.learnedParameters
 	
 
@@ -69,14 +69,27 @@ function amica!(myAmica::AbstractAmica,
 
 	for iter in 1:maxiter
 		for h in 1:M
-			myAmica = get_sources!(myAmica, data, h)
-			#Lt[iter,:] = get_likelihood_time(A, proportions, mu, beta, rho, alpha, b, h)
-			#Lt[1,:] = [-84.2453 -40.6495 -9.3180 -7.9679 -38.9525 -83.2213]
-			#myAmica = calculate_z_y!(myAmica,h)
-			#Lt[h,:] = sum(loglikelihoodMMGG.(eachcol(mu[:,:,h]),eachcol(beta[:,:,h]),eachcol(rho[:,:,h]),eachrow(source_signals[:,:,h]),eachcol(alpha[:,:,h])))
-			#myAmica = calculate_Lt!(myAmica, h)
-			myAmica = calculate_z_y_Lt!(myAmica, h)
+			myAmica = update_sources!(myAmica, data, h)
+			myAmica.ldet[h] =  calculate_ldet(myAmica.A[:,:,h])
+			myAmica.Lt[h,:] .= log(myAmica.proportions[h]) + myAmica.ldet[h] #todo: put into function
+			
+			for i in 1:n
+				for j in 1:m
+					#Lt[h,:] = sum(loglikelihoodMMGG.(eachcol(mu[:,:,h]),eachcol(beta[:,:,h]),eachcol(rho[:,:,h]),eachrow(source_signals[:,:,h]),eachcol(alpha[:,:,h])))
+					#myAmica = calculate_z_y_Lt!(myAmica, h)
+					myAmica.y[i,:,j,h] = calculate_y(myAmica.learnedParameters.scale[j,i,h], myAmica.learnedParameters.location[j,i,h], myAmica.source_signals[i,:,h])
+					myAmica.Q[j,:] .= calculate_Q(myAmica.y[i,:,j,h], myAmica.learnedParameters.prop[j,i,h], myAmica.learnedParameters.scale[j,i,h], myAmica.learnedParameters.shape[j,i,h])
+				end
+				if m > 1
+					for j in 1:m
+						myAmica.z[i,:,j,h] = calculate_u(myAmica.Q, j)
+					end
+				end
+				myAmica.Lt[h,:] = calculate_Lt(myAmica.Lt[h,:], myAmica.Q)
+				#todo: calculate Lt for m = 1
+			end
 			myAmica = calculate_LL!(myAmica, iter)
+
 		end
 		
 		if iter > 1
@@ -112,13 +125,18 @@ function amica!(myAmica::AbstractAmica,
 				end
 			end
 			try
-				myAmica, g, vsum, kappa, lambda = update_parameters_and_other_stuff!(myAmica, v, vsum, h, fp, lambda, rholrate, update_rho)
+				#myAmica, g, vsum, kappa, lambda = update_parameters_and_other_stuff!(myAmica, v, vsum, h, fp, lambda, rholrate, update_rho)
+				for i in 1:n
+					for j in 1:m
+						sumz = 0
+					end
+				end
             catch e
 				isa(e,AmicaProportionsZeroException) ? continue : rethrow()
 			end
 			
 
-			if any(isnan, kappa) || any(isnan, myAmica.source_signals) || any(isnan, lambda) || any(isnan, g) || any(isnan, myAmica.learnedParameters.α)
+			if any(isnan, kappa) || any(isnan, myAmica.source_signals) || any(isnan, lambda) || any(isnan, g) || any(isnan, myAmica.learnedParameters.prop)
 				println("NaN detected. Better stop. Current iteration: ", iter)
 				@goto escape_from_NaN
 			end

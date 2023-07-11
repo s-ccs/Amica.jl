@@ -1,8 +1,8 @@
 function reparameterize!(myAmica, data, v)
 	n = myAmica.n
 	M = myAmica.M
-	mu = myAmica.learnedParameters.μ
-	beta = myAmica.learnedParameters.β
+	mu = myAmica.learnedParameters.location
+	beta = myAmica.learnedParameters.scale
 
 	for h = 1:M
 		if myAmica.proportions[h] == 0
@@ -25,22 +25,33 @@ function reparameterize!(myAmica, data, v)
 		end
 	end
 
-	myAmica.learnedParameters.μ .= mu
-	myAmica.learnedParameters.β .= beta
+	myAmica.learnedParameters.location .= mu
+	myAmica.learnedParameters.scale .= beta
 
 	return myAmica
 end
 
+#todo: all of those
+function update_parameters!(myAmica, v, vsum, h, fp, lambda, lrate_rho::LearningRate, update_rho)
+	update_prop()
+	update_scale()
+	update_location()
+	update_shape()
+	myAmica.z[i,:,j,h] .= calculate_z(myAmica, z[i,:,j,h])
+	calculate_g()
+end
 
+
+#todo: need different versions for Multi & Single Models
 function update_parameters_and_other_stuff!(myAmica, v, vsum, h, fp, lambda, lrate_rho::LearningRate, update_rho)
 	M = myAmica.M
 	N = myAmica.N
 	n = myAmica.n 
 	m = myAmica.m
-	alpha = myAmica.learnedParameters.α
-	beta = myAmica.learnedParameters.β
-	mu = myAmica.learnedParameters.μ
-	rho = myAmica.learnedParameters.ρ
+	alpha = myAmica.learnedParameters.prop
+	beta = myAmica.learnedParameters.scale
+	mu = myAmica.learnedParameters.location
+	rho = myAmica.learnedParameters.shape
 
 	g = zeros(n,N)
 	kappa = zeros(n,1)
@@ -102,7 +113,7 @@ function update_parameters_and_other_stuff!(myAmica, v, vsum, h, fp, lambda, lra
 				if db > 0
 					beta[j,i,h] = beta[j,i,h] / db
 				end
-			else #todo: noch überprüfen, tritt bei erster iteration nicht ein
+			else
 				if (m > 1) | (M > 1)
 					if kp > 0
 						mu[j,i,h] = mu[j,i,h] + sqrt(beta[j,i,h]) * sum(zfp[j,:]) / kp #only difference is sqrt instead of 1/sqrt
@@ -113,15 +124,15 @@ function update_parameters_and_other_stuff!(myAmica, v, vsum, h, fp, lambda, lra
 			end
 	
 			if update_rho == 1
-				update_rho!(myAmica, rho, j, i, h, lrate_rho) #todo: doppelt gemoppelt, rho ist auch in myAmica drin...
+				update_rho!(myAmica, rho, j, i, h, lrate_rho)
 			end
 		end
 	end
 
-	myAmica.learnedParameters.α = alpha
-	myAmica.learnedParameters.β = beta
-	myAmica.learnedParameters.μ = mu
-	myAmica.learnedParameters.ρ = rho
+	myAmica.learnedParameters.prop = alpha
+	myAmica.learnedParameters.scale = beta
+	myAmica.learnedParameters.location = mu
+	myAmica.learnedParameters.shape = rho
 
 	return myAmica, g, vsum, kappa, lambda
 end
@@ -131,15 +142,14 @@ function update_rho!(myAmica::MultiModelAmica, rho, j, i, h, lrate_rho::Learning
 	ytmp = abs.(myAmica.y[i,:,j,h]).^rho[j,i,h]
 	dr = sum(myAmica.z[i,:,j,h].*log.(ytmp).*ytmp)
 
-	#todo: dieses if testen, wird bei ersten iteration nicht ausgeführt
 	if rho[j,i,h] > 2
 		dr2 = digamma(1+1/rho[j,i,h]) / rho[j,i,h] - dr
-		if ~isnan(dr2) #todo: testen
+		if ~isnan(dr2)
 			rho[j,i,h] = rho[j,i,h] + 0.5 * dr2
 		end
 	else
 		dr2 = 1 - rho[j,i,h] * dr / digamma(1+1/rho[j,i,h])
-		if ~isnan(dr2) #todo: testen
+		if ~isnan(dr2)
 			rho[j,i,h] = rho[j,i,h] + rholrate *dr2
 		end
 	end

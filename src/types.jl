@@ -1,8 +1,8 @@
 mutable struct GGParameters
-	α::AbstractArray{Float64} #source density mixture proportions
-	β::AbstractArray{Float64} #source density inverse scale parameter
-	μ::AbstractArray{Float64} #source density location parameter
-	ρ::AbstractArray{Float64} #source density shape paramters
+	prop::AbstractArray{Float64} #source density mixture proportions
+	scale::AbstractArray{Float64} #source density inverse scale parameter
+	location::AbstractArray{Float64} #source density location parameter
+	shape::AbstractArray{Float64} #source density shape paramters
 end
 
 mutable struct MoreParameters
@@ -16,9 +16,9 @@ mutable struct MultiModelAmica <:AbstractAmica
 	source_signals::AbstractArray
 	learnedParameters::GGParameters
 	M::Integer #number of ica models
-	n::Integer
-	m::Integer
-	N::Integer
+	n::Integer #number of data channels
+	m::Integer #number of gaussians
+	N::Integer #number of timesteps
     A::AbstractArray #unmixing matrices for each model
 	z::AbstractArray
 	y::AbstractArray
@@ -27,9 +27,26 @@ mutable struct MultiModelAmica <:AbstractAmica
 	Lt::AbstractMatrix #log likelihood of time point for each model ( M x N )
 	LL::AbstractMatrix #log likelihood over iterations
 	ldet::AbstractArray
-	proportions::AbstractMatrix
+	proportions::AbstractMatrix #model proportions
 	maxiter::Integer #maximum number of iterations
-	lrate_over_iterations::AbstractArray #not needed for anything
+end
+
+mutable struct SingleModelAmica <:AbstractAmica
+	#moreParameters::MoreParameters
+	source_signals::AbstractArray
+	learnedParameters::GGParameters
+	n::Integer #number of data channels
+	m::Integer #number of gaussians
+	N::Integer #number of timesteps
+    A::AbstractArray #unmixing matrices for each model
+	z::AbstractArray
+	y::AbstractArray
+	Q::AbstractArray
+	centers::AbstractArray #model centers
+	Lt::AbstractMatrix #log likelihood of time point for each model ( M x N )
+	LL::AbstractMatrix #log likelihood over iterations
+	ldet::AbstractArray
+	maxiter::Integer #maximum number of iterations
 end
 
 using Parameters
@@ -42,7 +59,7 @@ using Parameters
 	decreaseFactor::Float64 = 0.5
 end
 
-
+#todo: rename gg parameters
 function MultiModelAmica(data::Array; m=3, M=1, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...)
 	# M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_mean
 	(n, N) = size(data)
@@ -90,11 +107,59 @@ function MultiModelAmica(data::Array; m=3, M=1, maxiter=500, A=nothing, mu=nothi
 	ldet = zeros(M)
 	source_signals = zeros(n,N,M)
 
-	lrate_over_iterations = zeros(maxiter)
 
 
-	return MultiModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),M,n,m,N,A,z,y,Q,centers,Lt,LL,ldet,proportions,maxiter,lrate_over_iterations)
+	return MultiModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),M,n,m,N,A,z,y,Q,centers,Lt,LL,ldet,proportions,maxiter)
 end
+
+function SingleModelAmica(data::Array; m=3, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...)
+	(n, N) = size(data)
+	
+
+	#initialize parameters
+	
+	centers = zeros(n)
+	eye = Matrix{Float64}(I, n, n)
+	if isnothing(A)
+		A = zeros(n,n)
+		for h in 1:1
+			A[:,:,h] = eye[n] .+ 0.1*rand(n,n)
+			for i in 1:n
+				A[:,i,h] = A[:,i,h] / norm(A[:,i,h])
+			end
+		end
+	end
+
+	alpha = (1/m) * ones(m,n)
+	if isnothing(mu)
+		if m > 1
+			mu = 0.1 * randn(m, n)
+		else
+			mu = zeros(m, n)
+		end
+	end
+	if isnothing(beta)
+		beta = ones(m, n) + 0.1 * randn(m, n)
+	end
+	rho = ones(m, n)
+
+	
+	y = zeros(n,N,m)
+	
+	Q = zeros(m,N)
+	
+	Lt = zeros(N)
+	z = ones(n,N,m)/N
+
+	LL = zeros(1,maxiter)
+	ldet = zeros(1)
+	source_signals = zeros(n,N)
+
+
+	return SingleModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),n,m,N,A,z,y,Q,centers,Lt,LL,ldet,maxiter)
+end
+
+
 
 import Base.getproperty
 Base.getproperty(x::AbstractAmica, s::Symbol) = Base.getproperty(x, Val(s))
