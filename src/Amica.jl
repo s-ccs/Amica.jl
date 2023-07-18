@@ -14,7 +14,7 @@ module Amica
     # Write your package code here.
     export amica!
     export fit,fit!
-    export AbstractAmica,MultiModelAmica
+    export AbstractAmica,MultiModelAmica,SingleModelAmica
 
 
     import Base.show

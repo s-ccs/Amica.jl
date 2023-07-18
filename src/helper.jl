@@ -86,27 +86,20 @@ function calculate_Lt(Lt, Q)
 		return Lt .+ Q[1,:] #todo: test
 	end
 end
-
-function calculate_z(::MultiModelAmica,myAmica.z[i,:,j,h],v)
-	return v[h,:] .* myAmica.z[i,:,j,h]
-end
-
-function calculate_z(::SingleModelAmica,myAmica.z[i,:,j,h],v)
-	return v[h,:] .* myAmica.z[i,:,j,h]
-end
 	
-function update_sources!(myAmica::AbstractAmica, data, h)
+function update_sources!(myAmica::SingleModelAmica, data, h)
 	b = myAmica.source_signals
-	M = myAmica.M
+	b = pinv(myAmica.A[:,:,h]) * data
+	myAmica.source_signals[:,:,:] = b
+	return myAmica
+end
+
+function update_sources!(myAmica::MultiModelAmica, data, h)
+	b = myAmica.source_signals
 	n = myAmica.n
-	if M == 1
-		b = pinv(myAmica.A[:,:,h]) * data
-	end
 	for i in 1:n 
-		if M > 1
-			Wh = pinv(myAmica.A[:,:,h])
-			b[i,:,h] = Wh[i,:]' * data .- Wh[i,:]' * myAmica.centers[:,h]
-		end
+		Wh = pinv(myAmica.A[:,:,h])
+		b[i,:,h] = Wh[i,:]' * data .- Wh[i,:]' * myAmica.centers[:,h]
 	end
 	myAmica.source_signals[:,:,:] = b
 	return myAmica

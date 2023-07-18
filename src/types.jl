@@ -5,13 +5,15 @@ mutable struct GGParameters
 	shape::AbstractArray{Float64} #source density shape paramters
 end
 
+#not in use
 mutable struct MoreParameters
 	kappa::AbstractArray
 end
 
 abstract type AbstractAmica end
 
-mutable struct MultiModelAmica <:AbstractAmica
+
+mutable struct SingleModelAmica <:AbstractAmica
 	#moreParameters::MoreParameters
 	source_signals::AbstractArray
 	learnedParameters::GGParameters
@@ -31,22 +33,9 @@ mutable struct MultiModelAmica <:AbstractAmica
 	maxiter::Integer #maximum number of iterations
 end
 
-mutable struct SingleModelAmica <:AbstractAmica
-	#moreParameters::MoreParameters
-	source_signals::AbstractArray
-	learnedParameters::GGParameters
-	n::Integer #number of data channels
-	m::Integer #number of gaussians
-	N::Integer #number of timesteps
-    A::AbstractArray #unmixing matrices for each model
-	z::AbstractArray
-	y::AbstractArray
-	Q::AbstractArray
-	centers::AbstractArray #model centers
-	Lt::AbstractMatrix #log likelihood of time point for each model ( M x N )
-	LL::AbstractMatrix #log likelihood over iterations
-	ldet::AbstractArray
-	maxiter::Integer #maximum number of iterations
+mutable struct MultiModelAmica <:AbstractAmica
+	singleModel::SingleModelAmica
+	#actually it should be: list of single models, additional dimension on all parameters
 end
 
 using Parameters
@@ -60,7 +49,7 @@ using Parameters
 end
 
 #todo: rename gg parameters
-function MultiModelAmica(data::Array; m=3, M=1, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...)
+function SingleModelAmica(data::Array; m=3, M=1, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...)
 	# M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_mean
 	(n, N) = size(data)
 	
@@ -108,68 +97,29 @@ function MultiModelAmica(data::Array; m=3, M=1, maxiter=500, A=nothing, mu=nothi
 	source_signals = zeros(n,N,M)
 
 
-
-	return MultiModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),M,n,m,N,A,z,y,Q,centers,Lt,LL,ldet,proportions,maxiter)
+	return SingleModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),M,n,m,N,A,z,y,Q,centers,Lt,LL,ldet,proportions,maxiter)
 end
 
-function SingleModelAmica(data::Array; m=3, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...)
-	(n, N) = size(data)
-	
-
-	#initialize parameters
-	
-	centers = zeros(n)
-	eye = Matrix{Float64}(I, n, n)
-	if isnothing(A)
-		A = zeros(n,n)
-		for h in 1:1
-			A[:,:,h] = eye[n] .+ 0.1*rand(n,n)
-			for i in 1:n
-				A[:,i,h] = A[:,i,h] / norm(A[:,i,h])
-			end
-		end
-	end
-
-	alpha = (1/m) * ones(m,n)
-	if isnothing(mu)
-		if m > 1
-			mu = 0.1 * randn(m, n)
-		else
-			mu = zeros(m, n)
-		end
-	end
-	if isnothing(beta)
-		beta = ones(m, n) + 0.1 * randn(m, n)
-	end
-	rho = ones(m, n)
-
-	
-	y = zeros(n,N,m)
-	
-	Q = zeros(m,N)
-	
-	Lt = zeros(N)
-	z = ones(n,N,m)/N
-
-	LL = zeros(1,maxiter)
-	ldet = zeros(1)
-	source_signals = zeros(n,N)
-
-
-	return SingleModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),n,m,N,A,z,y,Q,centers,Lt,LL,ldet,maxiter)
+function MultiModelAmica(data::Array; m=3, M=1, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...)
+	multiModel = SingleModelAmica(data; m, M, maxiter, A, mu, beta, kwargs...)
+	return MultiModelAmica(multiModel)
 end
-
 
 
 import Base.getproperty
-Base.getproperty(x::AbstractAmica, s::Symbol) = Base.getproperty(x, Val(s))
-Base.getproperty(x::AbstractAmica, ::Val{s}) where s = getfield(x, s)
+# Base.getproperty(x::AbstractAmica, s::Symbol) = Base.getproperty(x, Val(s))
+# Base.getproperty(x::AbstractAmica, ::Val{s}) where s = getfield(x, s)
 
-Base.getproperty(m::AbstractAmica, ::Val{:X}) = size(m.source_signals,4)
+# Base.getproperty(m::AbstractAmica, ::Val{:X}) = size(m.source_signals,4)
 
-# struct SinglemodelAmica <:AbstractAmica
-#     A::AbstractArray
-# end
+
+function Base.getproperty(multiModel::MultiModelAmica, prop::Symbol)
+    if prop in fieldnames(SingleModelAmica) && !(prop in fieldnames(MultiModelAmica))
+        return getfield(multiModel.singleModel, prop)
+    else
+        return getfield(multiModel, prop)
+    end
+end
 
 struct AmicaProportionsZeroException <: Exception
 end

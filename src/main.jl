@@ -59,7 +59,7 @@ function amica!(myAmica::AbstractAmica,
 	fp = zeros(m ,N)
 
 	#r = zeros(n,N,m,M)
-	
+	#todo put them into object
 	lambda = zeros(n, 1)
 	kappa = zeros(n, 1)
 	sigma2 = zeros(n, 1)
@@ -126,11 +126,7 @@ function amica!(myAmica::AbstractAmica,
 			end
 			try
 				#myAmica, g, vsum, kappa, lambda = update_parameters_and_other_stuff!(myAmica, v, vsum, h, fp, lambda, rholrate, update_rho)
-				for i in 1:n
-					for j in 1:m
-						sumz = 0
-					end
-				end
+				myAmica, g, kappa, lambda = update_parameters!(myAmica, v, vsum, h, fp, lambda, rholrate, update_rho)
             catch e
 				isa(e,AmicaProportionsZeroException) ? continue : rethrow()
 			end
