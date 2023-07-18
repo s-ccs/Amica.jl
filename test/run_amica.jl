@@ -42,7 +42,7 @@ A_init = read(file, "A_init")
 
 close(file)
 
-@time am = fit(MultiModelAmica,x;maxiter=1000,M=2, m=3, beta=beta_init, mu=mu_init, A=A_init)
+@time am = fit(MultiModelAmica,x;maxiter=1000,M=2, m=3, beta=beta_init, mu=mu_init, A=copy(A_init))
 size(am.A)
 W = pinv(am.A[:,:,1]) #previously [:,:,2]
 

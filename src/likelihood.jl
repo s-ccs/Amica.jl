@@ -19,11 +19,11 @@ function calculate_LL(Lt, M, N, n) #lines 225 - 231
 end
 
 function logpfun(x,rho) #taken from amica.m
-	return  (-abs.(x).^rho .- log(2) .- loggamma(1+1/rho))
+	return  (.-abs.(x).^rho .- log(2) .- loggamma.(1+1/rho))
 end
 
 function ffun(x,rho) #taken from amica.m
-	return rho * sign.(x) .* abs.(x) .^(rho-1)
+	return rho .* sign.(x) .* abs.(x) .^(rho.-1)
 end
 
 # calculate loglikelihood for each sample in vector x, given a parameterization of a mixture of PGeneralizedGaussians

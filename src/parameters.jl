@@ -43,7 +43,8 @@ function calculate_sumz(z, myAmica::MultiModelAmica)
 		return sum(z)
 end
 
-#does nothing for M = 1
+
+calculate_z!(myAmica::SingleModelAmica, v, z, i,j,h) = nothing
 function calculate_z!(myAmica::MultiModelAmica, v, z, i,j,h)
 	if myAmica.m > 1
 		myAmica.z[i,:,j,h] .= v .* z
@@ -52,13 +53,9 @@ function calculate_z!(myAmica::MultiModelAmica, v, z, i,j,h)
 	end
 end
 
-function calculate_z!(myAmica::SingleModelAmica, v, z, i,j,h)
-	nothing
-end
-
 function update_proportions!(proportions, sumz, vsum, myAmica::SingleModelAmica,j,i,h)
 	if myAmica.m > 1
-		myAmica.learnedParameters.prop[j,i,h] = sumz / N
+		myAmica.learnedParameters.prop[j,i,h] = sumz / myAmica.N
 	end
 end
 

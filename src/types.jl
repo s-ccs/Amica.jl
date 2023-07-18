@@ -27,7 +27,7 @@ mutable struct SingleModelAmica <:AbstractAmica
 	Q::AbstractArray
 	centers::AbstractArray #model centers
 	Lt::AbstractMatrix #log likelihood of time point for each model ( M x N )
-	LL::AbstractMatrix #log likelihood over iterations
+	LL::AbstractMatrix #log likelihood over iterations todo: change to tuple
 	ldet::AbstractArray
 	proportions::AbstractMatrix #model proportions
 	maxiter::Integer #maximum number of iterations
@@ -35,7 +35,7 @@ end
 
 mutable struct MultiModelAmica <:AbstractAmica
 	singleModel::SingleModelAmica
-	#actually it should be: list of single models, additional dimension on all parameters
+	#actually it should be: list of single models
 end
 
 using Parameters
