@@ -53,16 +53,16 @@ f = Figure()
 ax =f[1,1] =  Axis(f)
 for n = 1:4
 MM = Amica.MMGG( location[:,n,1],
-       (scale[:,n,1]),
-       #[1,1,1.],
-       shape[:,n,1],
+#[1,1,1.],
+(scale[:,n,1]),
+shape[:,n,1],
        mixtureproportions[:,n,1])
 
 x_t = -5:0.1:5
 
 lines!(x_t,pdf.(Ref(MM),x_t))
 end
-n = 2
+n = 3
 hist!(data[n,:,1],bins=x_t;normalization=:pdf,color=RGBAf(1,0,0,0.2))
 current_figure()
 #---
