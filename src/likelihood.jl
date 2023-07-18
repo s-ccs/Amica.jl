@@ -36,13 +36,13 @@ function loglikelihoodMMGG(loc::AbstractMatrix,scale::AbstractMatrix,shape::Abst
 
 end
 function loglikelihoodMMGG(location::AbstractVector,scale::AbstractVector,shape::AbstractVector,mixtureproportions::AbstractVector,data::AbstractVector)
-	MM = MMGG(location,scale,shape,mixtureproportions,data)
+	MM = MMGG(location,scale,shape,mixtureproportions)
 	return loglikelihood.(MM,data)
 end
 # calculate loglikelihood for each sample in vector x, given a parameterization of a mixture of PGeneralizedGaussians
-function MMGG(location::AbstractVector,scale::AbstractVector,shape::AbstractVector,mixtureproportions::AbstractVector,data::AbstractVector)
+function MMGG(location::AbstractVector,scale::AbstractVector,shape::AbstractVector,mixtureproportions::AbstractVector)
 	# take the vectors of μ,α,ρ and generate a GG from each
-    GGvec = PGeneralizedGaussian.(location,scale,shape)
+    GGvec = PGeneralizedGaussian.(location,scale,shape;check_args=false)
     MM = MixtureModel(GGvec,Vector(mixtureproportions)) # make it a mixture model with prior probabilities π
 	return MM
   #  return loglikelihood.(MM,data) # apply the loglikelihood to each sample individually (note the "." infront of .(MM,x))

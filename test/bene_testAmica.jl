@@ -16,7 +16,7 @@ x = A*s
 #A = [1 1 0 1; 1 1 0 0; 1 0 1 1; 0 0 0 1]
 #x = hcat(x,A*s) 
 
-am = fit(MultiModelAmica,x;maxiter=500,M=1)
+am = fit(MultiModelAmica,x;maxiter=2000,M=1)
 size(am.A)
 W = inv(am.A[:,:,1]) #previously [:,:,2]
 
@@ -32,8 +32,9 @@ series(f[2,1],W*x)
 ax,h = heatmap(f[2,2],am.A[:,:,1])
 Colorbar(f[2,3],h)
 
-series(f[4,1],x[:,1:500])
-series(f[4,2],(W*x)[:,1:500])
+series(f[3,1],am.source_signals[:,1:200,1])
+series(f[4,1],x[:,1:200])
+series(f[4,2],(W*x)[:,1:200])
 f
 #series(f[4,1],inv(W)'*x)
 #series(f[6,1],W'*x)
