@@ -92,18 +92,20 @@ function update_location(myAmica::MultiModelAmica,shape,zfp,y,location,scale,kp)
 			return location + sqrt(scale) * sum(zfp) / kp
 		end
 	end
+	return location
 end
 
 function update_scale(zfp,y,scale,z,shape)
 	if shape <= 2
 		db = sum(zfp.*y)
 		if db > 0
-			scale = scale / db
+			scale = scale ./ db
 		end
 	else
-		db = (shape * sum(z.*abs.(y).^shape))^(-2 / shape)
-		scale = scale * db
+		db = (shape .* sum(z.*abs.(y).^shape)).^(.- 2 ./ shape)
+		scale = scale .* db
 	end
+	return scale
 end
 
 function update_parameters!(myAmica, v, vsum, h, fp, lambda, lrate_rho::LearningRate, update_rho)
@@ -119,7 +121,7 @@ function update_parameters!(myAmica, v, vsum, h, fp, lambda, lrate_rho::Learning
 	kappa = zeros(n,1)
 	zfp = zeros(m, N)
 
-	for i in 1:myAmica.n
+	Threads.@threads for i in 1:myAmica.n
 		for j in 1:myAmica.m
 			sumz = 0
 			calculate_z!(myAmica, v[h,:], myAmica.z[i,:,j,h], i, j, h)
@@ -132,6 +134,8 @@ function update_parameters!(myAmica, v, vsum, h, fp, lambda, lrate_rho::Learning
 			else
 				continue
 			end
+	
+	
 			fp[j,:] = ffun(myAmica.y[i,:,j,h], rho[j,i,h])
 			zfp[j,:] = myAmica.z[i,:,j,h] .* fp[j,:]
 			g[i,:] = g[i,:] .+ alpha[j,i,h] .* sqrt(beta[j,i,h]) .*zfp[j,:]
@@ -140,8 +144,10 @@ function update_parameters!(myAmica, v, vsum, h, fp, lambda, lrate_rho::Learning
 	
 			kappa[i] = kappa[i]  + alpha[j,i,h] * kp
 	
-			lambda[i] = lambda[i] + alpha[j,i,h] * (sum(myAmica.z[i,:,j,h].*(fp[j,:].*myAmica.y[i,:,j,h] .-1).^2) + mu[j,i,h]^2 * kp)
-			mu[j,i,h] = update_location(myAmica,rho[j,i,h],zfp[j,:],myAmica.y[i,:,j,h],mu[j,i,h],beta[j,i,h],kp)
+			lambda[i] = lambda[i] .+ alpha[j,i,h] .* (sum(myAmica.z[i,:,j,h].*(fp[j,:].*myAmica.y[i,:,j,h] .-1).^2) .+ mu[j,i,h]^2 .* kp)
+			mu[j,i,h] =  update_location(myAmica,rho[j,i,h],zfp[j,:],myAmica.y[i,:,j,h],mu[j,i,h],beta[j,i,h],kp)
+			
+			
 			beta[j,i,h] = update_scale(zfp[j,:],myAmica.y[i,:,j,h],beta[j,i,h],myAmica.z[i,:,j,h],rho[j,i,h])
 
 			if update_rho == 1
