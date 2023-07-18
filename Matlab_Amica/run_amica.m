@@ -16,7 +16,10 @@ tic
 [A,c,LL,Lt,gm,alpha,mu,beta,rho] = amica_a(x,2,3,538,1);
 toc
 
-tiledlayout(3,1)
+tiledlayout(4,1)
+nexttile
+plot(s(:,1:100)')
+title('original data')
 nexttile
 plot(x(:,1:100)')
 title('mixed data')
