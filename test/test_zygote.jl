@@ -52,5 +52,5 @@ ub.mixtureproportions .= 1
 
 using ModelingToolkit
 df = OptimizationProblem(OptimizationFunction(myFun, Optimization.AutoZygote()), para,[];lb = lb,ub = ub)
-sol = solve(df,LBFGS(),maxtime =30)
+sol = solve(df,LBFGS(),maxtime =180)
 
