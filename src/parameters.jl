@@ -79,6 +79,7 @@ function update_location(myAmica::SingleModelAmica,shape,zfp,y,location,scale,kp
 			return location + sqrt(scale) * sum(zfp) / kp
 		end
 	end
+	return location
 end
 
 function update_location(myAmica::MultiModelAmica,shape,zfp,y,location,scale,kp)
@@ -121,6 +122,7 @@ function update_parameters!(myAmica, v, vsum, h, fp, lambda, lrate_rho::Learning
 	kappa = zeros(n,1)
 	zfp = zeros(m, N)
 
+	
 	Threads.@threads for i in 1:myAmica.n
 		for j in 1:myAmica.m
 			sumz = 0
