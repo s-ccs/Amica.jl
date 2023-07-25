@@ -1,8 +1,7 @@
 #s = sin.(t * collect(0.5:0.8:pi)')'#rand(10,10000)
-using CairoMakie
 using SignalAnalysis
 using Amica
-t = range(0,20*π,length=1000)
+t = range(0,20*π,length=100000)
 s =rand(PinkGaussian(length(t)),4)'
 s[2,:] = sin.(t)
 s[3,:] = sin.(2 .* t)
@@ -22,6 +21,8 @@ W = inv(am.A[:,:,1]) #previously [:,:,2]
 
 
 #---
+using CairoMakie
+
 f = Figure()
 series(f[1,1],s)
 ax,h = heatmap(f[1,2],A)
