@@ -59,5 +59,10 @@ d_memory = pyconvert(Array,raw_memory.get_data(;units="uV"))
 
 d_memory = reshape(permutedims(d_memory,(2,3,1)),71,:)
 
+using Diagonalizations
+d_memory_whiten = whitening(d_memory) # Todo: make the dimensionality reduction optional
+whiteData = d_memory_whiten.iF * d_memory
+am = SingleModelAmica(whiteData)
+fit!(am,whiteData)
 
-julia> am = fit(SingleModelAmica,d_memory;maxiter=10)
+am2 = fit(SingleModelAmica,d_memory)
