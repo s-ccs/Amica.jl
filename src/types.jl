@@ -48,13 +48,8 @@ using Parameters
 	decreaseFactor::Float64 = 0.5
 end
 
-<<<<<<< HEAD
-#todo: rename gg parameters, remove M
-function SingleModelAmica(data::Array; m=3, M=1, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...)
-=======
 #todo: rename gg parameters
 function SingleModelAmica(data::AbstractArray{T}; m=3, M=1, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...) where {T<:Real}
->>>>>>> threading
 	# M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_mean
 	(n, N) = size(data)
 	
