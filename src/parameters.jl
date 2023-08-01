@@ -79,8 +79,9 @@ function update_location(myAmica::SingleModelAmica,shape,zfp,y,location,scale,kp
 			return location + sqrt(scale) * sum(zfp) / kp
 		end
 	end
+	return location
 end
-
+#todo: wieder zusammen nehmen
 function update_location(myAmica::MultiModelAmica,shape,zfp,y,location,scale,kp)
 	if shape <= 2
 			dm = sum(zfp./y)
@@ -92,18 +93,20 @@ function update_location(myAmica::MultiModelAmica,shape,zfp,y,location,scale,kp)
 			return location + sqrt(scale) * sum(zfp) / kp
 		end
 	end
+	return location
 end
 
 function update_scale(zfp,y,scale,z,shape)
 	if shape <= 2
 		db = sum(zfp.*y)
 		if db > 0
-			scale = scale / db
+			return scale / db
 		end
 	else
 		db = (shape * sum(z.*abs.(y).^shape))^(-2 / shape)
-		scale = scale * db
+		return scale * db
 	end
+	return scale
 end
 
 function update_parameters!(myAmica, v, vsum, h, fp, lambda, lrate_rho::LearningRate, update_rho)

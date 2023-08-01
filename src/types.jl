@@ -35,7 +35,7 @@ end
 
 mutable struct MultiModelAmica <:AbstractAmica
 	singleModel::SingleModelAmica
-	#actually it should be: list of single models
+	#Models::ComponentArray
 end
 
 using Parameters
@@ -48,7 +48,7 @@ using Parameters
 	decreaseFactor::Float64 = 0.5
 end
 
-#todo: rename gg parameters
+#todo: rename gg parameters, remove M
 function SingleModelAmica(data::Array; m=3, M=1, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...)
 	# M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_mean
 	(n, N) = size(data)

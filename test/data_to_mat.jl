@@ -5,8 +5,8 @@ using LinearAlgebra
 using PyMNE
 
 #_____________________________________________
-#Generate multiple sin mixed with pink gaussian
-# t = range(0,20*π,length=1000)
+# #Generate multiple sin mixed with pink gaussian
+# t = range(0,20*π,length=100)
 # s =rand(PinkGaussian(length(t)),4)'
 # s[2,:] = sin.(t)
 # s[3,:] = sin.(2 .* t)
@@ -15,7 +15,7 @@ using PyMNE
 # #A = rand(size(s,1),size(s,1))
 # A = [1 1 0 0; 0 1 1 0; 0 0 1 1; 1 0 1 0]
 # x = A*s
-#_____________________________________________
+# #_____________________________________________
 #_____________________________________________
 #get eeg data
 data_path = pyconvert(String,@py(str(PyMNE.datasets.ssvep.data_path())))
@@ -50,10 +50,10 @@ for h in 1:M
     end
 end
 
-file = matopen("test/eeg_data.mat", "w")
+file = matopen("test/eeg_data2.mat", "w")
 write(file, "x", x)
-#write(file, "s", s) #only save for self-mixed data
-#write(file, "A", A) # "
+write(file, "s", s) #only save for self-mixed data
+write(file, "A", A) # "
 
 write(file, "beta_init", beta)
 write(file, "A_init", A_init)

@@ -5,6 +5,9 @@ Main AMICA algorithm
 function fit(amicaType::Type{T}, data; M = 1, m = 3, maxiter = 500, remove_mean = true, mu = nothing, beta = nothing, A = nothing, kwargs...) where {T<:AbstractAmica}
 	if remove_mean
 		removeMean!(data)
+		data = do_sphering(data)
+		# f = StatsAPI.fit(Whitening, data)
+		# transform(f, data)
 	end
 	amica = T(data; M = M, m = m, maxiter = maxiter, mu = mu, beta = beta, A = A)
 	fit!(amica, data; kwargs...)
@@ -69,6 +72,9 @@ function amica!(myAmica::AbstractAmica,
 
 	for iter in 1:maxiter
 		for h in 1:M
+			if iter == 5
+				nothing
+			end
 			myAmica = update_sources!(myAmica, data, h)
 			myAmica.ldet[h] =  calculate_ldet(myAmica.A[:,:,h])
 			myAmica.Lt[h,:] .= log(myAmica.proportions[h]) + myAmica.ldet[h] #todo: put into function

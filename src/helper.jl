@@ -8,6 +8,14 @@ function removeMean!(input)
 	return input
 end
 
+#todo:replace with function from lib
+function do_sphering(x)
+	(n,N) = size(x)
+	Us,Ss,Vs = svd(x*x'/N)
+	S = Us * diagm(vec(1 ./sqrt.(Ss))) * Us'
+    return x = S*x
+end
+
 
 function calculate_lrate!(dLL, lrateType::LearningRate,mindll, iter, newt_start_iter, do_newton, iterwin)
 
