@@ -5,7 +5,9 @@ Main AMICA algorithm
 function fit(amicaType::Type{T}, data; M = 1, m = 3, maxiter = 500, remove_mean = true, mu = nothing, beta = nothing, A = nothing, kwargs...) where {T<:AbstractAmica}
 	if remove_mean
 		removeMean!(data)
-		data = do_sphering(data)
+		data = jason_sphering(data)
+		#data = bene_sphering(data)
+		
 		# f = StatsAPI.fit(Whitening, data)
 		# transform(f, data)
 	end

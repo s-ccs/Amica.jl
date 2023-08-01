@@ -9,13 +9,16 @@ function removeMean!(input)
 end
 
 #todo:replace with function from lib
-function do_sphering(x)
+function jason_sphering(x)
 	(n,N) = size(x)
 	Us,Ss,Vs = svd(x*x'/N)
 	S = Us * diagm(vec(1 ./sqrt.(Ss))) * Us'
     return x = S*x
 end
-
+function bene_sphering(data)
+	d_memory_whiten = whitening(data) # Todo: make the dimensionality reduction optional
+	return d_memory_whiten.iF * data
+end
 
 function calculate_lrate!(dLL, lrateType::LearningRate,mindll, iter, newt_start_iter, do_newton, iterwin)
 

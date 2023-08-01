@@ -6,6 +6,7 @@ version = "0.1.0"
 [deps]
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 ComponentArrays = "b0b7db55-cfe3-40fc-9ded-d10e2dbeff66"
+Diagonalizations = "9cd687f3-b62d-43f3-8fd3-ffcd9e581047"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 GaussianMixtures = "cc18c42c-b769-54ff-9e2a-b28141a64aae"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
