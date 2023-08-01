@@ -48,8 +48,8 @@ using Parameters
 	decreaseFactor::Float64 = 0.5
 end
 
-#todo: rename gg parameters, remove M
-function SingleModelAmica(data::Array; m=3, M=1, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...)
+#todo: rename gg parameters
+function SingleModelAmica(data::AbstractArray{T}; m=3, M=1, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...) where {T<:Real}
 	# M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_mean
 	(n, N) = size(data)
 	
@@ -57,7 +57,7 @@ function SingleModelAmica(data::Array; m=3, M=1, maxiter=500, A=nothing, mu=noth
 	#initialize parameters
 	
 	centers = zeros(n,M)
-	eye = Matrix{Float64}(I, n, n)
+	eye = Matrix(I, n, n)
 	if isnothing(A)
 		A = zeros(n,n,M)
 		for h in 1:M
