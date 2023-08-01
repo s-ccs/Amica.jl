@@ -79,7 +79,7 @@ function amica!(myAmica::AbstractAmica,
 			myAmica.ldet[h] =  calculate_ldet(myAmica.A[:,:,h])
 			myAmica.Lt[h,:] .= log(myAmica.proportions[h]) + myAmica.ldet[h] #todo: put into function
 			
-			for i in 1:n
+			Threads.@threads for i in 1:n
 				for j in 1:m
 					#Lt[h,:] = sum(loglikelihoodMMGG.(eachcol(mu[:,:,h]),eachcol(beta[:,:,h]),eachcol(rho[:,:,h]),eachrow(source_signals[:,:,h]),eachcol(alpha[:,:,h])))
 					#myAmica = calculate_z_y_Lt!(myAmica, h)

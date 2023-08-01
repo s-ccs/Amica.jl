@@ -1,13 +1,12 @@
 #s = sin.(t * collect(0.5:0.8:pi)')'#rand(10,10000)
-using CairoMakie
 using SignalAnalysis
 using Amica
-t = range(0,20*π,length=1000)
+t = range(0,20*π,length=10000)
 s =rand(PinkGaussian(length(t)),4)'
 s[2,:] = sin.(t)
 s[3,:] = sin.(2 .* t)
 s[4,:] = sin.(10 .* t)
-s = s .* [1,2,3,4]
+#s = s .* [1,2,3,4]
 #A = rand(size(s,1),size(s,1))
 A = [1 1 0 0; 0 1 1 0; 0 0 1 1; 1 0 1 0]
 
@@ -15,13 +14,15 @@ x = A*s
 
 #A = [1 1 0 1; 1 1 0 0; 1 0 1 1; 0 0 0 1]
 #x = hcat(x,A*s) 
-
+am = fit(SingleModelAmica,x;maxiter=500)
 am = fit(MultiModelAmica,x;maxiter=500,M=1)
 size(am.A)
 W = inv(am.A[:,:,1]) #previously [:,:,2]
 
 
 #---
+using CairoMakie
+
 f = Figure()
 series(f[1,1],s)
 ax,h = heatmap(f[1,2],A)
@@ -48,3 +49,20 @@ raw = PyMNE.io.read_raw_brainvision(bids_fname, preload=true, verbose=false)
 raw.resample(128)
 raw.filter(l_freq=1, h_freq=nothing, fir_design="firwin")
 d = pyconvert(Array,raw.get_data(;units="uV"))
+
+
+am = fit(SingleModelAmica,x;maxiter=500)
+
+#----
+raw_memory = PyMNE.io.read_epochs_eeglab("/data/export/users/ehinger/amica_recompile/amica/Memorize.set")
+d_memory = pyconvert(Array,raw_memory.get_data(;units="uV"))
+
+d_memory = reshape(permutedims(d_memory,(2,3,1)),71,:)
+
+using Diagonalizations
+d_memory_whiten = whitening(d_memory) # Todo: make the dimensionality reduction optional
+whiteData = d_memory_whiten.iF * d_memory
+am = SingleModelAmica(whiteData)
+fit!(am,whiteData)
+
+am2 = fit(SingleModelAmica,d_memory)
