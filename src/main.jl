@@ -54,7 +54,7 @@ function amica!(myAmica::AbstractAmica,
 	mn = mean(data, dims = 2) #should be zeros if remove_mean = 0
 	#a = 0
 	g = zeros(n, N)
-	v = ones(M, N)
+	v = ones(N)
 	lambda = zeros(n, 1)
 	kappa = zeros(n, 1)
 	sigma2 = zeros(n, 1)
@@ -74,9 +74,6 @@ function amica!(myAmica::AbstractAmica,
 
 	for iter in 1:maxiter
 		for h in 1:M
-			if iter == 5
-				nothing
-			end
 			myAmica = update_sources!(myAmica, data, h)
 			myAmica.ldet[h] =  calculate_ldet(myAmica.A[:,:,h])
 			myAmica.Lt[h,:] .= log(myAmica.proportions[h]) + myAmica.ldet[h] #todo: put into function
