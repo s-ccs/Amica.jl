@@ -2,12 +2,12 @@
 using SignalAnalysis
 using Amica
 t = range(0,20*π,length=10000)
-s =rand(PinkGaussian(length(t)),4)'
+s =rand(PinkGaussian(length(t)),20)'
 s[2,:] = sin.(t)
 s[3,:] = sin.(2 .* t)
 s[4,:] = sin.(10 .* t)
 #s = s .* [1,2,3,4]
-#A = rand(size(s,1),size(s,1))
+A = rand(size(s,1),size(s,1))
 A = [1 1 0 0; 0 1 1 0; 0 0 1 1; 1 0 1 0]
 
 x = A*s
@@ -59,10 +59,4 @@ d_memory = pyconvert(Array,raw_memory.get_data(;units="uV"))
 
 d_memory = reshape(permutedims(d_memory,(2,3,1)),71,:)
 
-using Diagonalizations
-d_memory_whiten = whitening(d_memory) # Todo: make the dimensionality reduction optional
-whiteData = d_memory_whiten.iF * d_memory
-am = SingleModelAmica(whiteData)
-fit!(am,whiteData)
-
-am2 = fit(SingleModelAmica,d_memory)
+am2 = fit(SingleModelAmica,d_memory,M=1)
