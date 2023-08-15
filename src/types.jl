@@ -17,7 +17,6 @@ mutable struct SingleModelAmica <:AbstractAmica
 	#moreParameters::MoreParameters
 	source_signals
 	learnedParameters::GGParameters
-	M::Integer #number of ica models
 	n::Integer #number of data channels
 	m::Integer #number of gaussians
 	N::Integer #number of timesteps
@@ -26,9 +25,9 @@ mutable struct SingleModelAmica <:AbstractAmica
 	y::AbstractArray
 	Q::AbstractArray
 	centers::AbstractArray #model centers
-	Lt::AbstractMatrix #log likelihood of time point for each model ( M x N )
-	LL::AbstractMatrix #log likelihood over iterations todo: change to tuple
-	ldet::AbstractArray
+	Lt::AbstractVector #log likelihood of time point for each model ( M x N )
+	LL::AbstractVector #log likelihood over iterations todo: change to tuple 
+	ldet::Float64
 	maxiter::Integer #maximum number of iterations
 end
 
@@ -50,7 +49,7 @@ using Parameters
 end
 
 #todo: rename gg parameters
-function SingleModelAmica(data::AbstractArray{T}; m=3, M = 1, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...) where {T<:Real}
+function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...) where {T<:Real}
 	# M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_mean
 	(n, N) = size(data)
 	
@@ -90,12 +89,12 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, M = 1, maxiter=500, A=not
 
 
 	#originally initialized inside the loop
-	LL = zeros(1,maxiter)
-	ldet = 0
+	LL = zeros(maxiter) #todo: TUPEL
+	ldet = 0.0
 	source_signals = zeros(n,N)
 
 
-	return SingleModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),M,n,m,N,A,z,y,Q,centers,Lt,LL,ldet,maxiter)
+	return SingleModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),n,m,N,A,z,y,Q,centers,Lt,LL,ldet,maxiter)
 end
 #just a save
 # function SingleModelAmica(data::AbstractArray{T}; m=3, M=1, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...) where {T<:Real}
@@ -156,7 +155,7 @@ function MultiModelAmica(data::Array; m=3, M=2, maxiter=500, A=nothing, mu=nothi
 	proportions = (1/M) * ones(M,1)
 	ldet = zeros(M)
 	for h in 1:M
-		models[h] = SingleModelAmica(data; m, M, maxiter, A, mu, beta, kwargs...)
+		models[h] = SingleModelAmica(data; m, maxiter, A, mu, beta, kwargs...)
 	end
 	return MultiModelAmica(models,proportions,ldet)
 end

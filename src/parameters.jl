@@ -2,7 +2,8 @@
 #todo: remove third index for singlemodel on the arrays
 function reparameterize!(myAmica::SingleModelAmica, data, v)
 	n = myAmica.n
-	M = myAmica.M
+	#M = myAmica.M
+	M = 1#todo: remove
 	mu = myAmica.learnedParameters.location
 	beta = myAmica.learnedParameters.scale
 
@@ -145,7 +146,8 @@ function update_parameters!(myAmica::SingleModelAmica, v, vsum, fp, lambda, lrat
 	beta = myAmica.learnedParameters.scale
 	mu = myAmica.learnedParameters.location
 	rho = myAmica.learnedParameters.shape
-	M = myAmica.M
+	#M = myAmica.M
+	M = 1 #todo: remove
 	N = myAmica.N
 	n = myAmica.n 
 	m = myAmica.m

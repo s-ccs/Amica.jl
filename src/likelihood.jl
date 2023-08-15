@@ -1,11 +1,23 @@
-function calculate_LL!(myAmica::AbstractAmica, iter) #lines 225 - 231
-	LL = calculate_LL(myAmica.Lt,myAmica.M,myAmica.N,myAmica.n)
-	myAmica.LL[iter] = LL
-	
-	return myAmica
+#todo: make the calculate LLs one function
+function calculate_LL!(myAmica::SingleModelAmica, iter)
+	N = myAmica.N
+	n = myAmica.n
+	myAmica.LL[iter] = sum(myAmica.Lt) / (n*N)
 end
 
-function calculate_LL(Lt, M, N, n) #lines 225 - 231
+function calculate_LL!(myAmica::MultiModelAmica, iter) #todo: fix whole thing. requires Lt for all models at once
+	N = myAmica.N
+	n = myAmica.n
+	Ltmax = ones(size(myAmica.Lt))
+	for i in 1:N
+		Ltmax[:,i] .= maximum(myAmica.Lt[:,i])
+	end
+	P = sum(exp.(myAmica.Lt-Ltmax),dims = 1)'
+	myAmica.LL[iter] = sum(Ltmax[1,:] + log.(P)) / (n*N) #todo: fix with tuple
+end
+
+#old version (not standalone, was used by calculate_LL!)
+function calculate_LL(Lt, N, n) #lines 225 - 231
 	if M > 1
 		Ltmax = ones(size(Lt))
 		for i in 1:N
