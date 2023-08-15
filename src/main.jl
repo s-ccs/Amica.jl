@@ -43,7 +43,6 @@ function amica!(myAmica::AbstractAmica,
 	#learnedParameters(m::AbstractAmica) = m.learnedParameters
 	
 
-	M = myAmica.M
 	n = myAmica.n
 	N = myAmica.N
 	m = myAmica.m
@@ -73,29 +72,14 @@ function amica!(myAmica::AbstractAmica,
 
 
 	for iter in 1:maxiter
-		for h in 1:M
-			myAmica = update_sources!(myAmica, data, h)
-			myAmica.ldet[h] =  calculate_ldet(myAmica.A[:,:,h])
-			myAmica.Lt[h,:] .= log(myAmica.proportions[h]) + myAmica.ldet[h] #todo: put into function
-			
-			Threads.@threads for i in 1:n
-				for j in 1:m
-					#Lt[h,:] = sum(loglikelihoodMMGG.(eachcol(mu[:,:,h]),eachcol(beta[:,:,h]),eachcol(rho[:,:,h]),eachrow(source_signals[:,:,h]),eachcol(alpha[:,:,h])))
-					#myAmica = calculate_z_y_Lt!(myAmica, h)
-					myAmica.y[i,:,j,h] = calculate_y(myAmica.learnedParameters.scale[j,i,h], myAmica.learnedParameters.location[j,i,h], myAmica.source_signals[i,:,h])
-					myAmica.Q[j,:] .= calculate_Q(myAmica.y[i,:,j,h], myAmica.learnedParameters.prop[j,i,h], myAmica.learnedParameters.scale[j,i,h], myAmica.learnedParameters.shape[j,i,h])
-				end
-				if m > 1
-					for j in 1:m
-						myAmica.z[i,:,j,h] = calculate_u(myAmica.Q, j)
-					end
-				end
-				myAmica.Lt[h,:] = calculate_Lt(myAmica.Lt[h,:], myAmica.Q)
-				#todo: calculate Lt for m = 1
-			end
-			myAmica = calculate_LL!(myAmica, iter)
-
-		end
+		update_sources!(myAmica, data)
+		calculate_ldet!(myAmica) #todo: funktionen auf einzelnde models anwenden seperat anwenden (keine schleife außen)
+		lt_x_proportions_rename_pls(myAmica)
+		calculate_y!(myAmica)
+		calculate_Q!(myAmica)
+		calculate_u!(myAmica)
+		calculate_Lt!(myAmica) #todo: check weird stuff with position in loop
+		calculate_LL!(myAmica, iter) #todo: check if iter needs to be given
 		
 		if iter > 1
 			dLL[iter] = myAmica.LL[iter] - myAmica.LL[iter-1]
@@ -112,7 +96,7 @@ function amica!(myAmica::AbstractAmica,
 			#println("Iteration: ", iter, ". lrate = ", lrate.lrate, ". LL = ", myAmica.LL[iter])
 		end
    
-
+		M = 1 #todo: remove
 		vsum = zeros(M)
 		for h in 1:M
 			#update parameters
@@ -131,7 +115,7 @@ function amica!(myAmica::AbstractAmica,
 			end
 			try
 				#myAmica, g, vsum, kappa, lambda = update_parameters_and_other_stuff!(myAmica, v, vsum, h, fp, lambda, rholrate, update_rho)
-				myAmica, g, kappa, lambda = update_parameters!(myAmica, v, vsum, h, fp, lambda, rholrate, update_rho)
+				myAmica, g, kappa, lambda = update_parameters!(myAmica, v, vsum, fp, lambda, rholrate, update_rho) #should get h for multimodel
             catch e
 				isa(e,AmicaProportionsZeroException) ? continue : rethrow()
 			end

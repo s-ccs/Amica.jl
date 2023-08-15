@@ -2,7 +2,8 @@ function newton_method(myAmica, v, vsum, h, iter, g, kappa, do_newton, newt_star
 	
 	lnatrate = lrate.natural_rate
 	lrate = lrate.lrate
-	M = myAmica.M
+	#M = myAmica.M
+	M = 1#todo : remove
 	n = myAmica.n
 	N = myAmica.N
 
