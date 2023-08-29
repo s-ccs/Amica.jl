@@ -20,7 +20,7 @@ function bene_sphering(data)
 	return d_memory_whiten.iF * data
 end
 
-function calculate_lrate!(dLL, lrateType::LearningRate,mindll, iter, newt_start_iter, do_newton, iterwin)
+function calculate_lrate!(dLL, lrateType::LearningRate, iter, newt_start_iter, do_newton, iterwin) #todo: warum mindll nicht verwendet?
 
 	lratefact,lnatrate,lratemax, = lrateType.decreaseFactor, lrateType.natural_rate, lrateType.maximum
 	lrate = lrateType.lrate
@@ -38,36 +38,7 @@ function calculate_lrate!(dLL, lrateType::LearningRate,mindll, iter, newt_start_
     end
 	lrateType.lrate = lrate
 	#myAmica.lrate_over_iterations[iter] = lrate
-	return lrateType
-end
-
-#no longer in use
-function calculate_z_y_Lt!(myAmica,h)
-	myAmica.ldet[h] =  -log(abs(det(myAmica.A[:,:,h])))
-	myAmica.Lt[h,:] .= log(myAmica.proportions[h]) + myAmica.ldet[h]
-
-	Lt_h = myAmica.Lt[h,:]' #noch nicht übernommen
-	n = myAmica.n
-	m = myAmica.m
-	for i in 1:n
-		for j in 1:m
-			myAmica.y[i,:,j,h] = sqrt(myAmica.learnedParameters.β[j,i,h]) * (myAmica.source_signals[i,:,h] .- myAmica.learnedParameters.μ[j,i,h])
-			myAmica.Q[j,:] .= log(myAmica.learnedParameters.α[j,i,h]) + 0.5*log(myAmica.learnedParameters.β[j,i,h]) .+ logpfun(myAmica.y[i,:,j,h],myAmica.learnedParameters.ρ[j,i,h])
-		end
-		if m > 1
-			Qmax = ones(m,1).*maximum(myAmica.Q,dims=1);
-			Lt_h = Lt_h .+ Qmax[1,:]' .+ log.(sum(exp.(myAmica.Q - Qmax),dims = 1))
-			for j in 1:m
-				Qj = ones(m,1) .* myAmica.Q[j,:]'
-				myAmica.z[i,:,j,h] = 1 ./ sum(exp.(myAmica.Q-Qj),dims = 1)
-			end
-		else
-			Lt_h = Lt_h .+ myAmica.Q[1,:]
-		end
-	end
-
-	myAmica.Lt[h,:] = Lt_h
-	return myAmica
+	#return lrateType
 end
 
 function calculate_ldet!(myAmica::SingleModelAmica)
@@ -89,7 +60,7 @@ function calculate_y!(myAmica::SingleModelAmica)
 end
 
 function calculate_y!(myAmica::MultiModelAmica)
-	for h in 1:size(myAmica.models)
+	for h in 1:size(myAmica.models,1)
 		Threads.@threads for i in 1:myAmica.n
 			for j in 1:myAmica.m
 				myAmica.models[h].y[i,:,j] = sqrt(myAmica.models[h].learnedParameters.scale[j,i]) * (myAmica.models[h].source_signals[i,:] .- myAmica.models[h].learnedParameters.location[j,i])
@@ -98,46 +69,41 @@ function calculate_y!(myAmica::MultiModelAmica)
 	end
 end
 
-function calculate_Q!(myAmica::SingleModelAmica)
-	Threads.@threads for i in 1:myAmica.n
-		for j in 1:myAmica.m
-			myAmica.Q[j,:] = log(myAmica.learnedParameters.prop[j,i]) + 0.5*log(myAmica.learnedParameters.scale[j,i]) .+ logpfun(myAmica.y[i,:,j],myAmica.learnedParameters.shape[j,i])
-		end
-	end
-end
-
-function calculate_Q!(myAmica::MultiModelAmica)
-	for h in 1:size(myAmica.models)
-		Threads.@threads for i in 1:myAmica.n
-			for j in 1:myAmica.m
-				myAmica.models[h].Q[j,:] = log(myAmica.models[h].learnedParameters.prop[j,i]) + 0.5*log(myAmica.models[h].learnedParameters.scale[j,i]) .+ logpfun(myAmica.models[h].y[i,:,j],myAmica.models[h].learnedParameters.shape[j,i])
-			end
-		end
-	end
-end
-
 #calculates u but saves it into z
-function calculate_u!(myAmica::SingleModelAmica)
-	for i in 1:myAmica.n #todo: change how n is stored
-		if myAmica.m > 1 #same
-			for j in 1:myAmica.m
-				Qj = ones(myAmica.m,1) .* myAmica.Q[j,:]'
-				myAmica.z[i,:,j] = 1 ./ sum(exp.(myAmica.Q-Qj),dims = 1)
-			end
+function calculate_u!(myAmica::SingleModelAmica, i)
+	if myAmica.m > 1 #same
+		for j in 1:myAmica.m
+			Qj = ones(myAmica.m,1) .* myAmica.Q[j,:]'
+			myAmica.z[i,:,j] = 1 ./ sum(exp.(myAmica.Q-Qj),dims = 1)
 		end
 	end
 end
-
-function calculate_u!(myAmica::MultiModelAmica)
+#todo: remove n loop
+function calculate_u!(myAmica::MultiModelAmica,i)
 	m = myAmica.models[1].m #todo: change how m is stored
 	n = myAmica.models[1].n #same
-	for h in 1:size(models)
-		for i in 1:n
-			if m > 1 
-				for j in 1:m
-					Qj = ones(m,1) .* myAmica.models[h].Q[j,:]'
-					myAmica.myAmica.models[h].z[i,:,j] = 1 ./ sum(exp.(myAmica.models[h].Q-Qj),dims = 1)
-				end
+	for h in 1:size(myAmica.models,1)
+	#i in n loop was here
+		if m > 1 
+			for j in 1:m
+				Qj = ones(m,1) .* myAmica.models[h].Q[j,:]'
+				myAmica.models[h].z[i,:,j] = 1 ./ sum(exp.(myAmica.models[h].Q-Qj),dims = 1)
+			end
+		end
+	end
+end
+#no longer in use
+function calculate_Q!(myAmica::SingleModelAmica, i)
+	for j in 1:myAmica.m
+		myAmica.Q[j,:] = log(myAmica.learnedParameters.proportions[j,i]) + 0.5*log(myAmica.learnedParameters.scale[j,i]) .+ logpfun(myAmica.y[i,:,j],myAmica.learnedParameters.shape[j,i])
+	end
+end
+#todo: remove n loop
+function calculate_Q!(myAmica::MultiModelAmica, i)
+	for h in 1:size(myAmica.models,1)
+		Threads.@threads for i in 1:myAmica.n
+			for j in 1:myAmica.m
+				myAmica.models[h].Q[j,:] = log(myAmica.models[h].learnedParameters.proportions[j,i]) + 0.5*log(myAmica.models[h].learnedParameters.scale[j,i]) .+ logpfun(myAmica.models[h].y[i,:,j],myAmica.models[h].learnedParameters.shape[j,i])
 			end
 		end
 	end
@@ -145,24 +111,28 @@ end
 
 function calculate_Lt!(myAmica::SingleModelAmica)
 	m = myAmica.m
-	for i in 1:myAmica.n #todo: check if this loop is necessary and why, see matlab
-		if m > 1
-			Qmax = ones(m,1).*maximum(myAmica.Q,dims=1);
-			myAmica.Lt = vec(myAmica.Lt' .+ Qmax[1,:]' .+ log.(sum(exp.(myAmica.Q - Qmax),dims = 1))) #todo: check if vec necessary (otherwise dimension mismatch, but it wasnt used in previous version??)
-		else
-			myAmica.Lt = vec(myAmica.Lt .+ myAmica.Q[1,:]) #todo: test and same as above
-		end
+	if m > 1
+		Qmax = ones(m,1).*maximum(myAmica.Q,dims=1);
+		myAmica.Lt[:] = myAmica.Lt' .+ Qmax[1,:]' .+ log.(sum(exp.(myAmica.Q - Qmax),dims = 1))
+	else
+		myAmica.Lt[:] = myAmica.Lt .+ myAmica.Q[1,:]#todo: testen, wir hatten noch nie m = 1 benutzt
 	end
 end
-
+#todo: remove Q and n loop
 function calculate_Lt!(myAmica::MultiModelAmica)
 	m = myAmica.models[1].m
-	for i in 1:myAmica.models[1].n #todo: check if this loop is necessary and why, see matlab
-		if m > 1
-			Qmax = ones(m,1).*maximum(myAmica.models[h].Q,dims=1);
-			myAmica.models[h].Lt = myAmica.models[h].Lt' .+ Qmax[1,:]' .+ log.(sum(exp.(myAmica.models[h].Q - Qmax),dims = 1))
-		else
-			myAmica.Lt = myAmica.models[h].Lt .+ myAmica.models[h].Q[1,:] #todo: test
+	M = size(myAmica.models,1)
+	for h in 1:M
+		for i in 1:myAmica.models[1].n #todo: check if this loop is necessary and why, see matlab
+			for j in 1:myAmica.m
+				myAmica.models[h].Q[j,:] = log(myAmica.models[h].learnedParameters.proportions[j,i]) + 0.5*log(myAmica.models[h].learnedParameters.scale[j,i]) .+ logpfun(myAmica.models[h].y[i,:,j],myAmica.models[h].learnedParameters.shape[j,i])
+			end
+			if m > 1
+				Qmax = ones(m,1).*maximum(myAmica.models[h].Q,dims=1);
+				myAmica.models[h].Lt[:] = myAmica.models[h].Lt[:]' .+ Qmax[1,:]' .+ log.(sum(exp.(myAmica.models[h].Q - Qmax),dims = 1))
+			else
+				myAmica.models[h].Lt[:] = myAmica.models[h].Lt[:] .+ myAmica.models[h].Q[1,:] #todo: test
+			end
 		end
 	end
 end
@@ -178,8 +148,9 @@ function calculate_Lt(Lt, Q)
 end
 
 function lt_x_proportions_rename_pls(myAmica::MultiModelAmica) #todo: rename
-	for h in 1:size(models)
-		myAmica.models[h].Lt .= log(myAmica.models[h].proportions) + myAmica.models[h].ldet
+	M = size(myAmica.models,1)
+	for h in 1:M
+		myAmica.models[h].Lt .= log(myAmica.model_proportions[h]) + myAmica.models[h].ldet
 	end
 end
 
@@ -194,13 +165,21 @@ function update_sources!(myAmica::SingleModelAmica, data)
 end
 
 function update_sources!(myAmica::MultiModelAmica, data)
-	n = size(myAmica.models[h].A, 1)
+	n = size(myAmica.models[1].A, 1)
 	for h in 1:length(myAmica.models)
-		b = myAmica.models[h].source_signals
 		for i in 1:n 
 			Wh = pinv(myAmica.models[h].A)
-			myAmica.models[h].b[i,:] = Wh[i,:]' * data .- Wh[i,:]' * myAmica.models[h].centers #todo: why centers here and not in singlemodel function?
+			myAmica.models[h].source_signals[i,:] = Wh[i,:]' * data .- Wh[i,:]' * myAmica.models[h].centers
 		end
-		#myAmica.source_signals[:,:,:] = b
+	end
+end
+
+#Adds means back to model centers
+add_means_back!(myAmica::SingleModelAmica) = nothing
+
+function add_means_back!(myAmica::MultiModelAmica)
+	M = size(myAmica.models)
+	for h in 1:M
+		myAmica.centers[:,h] = myAmica.centers[:,h] + mn #add mean back to model centers
 	end
 end

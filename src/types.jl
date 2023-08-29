@@ -1,5 +1,5 @@
 mutable struct GGParameters
-	prop::AbstractArray{Float64} #source density mixture proportions
+	proportions::AbstractArray{Float64} #source density mixture proportions
 	scale::AbstractArray{Float64} #source density inverse scale parameter
 	location::AbstractArray{Float64} #source density location parameter
 	shape::AbstractArray{Float64} #source density shape paramters
@@ -34,8 +34,10 @@ end
 mutable struct MultiModelAmica <:AbstractAmica
 	#singleModel::SingleModelAmica
 	models::Array{SingleModelAmica} #Array of SingleModelAmicas
-	proportions::AbstractMatrix #model proportions
-	ldet::AbstractArray #currently in both amicas
+	model_proportions::AbstractMatrix #model proportions
+	ldet::AbstractArray #currently in both amicas todo: change that
+	v
+	vsum
 end
 
 using Parameters
@@ -96,68 +98,20 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, m
 
 	return SingleModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),n,m,N,A,z,y,Q,centers,Lt,LL,ldet,maxiter)
 end
-#just a save
-# function SingleModelAmica(data::AbstractArray{T}; m=3, M=1, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...) where {T<:Real}
-# 	# M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_mean
-# 	(n, N) = size(data)
-	
-
-# 	#initialize parameters
-	
-# 	centers = zeros(n,M)
-# 	eye = Matrix(I, n, n)
-# 	if isnothing(A)
-# 		A = zeros(n,n,M)
-# 		for h in 1:M
-# 			A[:,:,h] = eye[n] .+ 0.1*rand(n,n)
-# 			for i in 1:n
-# 				A[:,i,h] = A[:,i,h] / norm(A[:,i,h])
-# 			end
-# 		end
-# 	end
-
-# 	proportions = (1/M) * ones(M,1)
-# 	alpha = (1/m) * ones(m,n,M)
-# 	if isnothing(mu)
-# 		if m > 1
-# 			mu = 0.1 * randn(m, n, M)
-# 		else
-# 			mu = zeros(m, n, M)
-# 		end
-# 	end
-# 	if isnothing(beta)
-# 		beta = ones(m, n, M) + 0.1 * randn(m, n, M)
-# 	end
-# 	rho = ones(m, n, M)
-
-	
-# 	y = zeros(n,N,m,M)
-	
-# 	Q = zeros(m,N)
-	
-# 	Lt = zeros(M,N)
-# 	z = ones(n,N,m,M)/N
-
-
-# 	#originally initialized inside the loop
-# 	LL = zeros(1,maxiter)
-# 	ldet = zeros(M)
-# 	source_signals = zeros(n,N,M)
-
-
-# 	return SingleModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),M,n,m,N,A,z,y,Q,centers,Lt,LL,ldet,proportions,maxiter)
-# end
 
 function MultiModelAmica(data::Array; m=3, M=2, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...)
 	# multiModel = SingleModelAmica(data; m, M, maxiter, A, mu, beta, kwargs...)
 	# return MultiModelAmica(multiModel)
 	models = Array{SingleModelAmica}(undef, M)
-	proportions = (1/M) * ones(M,1)
+	model_proportions = (1/M) * ones(M,1)
+	(n, N) = size(data)
 	ldet = zeros(M)
+	v = ones(N)
+	vsum = zeros(M)
 	for h in 1:M
 		models[h] = SingleModelAmica(data; m, maxiter, A, mu, beta, kwargs...)
 	end
-	return MultiModelAmica(models,proportions,ldet)
+	return MultiModelAmica(models,model_proportions,ldet,v,vsum)
 end
 
 
@@ -176,6 +130,7 @@ import Base.getproperty
 #     end
 # end
 
+#currently not necessary
 function Base.getproperty(multiModel::MultiModelAmica, prop::Symbol)
     if prop in fieldnames(SingleModelAmica) && !(prop in fieldnames(MultiModelAmica))
         return getfield(multiModel.models[1], prop)
@@ -185,4 +140,7 @@ function Base.getproperty(multiModel::MultiModelAmica, prop::Symbol)
 end
 
 struct AmicaProportionsZeroException <: Exception
+end
+
+struct AmicaNaNException <: Exception
 end

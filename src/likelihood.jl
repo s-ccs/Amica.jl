@@ -5,15 +5,20 @@ function calculate_LL!(myAmica::SingleModelAmica, iter)
 	myAmica.LL[iter] = sum(myAmica.Lt) / (n*N)
 end
 
-function calculate_LL!(myAmica::MultiModelAmica, iter) #todo: fix whole thing. requires Lt for all models at once
+function calculate_LL!(myAmica::MultiModelAmica, iter)
+	M = size(myAmica.models,1)
 	N = myAmica.N
 	n = myAmica.n
 	Ltmax = ones(size(myAmica.Lt))
+	Lt_i = zeros(M)
 	for i in 1:N
-		Ltmax[:,i] .= maximum(myAmica.Lt[:,i])
+		for h in 1:M
+			Lt_i[h] = myAmica.models[h].Lt[i]
+		end
+		Ltmax[i] = maximum(Lt_i) #Look for the maximum ith entry among all models
 	end
 	P = sum(exp.(myAmica.Lt-Ltmax),dims = 1)'
-	myAmica.LL[iter] = sum(Ltmax[1,:] + log.(P)) / (n*N) #todo: fix with tuple
+	myAmica.LL[iter] = sum(Ltmax[1] .+ log.(P)) / (n*N) #todo: fix with tuple, fix calculation
 end
 
 #old version (not standalone, was used by calculate_LL!)

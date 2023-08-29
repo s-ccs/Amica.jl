@@ -2,20 +2,20 @@
 using SignalAnalysis
 using Amica
 t = range(0,20*π,length=20000)
-s =rand(PinkGaussian(length(t)),4)'
+s =rand(PinkGaussian(length(t)),20)'
 s[2,:] = sin.(t)
 s[3,:] = sin.(2 .* t)
 s[4,:] = sin.(10 .* t)
 #s = s .* [1,2,3,4]
-#A = rand(size(s,1),size(s,1))
-A = [1 1 0 0; 0 1 1 0; 0 0 1 1; 1 0 1 0]
+A = rand(size(s,1),size(s,1))
+#A = [1 1 0 0; 0 1 1 0; 0 0 1 1; 1 0 1 0]
 
 x = A*s
 
 #A = [1 1 0 1; 1 1 0 0; 1 0 1 1; 0 0 0 1]
 #x = hcat(x,A*s) 
 #am = fit(SingleModelAmica,x;maxiter=500)
-am = fit(MultiModelAmica,x;maxiter=500,M=2)
+am = fit(SingleModelAmica,x;maxiter=50,M=2)
 size(am.A)
 W = inv(am.A[:,:,1]) #previously [:,:,2]
 
