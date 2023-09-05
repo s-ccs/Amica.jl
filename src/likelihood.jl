@@ -1,11 +1,34 @@
-function calculate_LL!(myAmica::AbstractAmica, iter) #lines 225 - 231
-	LL = calculate_LL(myAmica.Lt,myAmica.M,myAmica.N,myAmica.n)
-	myAmica.LL[iter] = LL
-	
-	return myAmica
+#todo: make the calculate LLs one function
+function calculate_LL!(myAmica::SingleModelAmica)
+	N = myAmica.N
+	n = myAmica.n
+	push!(myAmica.LL,sum(myAmica.Lt) / (n*N))
 end
 
-function calculate_LL(Lt, M, N, n) #lines 225 - 231
+#Calculates Learning Rate for each iteration
+function calculate_LL!(myAmica::MultiModelAmica)
+	M = size(myAmica.models,1)
+	N = size(myAmica.models[1].Lt,1)
+	n = size(myAmica.models[1].A,1)
+	Ltmax = ones(#=size(myAmica.models,1),=#size(myAmica.models[1].Lt,1)) #Ltmax = (M x N)
+	Lt_i = zeros(M)
+	P = zeros(N)
+	for i in 1:N
+		for h in 1:M
+			Lt_i[h] = myAmica.models[h].Lt[i]
+		end
+		Ltmax[i] = maximum(Lt_i) #Look for the maximum ith entry among all models
+		for h in 1:M
+			P[i] = P[i] + exp(myAmica.models[h].Lt[i] - Ltmax[i])
+			#P[i] = exp(P[i])
+		end
+	end 
+	#P = sum(exp.(myAmica.Lt-Ltmax),dims = 1)'
+	push!(myAmica.LL, sum(Ltmax .+ log.(P)) / (n*N))
+end
+
+#old version (not standalone, was used by calculate_LL!)
+function calculate_LL(Lt, N, n) #lines 225 - 231
 	if M > 1
 		Ltmax = ones(size(Lt))
 		for i in 1:N
