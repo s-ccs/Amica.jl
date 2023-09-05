@@ -43,7 +43,7 @@ function amica!(myAmica::AbstractAmica,
 	maxiter = myAmica.maxiter,
 	do_newton = 1,
 	newt_start_iter = 25,# TODO Check
-	iterwin = 10,
+	iterwin = 1,
 	update_rho = 1,
 	mindll = 1e-8,
 
@@ -56,7 +56,7 @@ function amica!(myAmica::AbstractAmica,
 	(n, N) = size(data)
 
 
-	m = myAmica.models[1].m
+	m = myAmica.m
 
 	removed_mean = removeMean!(data)
 	#Mx = maximum(abs.(data)) #maximum and max are not the same
