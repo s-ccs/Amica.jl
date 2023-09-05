@@ -6,14 +6,19 @@ using LinearAlgebra
 
 #_____________________________________________
 #Generate multiple sin mixed with pink gaussian
-t = range(0,20*π,length=20000)
-s =rand(PinkGaussian(length(t)),4)'
+m = 3
+M = 2
+n = 4 #at least 4 to fit all sinusses
+
+t = range(0,20*π,length=5)
+s =rand(PinkGaussian(length(t)),n)'
 s[2,:] = sin.(t)
 s[3,:] = sin.(2 .* t)
 s[4,:] = sin.(10 .* t)
 #s = s .* [1,2,3,4]
-#A = rand(size(s,1),size(s,1))
-A = [1 1 0 0; 0 1 1 0; 0 0 1 1; 1 0 1 0]
+A = rand(size(s,1),size(s,1))
+#A = [1 1 0 0; 0 1 1 0; 0 0 1 1; 1 0 1 0]
+
 x = A*s
 #_____________________________________________
 #_____________________________________________
@@ -27,10 +32,6 @@ x = A*s
 # raw.filter(l_freq=1, h_freq=nothing, fir_design="firwin")
 # x = pyconvert(Array,raw.get_data(;units="uV"))
 #_____________________________________________
-
-m = 3
-M = 1
-n = 4
 
 #initialise random parameters (A, beta, mu) before saving them
 beta = ones(m, n, M) + 0.1 * randn(m, n, M)
@@ -50,7 +51,7 @@ for h in 1:M
     end
 end
 
-file = matopen("test/breakit_data.mat", "w")
+file = matopen("test/supersmall_data.mat", "w")
 write(file, "x", x)
 write(file, "s", s) #only save for self-mixed data
 write(file, "A", A) # "
