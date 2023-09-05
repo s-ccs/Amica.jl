@@ -37,15 +37,14 @@ function newton_method!(myAmica::SingleModelAmica, iter, g, kappa, do_newton, ne
 	end
 end
 
-function newton_method!(myAmica::MultiModelAmica, v, vsum, h, iter, g, kappa, do_newton, newt_start_iter, lrate::LearningRate, lambda)
+function newton_method!(myAmica::MultiModelAmica, h, iter, g, kappa, do_newton, newt_start_iter, lrate::LearningRate, lambda)
 	
 	lnatrate = lrate.natural_rate
 	lrate = lrate.lrate
 	M = size(myAmica.models)
-	n = myAmica.n
-	N = myAmica.N
+	(n,N) = size(myAmica.models[1].source_signals)
 
-	sigma2 = myAmica.source_signals[:,:,h].^2 * v[h,:] /vsum[h]
+	sigma2 = myAmica.models[h].source_signals[:,:].^2 * myAmica.v[h,:] /myAmica.vsum[h]
 
 	dA = Matrix{Float64}(I, n, n) - g * myAmica.models[h].source_signals[:,:]' 
 	bflag = 0

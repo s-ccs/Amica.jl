@@ -1,24 +1,30 @@
 #todo: make the calculate LLs one function
-function calculate_LL!(myAmica::SingleModelAmica, iter)
+function calculate_LL!(myAmica::SingleModelAmica)
 	N = myAmica.N
 	n = myAmica.n
-	myAmica.LL[iter] = sum(myAmica.Lt) / (n*N)
+	push!(myAmica.LL,sum(myAmica.Lt) / (n*N))
 end
 
-function calculate_LL!(myAmica::MultiModelAmica, iter)
+#Calculates Learning Rate for each iteration
+function calculate_LL!(myAmica::MultiModelAmica)
 	M = size(myAmica.models,1)
-	N = myAmica.N
-	n = myAmica.n
-	Ltmax = ones(size(myAmica.Lt))
+	N = size(myAmica.models[1].Lt,1)
+	n = size(myAmica.models[1].A,1)
+	Ltmax = ones(#=size(myAmica.models,1),=#size(myAmica.models[1].Lt,1)) #Ltmax = (M x N)
 	Lt_i = zeros(M)
+	P = zeros(N)
 	for i in 1:N
 		for h in 1:M
 			Lt_i[h] = myAmica.models[h].Lt[i]
 		end
 		Ltmax[i] = maximum(Lt_i) #Look for the maximum ith entry among all models
-	end
-	P = sum(exp.(myAmica.Lt-Ltmax),dims = 1)'
-	myAmica.LL[iter] = sum(Ltmax[1] .+ log.(P)) / (n*N) #todo: fix with tuple, fix calculation
+		for h in 1:M
+			P[i] = P[i] + exp(myAmica.models[h].Lt[i] - Ltmax[i])
+			#P[i] = exp(P[i])
+		end
+	end 
+	#P = sum(exp.(myAmica.Lt-Ltmax),dims = 1)'
+	push!(myAmica.LL, sum(Ltmax .+ log.(P)) / (n*N))
 end
 
 #old version (not standalone, was used by calculate_LL!)

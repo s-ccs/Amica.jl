@@ -19,7 +19,7 @@ Main AMICA algorithm
 
 function fit(amicaType::Type{T}, data; m = 3, maxiter = 500, remove_mean = true, mu = nothing, beta = nothing, A = nothing, kwargs...) where {T<:AbstractAmica}
 	if remove_mean
-		removeMean!(data)
+		#removeMean!(data) now in main method
 		#data = jason_sphering(data)
 		#data = bene_sphering(data)
 		
@@ -49,18 +49,19 @@ function amica!(myAmica::AbstractAmica,
 
 	kwargs...)
 	
-	myAmica.learnedParameters.shape .= rholrate.init .*myAmica.learnedParameters.shape
+	initialize_shape_parameter(myAmica,rholrate)
 	#learnedParameters(m::AbstractAmica) = m.learnedParameters
 	
 
-	n = myAmica.n
-	N = myAmica.N
-	m = myAmica.m
+	(n, N) = size(data)
 
 
+	m = myAmica.models[1].m
+
+	removed_mean = removeMean!(data)
 	#Mx = maximum(abs.(data)) #maximum and max are not the same
 
-	mn = mean(data, dims = 2) #should be zeros if remove_mean = 0
+	mn = mean(data, dims = 2) #should be zeros if remove_mean = 0, todo: add to mean function
 	#a = 0
 	g = zeros(n, N)
 	lambda = zeros(n, 1)
@@ -85,13 +86,8 @@ function amica!(myAmica::AbstractAmica,
 		calculate_ldet!(myAmica)
 		lt_x_proportions_rename_pls(myAmica) #todo: rename
 		calculate_y!(myAmica)
-		#Threads.@threads 
-		for i in 1:myAmica.n
-			calculate_Q!(myAmica,i)
-			calculate_u!(myAmica,i)
-			calculate_Lt!(myAmica) #Has to be in loop because it uses current Q
-		end
-		calculate_LL!(myAmica, iter) #todo: check if iter needs to be given
+		loopiloop(myAmica) #Updates y and Lt. Todo: Rename
+		calculate_LL!(myAmica) #todo: check if iter needs to be given
 		
 		#calculate difference in loglikelihood between iterations
 		if iter > 1
@@ -110,7 +106,7 @@ function amica!(myAmica::AbstractAmica,
 			update_loop!(myAmica, fp, lambda, rholrate, update_rho, iter, kappa, do_newton, newt_start_iter, lrate) #updates parameters and mixing matrix, todo: zeug übergeben was es für die anderen funktionen braucht
 		catch e
 			if isa(e,AmicaNaNException)
-				println("NaN detected. Better stop. Current iteration: ", iter)
+				println("\nNaN detected. Better stop. Current iteration: ", iter)
 				@goto escape_from_NaN
 			else 
 				rethrow()
@@ -124,6 +120,6 @@ function amica!(myAmica::AbstractAmica,
 	end
 
     @label escape_from_NaN #If parameters contain NaNs, the algorithm skips the A update and terminates by jumping here
-	add_means_back!(myAmica)
+	add_means_back!(myAmica, removed_mean)
 	return myAmica
 end

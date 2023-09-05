@@ -17,18 +17,16 @@ mutable struct SingleModelAmica <:AbstractAmica
 	#moreParameters::MoreParameters
 	source_signals
 	learnedParameters::GGParameters
-	n::Integer #number of data channels
 	m::Integer #number of gaussians
-	N::Integer #number of timesteps
     A::AbstractArray #unmixing matrices for each model
 	z::AbstractArray
 	y::AbstractArray
-	Q::AbstractArray
+	Q::Union{AbstractArray, Nothing} #1xN
 	centers::AbstractArray #model centers
 	Lt::AbstractVector #log likelihood of time point for each model ( M x N )
-	LL::AbstractVector #log likelihood over iterations todo: change to tuple 
+	LL::Union{AbstractVector, Nothing} #log likelihood over iterations todo: change to tuple 
 	ldet::Float64
-	maxiter::Integer #maximum number of iterations
+	maxiter::Union{Int, Nothing} #maximum number of iterations, can be nothing because it's not needed for multimodel
 end
 
 mutable struct MultiModelAmica <:AbstractAmica
@@ -38,6 +36,10 @@ mutable struct MultiModelAmica <:AbstractAmica
 	ldet::AbstractArray #currently in both amicas todo: change that
 	v
 	vsum
+	maxiter::Int
+	m::Int #Number of Gaussians
+	LL::AbstractVector
+	Q
 end
 
 using Parameters
@@ -84,19 +86,24 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, m
 	
 	y = zeros(n,N,m)
 	
-	Q = zeros(m,N)
 	
 	Lt = zeros(N)
 	z = ones(n,N,m)/N
 
 
-	#originally initialized inside the loop
-	LL = zeros(maxiter) #todo: TUPEL
+	#Sets some parameters to nothing to only have them once in MultiModel
+	if isnothing(maxiter)
+		LL = nothing #todo: check if this works in Multimodel. maxiter will be given as nothing by MultiModel constructor
+		Q = nothing
+	else
+		LL = Float64[]
+		Q = zeros(m,N)
+	end
 	ldet = 0.0
 	source_signals = zeros(n,N)
 
 
-	return SingleModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),n,m,N,A,z,y,Q,centers,Lt,LL,ldet,maxiter)
+	return SingleModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),m,A,z,y,Q,centers,Lt,LL,ldet,maxiter)
 end
 
 function MultiModelAmica(data::Array; m=3, M=2, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...)
@@ -106,12 +113,39 @@ function MultiModelAmica(data::Array; m=3, M=2, maxiter=500, A=nothing, mu=nothi
 	model_proportions = (1/M) * ones(M,1)
 	(n, N) = size(data)
 	ldet = zeros(M)
-	v = ones(N)
+	v = ones(M,N)
 	vsum = zeros(M)
-	for h in 1:M
-		models[h] = SingleModelAmica(data; m, maxiter, A, mu, beta, kwargs...)
+	LL = Float64[]
+	Q = zeros(m,N)
+
+	#This part only exists to allow for initial values to be set by the user. They are still required to have the old format (something, something, M)
+	eye = Matrix(I, n, n) #todo: check if necessary
+	if isnothing(A)
+		A = zeros(n,n,M)
+		for h in 1:M
+			A[:,:,h] = eye[n] .+ 0.1*rand(n,n)
+			for i in 1:n
+				A[:,i,h] = A[:,i,h] / norm(A[:,i,h])
+			end
+		end
 	end
-	return MultiModelAmica(models,model_proportions,ldet,v,vsum)
+
+	if isnothing(mu)
+		if m > 1
+			mu = 0.1 * randn(m, n, M)
+		else
+			mu = zeros(m, n, M)
+		end
+	end
+
+	if isnothing(beta)
+		beta = ones(m, n, M) + 0.1 * randn(m, n, M)
+	end
+
+	for h in 1:M
+		models[h] = SingleModelAmica(data; m, maxiter=nothing, A=A[:,:,h], mu=mu[:,:,h], beta=beta[:,:,h], kwargs...)
+	end
+	return MultiModelAmica(models,model_proportions,ldet,v,vsum,maxiter,m,LL,Q)
 end
 
 
@@ -131,13 +165,13 @@ import Base.getproperty
 # end
 
 #currently not necessary
-function Base.getproperty(multiModel::MultiModelAmica, prop::Symbol)
-    if prop in fieldnames(SingleModelAmica) && !(prop in fieldnames(MultiModelAmica))
-        return getfield(multiModel.models[1], prop)
-    else
-        return getfield(multiModel, prop)
-    end
-end
+# function Base.getproperty(multiModel::MultiModelAmica, prop::Symbol)
+#     if prop in fieldnames(SingleModelAmica) && !(prop in fieldnames(MultiModelAmica))
+#         return getfield(multiModel.models[1], prop)
+#     else
+#         return getfield(multiModel, prop)
+#     end
+# end
 
 struct AmicaProportionsZeroException <: Exception
 end

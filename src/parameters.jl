@@ -19,9 +19,8 @@ function reparameterize!(myAmica::SingleModelAmica, data)
 end
 
 function reparameterize!(myAmica::MultiModelAmica, data)
-	n = myAmica.n #todo: calculate from something
-	M = size(myAmica.models)
-	v = myAmica.v
+	(n,N) = size(myAmica.models[1].source_signals)
+	M = size(myAmica.models,1)
 	
 	for h = 1:M
 		mu = myAmica.models[h].learnedParameters.location
@@ -38,37 +37,37 @@ function reparameterize!(myAmica::MultiModelAmica, data)
 		end
 	
 		if M > 1
-			cnew = data * v[h,:] /(sum(v[h,:]))
+			cnew = data * myAmica.v[h,:] /(sum(myAmica.v[h,:])) #todo: check why v not inverted
 			for i in 1:n
 				Wh = pinv(myAmica.models[h].A[:,:])
 				mu[:,i] = mu[:,i] .- Wh[i,:]' * (cnew-myAmica.models[h].centers[:])
 			end
-			myAmica.centers[:,h] = cnew
+			myAmica.models[h].centers = cnew
 		end
 		myAmica.models[h].learnedParameters.location .= mu
 		myAmica.models[h].learnedParameters.scale .= beta
 	end
 end
 
-function calculate_sumz(z, myAmica::SingleModelAmica)
+function calculate_sumz(myAmica::SingleModelAmica,i,j)
 	if myAmica.m == 1
-		return myAmica.N
+		return size(myAmica.source_signals,2) #todo: should return N. check
 	else
-		return sum(z)
+		return sum(myAmica.z[i,:,j])
 	end
 end
 
-function calculate_sumz(z, myAmica::MultiModelAmica)
-		return sum(z)
+function calculate_sumz(myAmica::MultiModelAmica,i,j,h)
+		return sum(myAmica.models[h].z[i,:,j])
 end
 
 
-calculate_z!(myAmica::SingleModelAmica, v, i,j) = nothing
-function calculate_z!(myAmica::MultiModelAmica, v, i,j,h)
+calculate_z!(myAmica::SingleModelAmica, i,j) = nothing
+function calculate_z!(myAmica::MultiModelAmica, i,j,h)
 	if myAmica.m > 1
-		myAmica.models[h].z[i,:,j] .= v .* myAmica.models[h].z[i,:,j]
+		myAmica.models[h].z[i,:,j] .= myAmica.v[h,:] .* myAmica.models[h].z[i,:,j]
 	elseif myAmica.m == 1
-		myAmica.models[h].z[i,:,j] = v
+		myAmica.models[h].z[i,:,j] = myAmica.v[h,:]
 	end
 end
 
@@ -78,9 +77,9 @@ function update_mixture_proportions!(sumz, myAmica::SingleModelAmica,j,i)
 	end
 end
 
-function update_mixture_proportions!(sumz, vsum, myAmica::MultiModelAmica,j,i,h)
+function update_mixture_proportions!(sumz, myAmica::MultiModelAmica,j,i,h)
 	if myAmica.m > 1
-		myAmica.models[h].learnedParameters.proportions[j,i] = sumz / vsum
+		myAmica.models[h].learnedParameters.proportions[j,i] = sumz / myAmica.vsum[h]
 	end
 end
 
@@ -134,7 +133,7 @@ function update_loop!(myAmica::SingleModelAmica, fp, lambda, rholrate, update_rh
 		
 		#Checks for NaN in parameters before updating the mixing matrix
 		if any(isnan, kappa) || any(isnan, myAmica.source_signals) || any(isnan, lambda) || any(isnan, g) || any(isnan, myAmica.learnedParameters.proportions)
-			throw(AmicaNaNException)
+			throw(AmicaNaNException())
 		end
 		#Update mixing matrix via Newton method
 		newton_method!(myAmica, iter, g, kappa, do_newton, newt_start_iter, lrate, lambda)
@@ -143,34 +142,33 @@ end
 function update_loop!(myAmica::MultiModelAmica, fp, lambda, rholrate, update_rho, iter, kappa, do_newton, newt_start_iter, lrate)
 	(n,N) = size(myAmica.models[1].source_signals)
 	M = size(myAmica.models,1)
-	myAmica.vsum = zeros(M)
-	v = myAmica.v
 	for h in 1:M
 		#update parameters
-		Lh = ones(M,N)
+		#Lh = ones(N)
+		#Lh = myAmica.models[i].Lt
 		for i in 1:M
-			Lh[i,:] = myAmica.models[h].Lt[:]
+			myAmica.v[h,:] = myAmica.v[h,:] + 1 ./ exp.(myAmica.models[i].Lt-myAmica.models[h].Lt)
 		end
-		v[h,:] = 1 ./ sum(exp.(myAmica.Lt-Lh),dims=1)
-		vsum[h] = sum(v[h,:])
-		myAmica.model_proportions[h] = vsum[h] / N
+		#v[h,:] = 1 ./ sum(exp.(myAmica.models[h].Lt-Lh),dims=1)
+		myAmica.vsum[h] = sum(myAmica.v[h,:])
+		myAmica.model_proportions[h] = myAmica.vsum[h] / N
 		
 		if myAmica.model_proportions[h] == 0
 			continue
 		end
 
-		try
-			g, kappa, lambda = update_parameters!(myAmica, v, vsum, h, fp, lambda, rholrate, update_rho)
-		catch e
-			isa(e,AmicaProportionsZeroException) ? continue : rethrow()
-		end
-		
+		#try
+			g, kappa, lambda = update_parameters!(myAmica, h, fp, lambda, rholrate, update_rho)#todo: output fixen
+		# catch e
+		# 	isa(e,AmicaProportionsZeroException) ? continue : rethrow()
+		# end
+
 		#Checks for NaN in parameters before updating the mixing matrix
-		if any(isnan, kappa) || any(isnan, myAmica.source_signals) || any(isnan, lambda) || any(isnan, g) || any(isnan, myAmica.learnedParameters.proportions)
-			throw(AmicaNaNException)
+		if any(isnan, kappa) || any(isnan, myAmica.models[h].source_signals) || any(isnan, lambda) || any(isnan, g) || any(isnan, myAmica.models[h].learnedParameters.proportions)
+			throw(AmicaNaNException()) #todo: check all source_signals
 		end
 		#Update mixing matrix via Newton method
-		newton_method!(myAmica, v, vsum, h, iter, g, kappa, do_newton, newt_start_iter, lrate, lambda)
+		newton_method!(myAmica, h, iter, g, kappa, do_newton, newt_start_iter, lrate, lambda)
 	end
 end
 
@@ -191,7 +189,7 @@ function update_parameters!(myAmica::SingleModelAmica, fp, lambda, lrate_rho::Le
 	for i in 1:myAmica.n
 		for j in 1:myAmica.m
 			sumz = 0
-			sumz = calculate_sumz(myAmica.z[i,:,j], myAmica)
+			sumz = calculate_sumz(myAmica,i,j)
 			update_mixture_proportions!(sumz,myAmica,j,i)
 			if sumz > 0
 				if (m > 1)
@@ -227,26 +225,25 @@ function update_parameters!(myAmica::SingleModelAmica, fp, lambda, lrate_rho::Le
 	return g, kappa, lambda
 end
 
-function update_parameters!(myAmica::MultiModelAmica, v, vsum, h, fp, lambda, lrate_rho::LearningRate, update_rho)
+function update_parameters!(myAmica::MultiModelAmica, h, fp, lambda, lrate_rho::LearningRate, update_rho)
 	alpha = myAmica.models[h].learnedParameters.proportions #todo: move into loop and add h
 	beta = myAmica.models[h].learnedParameters.scale
 	mu = myAmica.models[h].learnedParameters.location
 	rho = myAmica.models[h].learnedParameters.shape
-	M = myAmica.M
-	N = myAmica.N
-	n = myAmica.n 
+	#M = size(myAmica.models,1)
+	(n,N) = size(myAmica.models[1].source_signals)
 	m = myAmica.m
 	g = zeros(n,N)
 	kappa = zeros(n,1)
 	zfp = zeros(m, N)
 
 	
-	Threads.@threads for i in 1:myAmica.n
-		for j in 1:myAmica.m
+	#=Threads.@threads=# for i in 1:n
+		for j in 1:m
 			sumz = 0
-			calculate_z!(myAmica, v[h,:], i, j, h)
-			sumz = calculate_sumz(myAmica.models[h].z[i,:,j], myAmica)
-			update_mixture_proportions!(sumz, vsum[h],myAmica,j,i,h)
+			calculate_z!(myAmica, i, j, h)
+			sumz = calculate_sumz(myAmica,i,j,h)
+			update_mixture_proportions!(sumz,myAmica,j,i,h)
 			if sumz > 0
 				myAmica.models[h].z[i,:,j] .= myAmica.models[h].z[i,:,j] / sumz
 			else
@@ -277,7 +274,7 @@ function update_parameters!(myAmica::MultiModelAmica, v, vsum, h, fp, lambda, lr
 	myAmica.models[h].learnedParameters.scale = beta
 	myAmica.models[h].learnedParameters.location = mu
 	myAmica.models[h].learnedParameters.shape = rho
-	return myAmica, g, kappa, lambda
+	return g, kappa, lambda
 end
 
 function update_rho!(myAmica::SingleModelAmica, rho, j, i, lrate_rho::LearningRate)
