@@ -188,7 +188,7 @@ function update_sources!(myAmica::MultiModelAmica, data)
 end
 
 #Adds means back to model centers
-add_means_back!(myAmica::SingleModelAmica) = nothing
+add_means_back!(myAmica::SingleModelAmica,removed_mean) = nothing
 
 function add_means_back!(myAmica::MultiModelAmica, removed_mean)
 	M = size(myAmica.models,1)

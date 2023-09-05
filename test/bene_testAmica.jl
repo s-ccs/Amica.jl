@@ -1,7 +1,8 @@
 #s = sin.(t * collect(0.5:0.8:pi)')'#rand(10,10000)
 using SignalAnalysis
 using Amica
-t = range(0,20*π,length=20000)
+
+t = range(0,20*π,length=10000)
 s =rand(PinkGaussian(length(t)),20)'
 s[2,:] = sin.(t)
 s[3,:] = sin.(2 .* t)
@@ -14,8 +15,8 @@ x = A*s
 
 #A = [1 1 0 1; 1 1 0 0; 1 0 1 1; 0 0 0 1]
 #x = hcat(x,A*s) 
-#am = fit(SingleModelAmica,x;maxiter=500)
-am = fit(SingleModelAmica,x;maxiter=50,M=2)
+am = fit(SingleModelAmica,x;maxiter=500)
+amm = fit(MultiModelAmica,x;maxiter=500,M=1)
 size(am.A)
 W = inv(am.A[:,:,1]) #previously [:,:,2]
 
@@ -24,7 +25,7 @@ W = inv(am.A[:,:,1]) #previously [:,:,2]
 using CairoMakie
 
 f = Figure()
-series(f[1,1],s)
+series(f[1,1],s[:,1:500])
 ax,h = heatmap(f[1,2],A)
 Colorbar(f[1,3],h)
 
@@ -51,7 +52,7 @@ raw.filter(l_freq=1, h_freq=nothing, fir_design="firwin")
 d = pyconvert(Array,raw.get_data(;units="uV"))
 
 
-am = fit(SingleModelAmica,x;maxiter=500)
+am = fit(MultiModelAmica,d;maxiter=500,M=2)
 
 #----
 raw_memory = PyMNE.io.read_epochs_eeglab("/data/export/users/ehinger/amica_recompile/amica/Memorize.set")
