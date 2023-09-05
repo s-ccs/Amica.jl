@@ -1,5 +1,5 @@
 using Amica
-using CairoMakie
+#using CairoMakie
 using MAT
 using LinearAlgebra
 
@@ -31,7 +31,8 @@ using LinearAlgebra
 
 #___________________________________________________________________________________
 #Sinus data from mat file
-file = matopen("test/eeg_data.mat")
+#file = matopen("test/eeg_data.mat")
+file = matopen("test/supersmall_data.mat")
 x = read(file, "x")
 #s = read(file, "s")
 #A = read(file, "A")
@@ -41,11 +42,13 @@ mu_init = read(file, "mu_init")
 A_init = read(file, "A_init")
 
 close(file)
+#@time am = fit(SingleModelAmica,x;maxiter=4, m=3,#=M = 1, =#beta=beta_init[:,:,1], mu=mu_init[:,:,1], A=copy(A_init[:,:,1]))
+@time am = fit(MultiModelAmica,x;maxiter=5, m=3,M = 2,beta=beta_init, mu=mu_init, A=copy(A_init))
 
-#@time am = fit(SingleModelAmica,x;maxiter=50,M=1, m=3, beta=beta_init, mu=mu_init, A=copy(A_init))
-@time am = fit(MultiModelAmica,x;maxiter=50,M=2, m=3)
-size(am.A)
-W = pinv(am.A[:,:,1]) #previously [:,:,2]
+#@time am = fit(SingleModelAmica,x;maxiter=538, m=3)
+#@time am = fit(MultiModelAmica,x;maxiter=50,M=2, m=3)
+#size(am.A)
+W = pinv(am.models[1].A[:,:]); #previously [:,:,2]
 
 #---
 # f = Figure()
