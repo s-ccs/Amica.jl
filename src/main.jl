@@ -44,7 +44,7 @@ function amica!(myAmica::AbstractAmica,
 	maxiter = myAmica.maxiter,
 	do_newton = 1,
 	newt_start_iter = 25,# TODO Check
-	iterwin = 10,
+	iterwin = 1,
 	update_rho = 1,
 	mindll = 1e-8,
 
