@@ -17,15 +17,15 @@ Main AMICA algorithm
 # 	return amica
 # end
 
-function fit(amicaType::Type{T}, data; m = 3, maxiter = 500, remove_mean = true, mu = nothing, beta = nothing, A = nothing, kwargs...) where {T<:AbstractAmica}
-	if remove_mean
+function fit(amicaType::Type{T}, data; m = 3, maxiter = 500, mu = nothing, beta = nothing, A = nothing, kwargs...) where {T<:AbstractAmica}
+	#if remove_mean
 		#removeMean!(data) now in main method
 		#data = jason_sphering(data)
 		#data = bene_sphering(data)
 		
 		# f = StatsAPI.fit(Whitening, data)
 		# transform(f, data)
-	end
+	#end
 	amica = T(data; m = m, maxiter = maxiter, mu = mu, beta = beta, A = A)
 	fit!(amica, data; kwargs...)
 	return amica
@@ -39,6 +39,7 @@ function amica!(myAmica::AbstractAmica,
 	lrate = LearningRate(),
 	rholrate = LearningRate(;lrate = 0.1,minimum=0.5,maximum=5,init=1.5),
 	
+	remove_mean = true,
 	show_progress = true,
 	maxiter = myAmica.maxiter,
 	do_newton = 1,
@@ -54,14 +55,14 @@ function amica!(myAmica::AbstractAmica,
 	
 
 	(n, N) = size(data)
+	m = myAmica.m
 
-
-	m = myAmica.models[1].m
-
-	removed_mean = removeMean!(data)
+	if remove_mean
+		removed_mean = removeMean!(data)
+	end
 	#Mx = maximum(abs.(data)) #maximum and max are not the same
 
-	mn = mean(data, dims = 2) #should be zeros if remove_mean = 0, todo: add to mean function
+	#mn = mean(data, dims = 2) #should be zeros if remove_mean = 0, todo: add to mean function
 	#a = 0
 	g = zeros(n, N)
 	lambda = zeros(n, 1)
@@ -69,7 +70,6 @@ function amica!(myAmica::AbstractAmica,
 	sigma2 = zeros(n, 1)
 
 	dLL = zeros(1, maxiter)
-
 	fp = zeros(m ,N)
 
 	#r = zeros(n,N,m,M)
@@ -120,6 +120,8 @@ function amica!(myAmica::AbstractAmica,
 	end
 
     @label escape_from_NaN #If parameters contain NaNs, the algorithm skips the A update and terminates by jumping here
-	add_means_back!(myAmica, removed_mean)
+	if remove_mean
+		add_means_back!(myAmica, removed_mean)
+	end
 	return myAmica
 end

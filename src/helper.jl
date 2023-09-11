@@ -41,6 +41,7 @@ function calculate_lrate!(dLL, lrateType::LearningRate, iter, newt_start_iter, d
 	#return lrateType
 end
 
+#first log-likelihood part of L = |A| * p(sources)
 function calculate_ldet!(myAmica::SingleModelAmica)
 	myAmica.ldet = -log(abs(det(myAmica.A)))
 end
@@ -73,92 +74,105 @@ end
 
 #Todo: Rename
 function loopiloop(myAmica::SingleModelAmica)
-	n = size(myAmica.A,1)
+	(n,N) = size(myAmica.source_signals)
+	m = myAmica.m
+	Q = zeros(m,N)
 
 	#Threads.@threads 
 	for i in 1:n
-		calculate_Q!(myAmica,i)
-		calculate_u!(myAmica,i)
-		calculate_Lt!(myAmica) #Has to be in loop because it uses current Q
+		Q = calculate_Q(myAmica,Q,i) #todo: describe Q
+		calculate_u!(myAmica,Q,i)
+		calculate_Lt!(myAmica,Q) #Has to be in loop because it uses current Q
 	end
 end
 
 function loopiloop(myAmica::MultiModelAmica)
 	M = size(myAmica.models,1)
-	n = size(myAmica.models[1].A,1)
+	(n,N) = size(myAmica.models[1].source_signals)
+	m = myAmica.m
+	Q = zeros(m,N)
 
-	for h in 1:M
-		for i in 1:n
-			calculate_Q!(myAmica,i,h)
-			calculate_u!(myAmica,i,h)
-			calculate_Lt!(myAmica,h) #Has to be in loop because it uses current Q
+	for h in 1:M #run along models
+		for i in 1:n #run along components
+			#uses SingleModel versions of functions
+			Q = calculate_Q(myAmica.models[h],Q,i)
+			calculate_u!(myAmica.models[h],Q,i) #todo: same
+			calculate_Lt!(myAmica.models[h],Q) #Has to be in loop because it uses current Q
 		end
 	end
 end
 
-#calculates u but saves it into z
-function calculate_u!(myAmica::SingleModelAmica, i)
-	if myAmica.m > 1 #same
-		for j in 1:myAmica.m
-			Qj = ones(myAmica.m,1) .* myAmica.Q[j,:]'
-			myAmica.z[i,:,j] = 1 ./ sum(exp.(myAmica.Q-Qj),dims = 1)
+#calculates u but saves it into z todo: zusammenfügen für beide models
+function calculate_u!(myAmica::SingleModelAmica, Q, i)
+	m = size(myAmica.learnedParameters.scale,1)
+	if m > 1 #same
+		for j in 1:m
+			Qj = ones(m,1) .* Q[j,:]'
+			myAmica.z[i,:,j] = 1 ./ sum(exp.(Q-Qj),dims = 1)
 		end
 	end
 end
 
-function calculate_u!(myAmica::MultiModelAmica,i,h)
-	m = myAmica.models[1].m #todo: change how m is stored
+#no longer in use, multimodel also uses the singlemodel version (see loopiloop)
+function calculate_u!(myAmica::MultiModelAmica,Q,i,h)
+	m = myAmica.m
 	
 	if m > 1 
 		for j in 1:m
-			Qj = ones(m,1) .* myAmica.Q[j,:]'
-			myAmica.models[h].z[i,:,j] = 1 ./ sum(exp.(myAmica.Q-Qj),dims = 1)
+			Qj = ones(m,1) .* Q[j,:]'
+			myAmica.models[h].z[i,:,j] = 1 ./ sum(exp.(Q-Qj),dims = 1)
 		end
 	end
 end
-#no longer in use
-function calculate_Q!(myAmica::SingleModelAmica, i)
-	for j in 1:myAmica.m #todo: change m
-		myAmica.Q[j,:] = log(myAmica.learnedParameters.proportions[j,i]) + 0.5*log(myAmica.learnedParameters.scale[j,i]) .+ logpfun(myAmica.y[i,:,j],myAmica.learnedParameters.shape[j,i])
+
+#Currently used my MultiModelAmica too
+function calculate_Q(myAmica::SingleModelAmica, Q, i)
+	m = size(myAmica.learnedParameters.scale, 1) #m = number of GGs, can't use myAmica.m in case this gets used my MultiModelAmica
+	for j in 1:m
+		Q[j,:] = log(myAmica.learnedParameters.proportions[j,i]) + 0.5*log(myAmica.learnedParameters.scale[j,i]) .+ logpfun(myAmica.y[i,:,j],myAmica.learnedParameters.shape[j,i])
 	end
+	return Q
 end
-#todo: remove n loop
+
+#no longer in use, Q is no longer saved in Amica object but instead in loopiloop
 function calculate_Q!(myAmica::MultiModelAmica, i, h)
-	for j in 1:myAmica.m #todo: change m
+	m = myAmica.m
+	for j in 1:m
 		myAmica.Q[j,:] = log(myAmica.models[h].learnedParameters.proportions[j,i]) + 0.5*log(myAmica.models[h].learnedParameters.scale[j,i]) .+ logpfun(myAmica.models[h].y[i,:,j],myAmica.models[h].learnedParameters.shape[j,i])
 	end
 end
 
-function calculate_Lt!(myAmica::SingleModelAmica)
-	m = myAmica.m
-	if m > 1
-		Qmax = ones(m,1).*maximum(myAmica.Q,dims=1);
-		myAmica.Lt[:] = myAmica.Lt' .+ Qmax[1,:]' .+ log.(sum(exp.(myAmica.Q - Qmax),dims = 1))
-	else
-		myAmica.Lt[:] = myAmica.Lt .+ myAmica.Q[1,:]#todo: test
-	end
-end
-
-function calculate_Lt!(myAmica::MultiModelAmica,h)
-	m = myAmica.models[1].m
-
-	if m > 1
-		Qmax = ones(m,1).*maximum(myAmica.Q,dims=1);
-		myAmica.models[h].Lt[:] = myAmica.models[h].Lt[:]' .+ Qmax[1,:]' .+ log.(sum(exp.(myAmica.Q - Qmax),dims = 1))
-	else
-		myAmica.models[h].Lt[:] = myAmica.models[h].Lt[:] .+ myAmica.Q[1,:] #todo: test
-	end
-end
-
-function calculate_Lt(Lt, Q)
-	m = size(Q, 1)
+function calculate_Lt!(myAmica::SingleModelAmica,Q)
+	m = size(myAmica.learnedParameters.scale,1)
 	if m > 1
 		Qmax = ones(m,1).*maximum(Q,dims=1);
-		return Lt' .+ Qmax[1,:]' .+ log.(sum(exp.(Q - Qmax),dims = 1))
+		myAmica.Lt[:] = myAmica.Lt' .+ Qmax[1,:]' .+ log.(sum(exp.(Q - Qmax),dims = 1))
 	else
-		return Lt .+ Q[1,:] #todo: test
+		myAmica.Lt[:] = myAmica.Lt .+ Q[1,:]#todo: test
 	end
 end
+#no longer in use, multimodel amica also uses singlemodel version
+function calculate_Lt!(myAmica::MultiModelAmica,Q,h)
+	m = myAmica.m
+
+	if m > 1
+		Qmax = ones(m,1).*maximum(Q,dims=1);
+		myAmica.models[h].Lt[:] = myAmica.models[h].Lt[:]' .+ Qmax[1,:]' .+ log.(sum(exp.(Q - Qmax),dims = 1))
+	else
+		myAmica.models[h].Lt[:] = myAmica.models[h].Lt[:] .+ Q[1,:] #todo: test
+	end
+end
+
+#no longer in use
+# function calculate_Lt(Lt, Q)
+# 	m = size(Q, 1)
+# 	if m > 1
+# 		Qmax = ones(m,1).*maximum(Q,dims=1);
+# 		return Lt' .+ Qmax[1,:]' .+ log.(sum(exp.(Q - Qmax),dims = 1))
+# 	else
+# 		return Lt .+ Q[1,:] #todo: test
+# 	end
+# end
 
 function lt_x_proportions_rename_pls(myAmica::MultiModelAmica) #todo: rename
 	M = size(myAmica.models,1)
@@ -188,7 +202,7 @@ function update_sources!(myAmica::MultiModelAmica, data)
 end
 
 #Adds means back to model centers
-add_means_back!(myAmica::SingleModelAmica) = nothing
+add_means_back!(myAmica::SingleModelAmica, remove_mean) = nothing
 
 function add_means_back!(myAmica::MultiModelAmica, removed_mean)
 	M = size(myAmica.models,1)
