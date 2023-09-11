@@ -1,15 +1,13 @@
 #todo: make the calculate LLs one function
 function calculate_LL!(myAmica::SingleModelAmica)
-	N = myAmica.N
-	n = myAmica.n
+	(n,N) = size(myAmica.source_signals)
 	push!(myAmica.LL,sum(myAmica.Lt) / (n*N))
 end
 
 #Calculates Learning Rate for each iteration
 function calculate_LL!(myAmica::MultiModelAmica)
-	M = size(myAmica.models,1)
-	N = size(myAmica.models[1].Lt,1)
-	n = size(myAmica.models[1].A,1)
+	M = size(myAmica.models,1) #kann auch length nehmen
+	(n,N) = size(myAmica.models[1].source_signals)
 	Ltmax = ones(#=size(myAmica.models,1),=#size(myAmica.models[1].Lt,1)) #Ltmax = (M x N)
 	Lt_i = zeros(M)
 	P = zeros(N)
@@ -41,6 +39,7 @@ function calculate_LL(Lt, N, n) #lines 225 - 231
 	end
 end
 
+#L = det(A) * mult p(s|θ)
 function logpfun(x,rho) #taken from amica.m
 	return  (.-abs.(x).^rho .- log(2) .- loggamma.(1+1/rho))
 end

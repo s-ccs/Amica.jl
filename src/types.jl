@@ -17,11 +17,11 @@ mutable struct SingleModelAmica <:AbstractAmica
 	#moreParameters::MoreParameters
 	source_signals
 	learnedParameters::GGParameters
-	m::Integer #number of gaussians
+	m::Union{Integer, Nothing} #number of gaussians
     A::AbstractArray #unmixing matrices for each model
 	z::AbstractArray
 	y::AbstractArray
-	Q::Union{AbstractArray, Nothing} #1xN
+	#Q::Union{AbstractArray, Nothing} #mxN
 	centers::AbstractArray #model centers
 	Lt::AbstractVector #log likelihood of time point for each model ( M x N )
 	LL::Union{AbstractVector, Nothing} #log likelihood over iterations todo: change to tuple 
@@ -33,13 +33,13 @@ mutable struct MultiModelAmica <:AbstractAmica
 	#singleModel::SingleModelAmica
 	models::Array{SingleModelAmica} #Array of SingleModelAmicas
 	model_proportions::AbstractMatrix #model proportions
-	ldet::AbstractArray #currently in both amicas todo: change that
+	#ldet::AbstractArray #currently in both amicas todo: change that
 	v
 	vsum
 	maxiter::Int
 	m::Int #Number of Gaussians
 	LL::AbstractVector
-	Q
+	#Q
 end
 
 using Parameters
@@ -94,16 +94,17 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, m
 	#Sets some parameters to nothing to only have them once in MultiModel
 	if isnothing(maxiter)
 		LL = nothing #todo: check if this works in Multimodel. maxiter will be given as nothing by MultiModel constructor
-		Q = nothing
+		#Q = nothing
+		m = nothing
 	else
 		LL = Float64[]
-		Q = zeros(m,N)
+		#Q = zeros(m,N)
 	end
 	ldet = 0.0
 	source_signals = zeros(n,N)
 
 
-	return SingleModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),m,A,z,y,Q,centers,Lt,LL,ldet,maxiter)
+	return SingleModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),m,A,z,y,#=Q,=#centers,Lt,LL,ldet,maxiter)
 end
 
 function MultiModelAmica(data::Array; m=3, M=2, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...)
@@ -112,11 +113,11 @@ function MultiModelAmica(data::Array; m=3, M=2, maxiter=500, A=nothing, mu=nothi
 	models = Array{SingleModelAmica}(undef, M)
 	model_proportions = (1/M) * ones(M,1)
 	(n, N) = size(data)
-	ldet = zeros(M)
+	#ldet = zeros(M)
 	v = ones(M,N)
 	vsum = zeros(M)
 	LL = Float64[]
-	Q = zeros(m,N)
+	#Q = zeros(m,N)
 
 	#This part only exists to allow for initial values to be set by the user. They are still required to have the old format (something, something, M)
 	eye = Matrix(I, n, n) #todo: check if necessary
@@ -145,7 +146,7 @@ function MultiModelAmica(data::Array; m=3, M=2, maxiter=500, A=nothing, mu=nothi
 	for h in 1:M
 		models[h] = SingleModelAmica(data; m, maxiter=nothing, A=A[:,:,h], mu=mu[:,:,h], beta=beta[:,:,h], kwargs...)
 	end
-	return MultiModelAmica(models,model_proportions,ldet,v,vsum,maxiter,m,LL,Q)
+	return MultiModelAmica(models,model_proportions,v,vsum,maxiter,m,LL#=,Q=#)
 end
 
 

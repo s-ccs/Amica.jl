@@ -1,7 +1,7 @@
 #normalizes source density location parameter (mu), scale parameter (beta) and model centers
 #todo: remove third index for singlemodel on the arrays
 function reparameterize!(myAmica::SingleModelAmica, data)
-	n = myAmica.n
+	(n,N) = size(myAmica.source_signals)
 	mu = myAmica.learnedParameters.location
 	beta = myAmica.learnedParameters.scale
 
@@ -72,8 +72,9 @@ function calculate_z!(myAmica::MultiModelAmica, i,j,h)
 end
 
 function update_mixture_proportions!(sumz, myAmica::SingleModelAmica,j,i)
+	N = size(myAmica.source_signals,2)
 	if myAmica.m > 1
-		myAmica.learnedParameters.proportions[j,i] = sumz / myAmica.N
+		myAmica.learnedParameters.proportions[j,i] = sumz / N
 	end
 end
 
@@ -142,13 +143,17 @@ end
 function update_loop!(myAmica::MultiModelAmica, fp, lambda, rholrate, update_rho, iter, kappa, do_newton, newt_start_iter, lrate)
 	(n,N) = size(myAmica.models[1].source_signals)
 	M = size(myAmica.models,1)
+
+	myAmica.v = ones(M,N)
 	for h in 1:M
 		#update parameters
 		#Lh = ones(N)
 		#Lh = myAmica.models[i].Lt
+		myAmica.v[h,:] = zeros(N)
 		for i in 1:M
-			myAmica.v[h,:] = myAmica.v[h,:] + 1 ./ exp.(myAmica.models[i].Lt-myAmica.models[h].Lt)
+			myAmica.v[h,:] = myAmica.v[h,:] + exp.(myAmica.models[i].Lt-myAmica.models[h].Lt)
 		end
+		myAmica.v[h,:] = 1 ./ myAmica.v[h,:]
 		#v[h,:] = 1 ./ sum(exp.(myAmica.models[h].Lt-Lh),dims=1)
 		myAmica.vsum[h] = sum(myAmica.v[h,:])
 		myAmica.model_proportions[h] = myAmica.vsum[h] / N
@@ -157,11 +162,7 @@ function update_loop!(myAmica::MultiModelAmica, fp, lambda, rholrate, update_rho
 			continue
 		end
 
-		#try
-			g, kappa, lambda = update_parameters!(myAmica, h, fp, lambda, rholrate, update_rho)#todo: output fixen
-		# catch e
-		# 	isa(e,AmicaProportionsZeroException) ? continue : rethrow()
-		# end
+		g, kappa, lambda = update_parameters!(myAmica, h, fp, lambda, rholrate, update_rho)#todo: output fixen
 
 		#Checks for NaN in parameters before updating the mixing matrix
 		if any(isnan, kappa) || any(isnan, myAmica.models[h].source_signals) || any(isnan, lambda) || any(isnan, g) || any(isnan, myAmica.models[h].learnedParameters.proportions)
@@ -177,8 +178,7 @@ function update_parameters!(myAmica::SingleModelAmica, fp, lambda, lrate_rho::Le
 	beta = myAmica.learnedParameters.scale
 	mu = myAmica.learnedParameters.location
 	rho = myAmica.learnedParameters.shape
-	N = myAmica.N
-	n = myAmica.n 
+	(n,N) = size(myAmica.source_signals)
 	m = myAmica.m
 	g = zeros(n,N)
 	kappa = zeros(n,1)
@@ -186,8 +186,8 @@ function update_parameters!(myAmica::SingleModelAmica, fp, lambda, lrate_rho::Le
 
 	
 	#Threads.@threads 
-	for i in 1:myAmica.n
-		for j in 1:myAmica.m
+	for i in 1:n
+		for j in 1:m
 			sumz = 0
 			sumz = calculate_sumz(myAmica,i,j)
 			update_mixture_proportions!(sumz,myAmica,j,i)

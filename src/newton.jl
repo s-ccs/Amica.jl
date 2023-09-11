@@ -2,8 +2,7 @@ function newton_method!(myAmica::SingleModelAmica, iter, g, kappa, do_newton, ne
 	
 	lnatrate = lrate.natural_rate
 	lrate = lrate.lrate
-	n = myAmica.n
-	N = myAmica.N
+	(n,N) = size(myAmica.source_signals)
 
 	sigma2 = sum(myAmica.source_signals.^2,dims=2) / N
 
@@ -19,7 +18,7 @@ function newton_method!(myAmica::SingleModelAmica, iter, g, kappa, do_newton, ne
 	for i in 1:n
 		for k = 1:n
 			if i == k
-				B[i,i] = dA[i,i] / (-0*dA[i,i] + lambda[i])#*0?? wtf??
+				B[i,i] = dA[i,i] / (lambda[i])
 			else
 				denom = kappa[i]*kappa[k]*sigma2[i]*sigma2[k] - 1
 				if denom > 0
