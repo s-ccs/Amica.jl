@@ -1,18 +1,14 @@
+#Updates the mixing matrix with the newton method
 function newton_method!(myAmica::SingleModelAmica, iter, g, kappa, do_newton, newt_start_iter, lrate::LearningRate, lambda)
 	
 	lnatrate = lrate.natural_rate
 	lrate = lrate.lrate
 	(n,N) = size(myAmica.source_signals)
 
-	sigma2 = sum(myAmica.source_signals.^2,dims=2) / N
+	sigma2 = sum(myAmica.source_signals.^2,dims=2) / N #is probably called 2 cause always squared
 
 	dA = Matrix{Float64}(I, n, n) - g * myAmica.source_signals[:,:]' 
 	bflag = 0
-	# if iter == 55
-	# 	@show g
-	# 	@show b
-	# end
-	#eig. in loop deklariert
 	B = zeros(n,n)
 	
 	for i in 1:n
@@ -47,17 +43,12 @@ function newton_method!(myAmica::MultiModelAmica, h, iter, g, kappa, do_newton, 
 
 	dA = Matrix{Float64}(I, n, n) - g * myAmica.models[h].source_signals[:,:]' 
 	bflag = 0
-	# if iter == 55
-	# 	@show g
-	# 	@show b
-	# end
-	#eig. in loop deklariert
 	B = zeros(n,n)
 	
 	for i in 1:n
 		for k = 1:n
 			if i == k
-				B[i,i] = dA[i,i] / (-0*dA[i,i] + lambda[i])#*0?? wtf??
+				B[i,i] = dA[i,i] / (lambda[i])
 			else
 				denom = kappa[i]*kappa[k]*sigma2[i]*sigma2[k] - 1
 				if denom > 0

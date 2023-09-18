@@ -38,13 +38,13 @@ function amica!(myAmica::AbstractAmica,
 	data;
 	lrate = LearningRate(),
 	rholrate = LearningRate(;lrate = 0.1,minimum=0.5,maximum=5,init=1.5),
-	
 	remove_mean = true,
+	do_sphering = true,
 	show_progress = true,
 	maxiter = myAmica.maxiter,
 	do_newton = 1,
 	newt_start_iter = 25,# TODO Check
-	iterwin = 1,
+	iterwin = 10,
 	update_rho = 1,
 	mindll = 1e-8,
 
@@ -59,6 +59,9 @@ function amica!(myAmica::AbstractAmica,
 
 	if remove_mean
 		removed_mean = removeMean!(data)
+	end
+	if do_sphering
+		data = jason_sphering(data)
 	end
 	#Mx = maximum(abs.(data)) #maximum and max are not the same
 
@@ -80,8 +83,8 @@ function amica!(myAmica::AbstractAmica,
 
     prog = ProgressUnknown("Minimizing"; showspeed=true)
 
-
 	for iter in 1:maxiter
+		#E-step
 		update_sources!(myAmica, data)
 		calculate_ldet!(myAmica)
 		lt_x_proportions_rename_pls(myAmica) #todo: rename
@@ -101,7 +104,8 @@ function amica!(myAmica::AbstractAmica,
 				break
 			end
 		end
-   
+		
+		#M-step
 		try
 			update_loop!(myAmica, fp, lambda, rholrate, update_rho, iter, kappa, do_newton, newt_start_iter, lrate) #updates parameters and mixing matrix, todo: zeug übergeben was es für die anderen funktionen braucht
 		catch e

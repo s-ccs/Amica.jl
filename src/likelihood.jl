@@ -4,7 +4,7 @@ function calculate_LL!(myAmica::SingleModelAmica)
 	push!(myAmica.LL,sum(myAmica.Lt) / (n*N))
 end
 
-#Calculates Learning Rate for each iteration
+#Looks through Lt to find the highest LL for each time sample and takes average. This is the likelihood for the whole ICA model mixture
 function calculate_LL!(myAmica::MultiModelAmica)
 	M = size(myAmica.models,1) #kann auch length nehmen
 	(n,N) = size(myAmica.models[1].source_signals)
