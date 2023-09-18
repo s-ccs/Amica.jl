@@ -16,7 +16,7 @@ using MAT
     @test am.LL[6] == -1.701977346216155
     @test am.Lt[3] == -3.4842563175935526
 
-    #test multi model
+    #Test multi model
     file = matopen("test/supersmall_data.mat")
     beta_init = read(file, "beta_init")
     mu_init = read(file, "mu_init")
