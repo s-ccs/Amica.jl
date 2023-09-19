@@ -42,7 +42,7 @@ mu_init = read(file, "mu_init")
 A_init = read(file, "A_init")
 
 close(file)
-@time am = fit(SingleModelAmica,x;maxiter=10, do_sphering = false,remove_mean = true,m=3,#=M = 1, =#beta=beta_init[:,:,1], mu=mu_init[:,:,1], A=copy(A_init[:,:,1]))
+@time am = fit(SingleModelAmica,x;maxiter=100, do_sphering = false,remove_mean = true,m=3,#=M = 1, =#beta=beta_init[:,:,1], mu=mu_init[:,:,1], A=copy(A_init[:,:,1]))
 #@time am = fit(MultiModelAmica,x;maxiter=100, m=3,M = 2,beta=beta_init, mu=mu_init, A=copy(A_init), remove_mean = true)
 
 #@time am = fit(SingleModelAmica,x;maxiter=538, m=3)
