@@ -78,8 +78,7 @@ function loopiloop(myAmica::SingleModelAmica)
 	m = myAmica.m
 	Q = zeros(m,N)
 
-	#Threads.@threads 
-	for i in 1:n
+	Threads.@threads for i in 1:n
 		Q = calculate_Q(myAmica,Q,i) #todo: describe Q
 		calculate_u!(myAmica,Q,i)
 		calculate_Lt!(myAmica,Q) #Has to be in loop because it uses current Q
@@ -93,11 +92,11 @@ function loopiloop(myAmica::MultiModelAmica)
 	Q = zeros(m,N)
 
 	for h in 1:M #run along models
-		for i in 1:n #run along components
+		Threads.@threads for i in 1:n #run along components
 			#uses SingleModel versions of functions
 			Q = calculate_Q(myAmica.models[h],Q,i)
-			calculate_u!(myAmica.models[h],Q,i) #todo: same
-			calculate_Lt!(myAmica.models[h],Q) #Has to be in loop because it uses current Q
+			calculate_u!(myAmica.models[h],Q,i)
+			calculate_Lt!(myAmica.models[h],Q)
 		end
 	end
 end
@@ -177,7 +176,7 @@ end
 function lt_x_proportions_rename_pls(myAmica::MultiModelAmica) #todo: rename
 	M = size(myAmica.models,1)
 	for h in 1:M
-		myAmica.models[h].Lt .= log(myAmica.model_proportions[h]) + myAmica.models[h].ldet
+		myAmica.models[h].Lt .= log(myAmica.normalized_ica_weights[h]) + myAmica.models[h].ldet
 	end
 end
 

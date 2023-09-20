@@ -18,6 +18,7 @@ function reparameterize!(myAmica::SingleModelAmica, data)
 	return myAmica
 end
 
+#Reparameterizes the parameters for the active models
 function reparameterize!(myAmica::MultiModelAmica, data)
 	(n,N) = size(myAmica.models[1].source_signals)
 	M = size(myAmica.models,1)
@@ -26,7 +27,7 @@ function reparameterize!(myAmica::MultiModelAmica, data)
 		mu = myAmica.models[h].learnedParameters.location
 		beta = myAmica.models[h].learnedParameters.scale
 
-		if myAmica.model_proportions[h] == 0
+		if myAmica.normalized_ica_weights[h] == 0
 			continue
 		end
 		for i in 1:n
@@ -37,7 +38,7 @@ function reparameterize!(myAmica::MultiModelAmica, data)
 		end
 	
 		if M > 1
-			cnew = data * myAmica.v[h,:] /(sum(myAmica.v[h,:])) #todo: check why v not inverted
+			cnew = data * myAmica.ica_weights_per_sample[h,:] /(sum(myAmica.ica_weights_per_sample[h,:])) #todo: check why v not inverted
 			for i in 1:n
 				Wh = pinv(myAmica.models[h].A[:,:])
 				mu[:,i] = mu[:,i] .- Wh[i,:]' * (cnew-myAmica.models[h].centers[:])
@@ -65,9 +66,9 @@ end
 calculate_z!(myAmica::SingleModelAmica, i,j) = nothing
 function calculate_z!(myAmica::MultiModelAmica, i,j,h)
 	if myAmica.m > 1
-		myAmica.models[h].z[i,:,j] .= myAmica.v[h,:] .* myAmica.models[h].z[i,:,j]
+		myAmica.models[h].z[i,:,j] .= myAmica.ica_weights_per_sample[h,:] .* myAmica.models[h].z[i,:,j]
 	elseif myAmica.m == 1
-		myAmica.models[h].z[i,:,j] = myAmica.v[h,:]
+		myAmica.models[h].z[i,:,j] = myAmica.ica_weights_per_sample[h,:]
 	end
 end
 
@@ -80,7 +81,7 @@ end
 
 function update_mixture_proportions!(sumz, myAmica::MultiModelAmica,j,i,h)
 	if myAmica.m > 1
-		myAmica.models[h].learnedParameters.proportions[j,i] = sumz / myAmica.vsum[h]
+		myAmica.models[h].learnedParameters.proportions[j,i] = sumz / myAmica.ica_weights[h]
 	end
 end
 
@@ -144,21 +145,20 @@ function update_loop!(myAmica::MultiModelAmica, fp, lambda, rholrate, update_rho
 	(n,N) = size(myAmica.models[1].source_signals)
 	M = size(myAmica.models,1)
 
-	myAmica.v = ones(M,N)
+	myAmica.ica_weights_per_sample = ones(M,N)
 	for h in 1:M
 		#update parameters
 		#Lh = ones(N)
 		#Lh = myAmica.models[i].Lt
-		myAmica.v[h,:] = zeros(N)
+		myAmica.ica_weights_per_sample[h,:] = zeros(N)
 		for i in 1:M
-			myAmica.v[h,:] = myAmica.v[h,:] + exp.(myAmica.models[i].Lt-myAmica.models[h].Lt)
+			myAmica.ica_weights_per_sample[h,:] = myAmica.ica_weights_per_sample[h,:] + exp.(myAmica.models[i].Lt-myAmica.models[h].Lt)
 		end
-		myAmica.v[h,:] = 1 ./ myAmica.v[h,:]
-		#v[h,:] = 1 ./ sum(exp.(myAmica.models[h].Lt-Lh),dims=1)
-		myAmica.vsum[h] = sum(myAmica.v[h,:])
-		myAmica.model_proportions[h] = myAmica.vsum[h] / N
+		myAmica.ica_weights_per_sample[h,:] = 1 ./ myAmica.ica_weights_per_sample[h,:]
+		myAmica.ica_weights[h] = sum(myAmica.ica_weights_per_sample[h,:])
+		myAmica.normalized_ica_weights[h] = myAmica.ica_weights[h] / N
 		
-		if myAmica.model_proportions[h] == 0
+		if myAmica.normalized_ica_weights[h] == 0
 			continue
 		end
 
