@@ -4,7 +4,7 @@ module Amica
 	using Distributions
 	using SpecialFunctions
     using ProgressMeter
-    using ComponentArrays
+    #using ComponentArrays
     using Diagonalizations
     #using MultivariateStats
     #using StatsAPI
