@@ -5,41 +5,28 @@ mutable struct GGParameters
 	shape::AbstractArray{Float64} #source density shape paramters
 end
 
-#not in use
-mutable struct MoreParameters
-	kappa::AbstractArray
-end
-
-abstract type AbstractAmica end
-
-
 mutable struct SingleModelAmica <:AbstractAmica
-	#moreParameters::MoreParameters
-	source_signals
-	learnedParameters::GGParameters
-	m::Union{Integer, Nothing} #number of gaussians
-    A::AbstractArray #unmixing matrices for each model
-	z::AbstractArray
+	source_signals					   #Unmixed signals
+	learnedParameters::GGParameters	   #Parameters of the Gaussian mixtures
+	m::Union{Integer, Nothing} 		   #Number of gaussians
+    A::AbstractArray 				   #Mixing matrix
+	z::AbstractArray				   
 	y::AbstractArray
-	#Q::Union{AbstractArray, Nothing} #mxN
-	centers::AbstractArray #model centers
-	Lt::AbstractVector #log likelihood of time point for each model ( M x N )
-	LL::Union{AbstractVector, Nothing} #log likelihood over iterations todo: change to tuple 
-	ldet::Float64
-	maxiter::Union{Int, Nothing} #maximum number of iterations, can be nothing because it's not needed for multimodel
+	centers::AbstractArray 			   #Model centers
+	Lt::AbstractVector 				   #Log likelihood of time point for each model ( M x N )
+	LL::Union{AbstractVector, Nothing} #Log-Likelihood
+	ldet::Float64					   #log determinant of A
+	maxiter::Union{Int, Nothing} 	   #maximum number of iterations, can be nothing because it's not needed for multimodel
 end
 
 mutable struct MultiModelAmica <:AbstractAmica
-	#singleModel::SingleModelAmica
 	models::Array{SingleModelAmica} #Array of SingleModelAmicas
-	model_proportions::AbstractMatrix #model proportions
-	#ldet::AbstractArray #currently in both amicas todo: change that
-	v
-	vsum
-	maxiter::Int
-	m::Int #Number of Gaussians
-	LL::AbstractVector
-	#Q
+	normalized_ica_weights 			#Model weights (normalized)
+	ica_weights_per_sample 			#Model weight for each sample
+	ica_weights						#Model weight for all samples
+	maxiter::Int					#Number of iterations
+	m::Int 							#Number of Gaussians
+	LL::AbstractVector				#Log-Likelihood
 end
 
 using Parameters
@@ -111,11 +98,11 @@ function MultiModelAmica(data::Array; m=3, M=2, maxiter=500, A=nothing, mu=nothi
 	# multiModel = SingleModelAmica(data; m, M, maxiter, A, mu, beta, kwargs...)
 	# return MultiModelAmica(multiModel)
 	models = Array{SingleModelAmica}(undef, M)
-	model_proportions = (1/M) * ones(M,1)
+	normalized_ica_weights = (1/M) * ones(M,1)
 	(n, N) = size(data)
 	#ldet = zeros(M)
-	v = ones(M,N)
-	vsum = zeros(M)
+	ica_weights_per_sample = ones(M,N)
+	ica_weights = zeros(M)
 	LL = Float64[]
 	#Q = zeros(m,N)
 
@@ -146,7 +133,7 @@ function MultiModelAmica(data::Array; m=3, M=2, maxiter=500, A=nothing, mu=nothi
 	for h in 1:M
 		models[h] = SingleModelAmica(data; m, maxiter=nothing, A=A[:,:,h], mu=mu[:,:,h], beta=beta[:,:,h], kwargs...)
 	end
-	return MultiModelAmica(models,model_proportions,v,vsum,maxiter,m,LL#=,Q=#)
+	return MultiModelAmica(models,normalized_ica_weights,ica_weights_per_sample,ica_weights,maxiter,m,LL#=,Q=#)
 end
 
 
