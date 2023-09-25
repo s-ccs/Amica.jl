@@ -5,7 +5,7 @@ function newton_method!(myAmica::SingleModelAmica, iter, g, kappa, do_newton, ne
 	lrate = lrate.lrate
 	(n,N) = size(myAmica.source_signals)
 
-	sigma2 = sum(myAmica.source_signals.^2,dims=2) / N #is probably called 2 cause always squared
+	sigma2 = sum(myAmica.source_signals.^2,dims=2) / N #is probably called sigma2 cause always squared
 
 	dA = Matrix{Float64}(I, n, n) - g * myAmica.source_signals[:,:]' 
 	bflag = 0

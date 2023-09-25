@@ -2,30 +2,8 @@
 Main AMICA algorithm
 
 """
-#todo:remove M from header
-# function fit(amicaType::Type{T}, data; M = 1, m = 3, maxiter = 500, remove_mean = true, mu = nothing, beta = nothing, A = nothing, kwargs...) where {T<:AbstractAmica}
-# 	if remove_mean
-# 		removeMean!(data)
-# 		#data = jason_sphering(data)
-# 		#data = bene_sphering(data)
-		
-# 		# f = StatsAPI.fit(Whitening, data)
-# 		# transform(f, data)
-# 	end
-# 	amica = T(data; M = M, m = m, maxiter = maxiter, mu = mu, beta = beta, A = A)
-# 	fit!(amica, data; kwargs...)
-# 	return amica
-# end
 
 function fit(amicaType::Type{T}, data; m = 3, maxiter = 500, mu = nothing, beta = nothing, A = nothing, kwargs...) where {T<:AbstractAmica}
-	#if remove_mean
-		#removeMean!(data) now in main method
-		#data = jason_sphering(data)
-		#data = bene_sphering(data)
-		
-		# f = StatsAPI.fit(Whitening, data)
-		# transform(f, data)
-	#end
 	amica = T(data; m = m, maxiter = maxiter, mu = mu, beta = beta, A = A)
 	fit!(amica, data; kwargs...)
 	return amica
@@ -37,45 +15,35 @@ end
 function amica!(myAmica::AbstractAmica,
 	data;
 	lrate = LearningRate(),
-	rholrate = LearningRate(;lrate = 0.1,minimum=0.5,maximum=5,init=1.5),
+	shapelrate = LearningRate(;lrate = 0.1,minimum=0.5,maximum=5,init=1.5),
 	remove_mean = true,
 	do_sphering = true,
 	show_progress = true,
 	maxiter = myAmica.maxiter,
 	do_newton = 1,
-	newt_start_iter = 25,# TODO Check
+	newt_start_iter = 25,
 	iterwin = 10,
-	update_rho = 1,
+	update_shape = 1,
 	mindll = 1e-8,
 
 	kwargs...)
 	
-	initialize_shape_parameter(myAmica,rholrate)
-	#learnedParameters(m::AbstractAmica) = m.learnedParameters
-	
+	initialize_shape_parameter(myAmica,shapelrate)
 
 	(n, N) = size(data)
 	m = myAmica.m
 
+	#Prepares data by removing means and/or sphering
 	if remove_mean
 		removed_mean = removeMean!(data)
 	end
 	if do_sphering
-		data = jason_sphering(data)
+		data = sphering(data)
 	end
-	#Mx = maximum(abs.(data)) #maximum and max are not the same
-
-	#mn = mean(data, dims = 2) #should be zeros if remove_mean = 0, todo: add to mean function
-	#a = 0
-	g = zeros(n, N)
-	lambda = zeros(n, 1)
-	kappa = zeros(n, 1)
-	sigma2 = zeros(n, 1)
-
+	
 	dLL = zeros(1, maxiter)
 	fp = zeros(m ,N)
 
-	#r = zeros(n,N,m,M)
 	#todo put them into object
 	lambda = zeros(n, 1)
 	kappa = zeros(n, 1)
@@ -87,18 +55,20 @@ function amica!(myAmica::AbstractAmica,
 		#E-step
 		update_sources!(myAmica, data)
 		calculate_ldet!(myAmica)
-		lt_x_proportions_rename_pls(myAmica) #todo: rename
+		initialize_Lt!(myAmica)
 		calculate_y!(myAmica)
 		loopiloop(myAmica) #Updates y and Lt. Todo: Rename
-		calculate_LL!(myAmica) #todo: check if iter needs to be given
+		calculate_LL!(myAmica)
 		
-		#calculate difference in loglikelihood between iterations
+		#Calculate difference in loglikelihood between iterations
 		if iter > 1
 			dLL[iter] = myAmica.LL[iter] - myAmica.LL[iter-1]
 		end
 		if iter > iterwin +1
 			calculate_lrate!(dLL, lrate, iter,newt_start_iter, do_newton, iterwin)
-			sdll = sum(dLL[iter-iterwin+1:iter])/iterwin #calculates average likelihood change over multiple itertions
+			#Calculates average likelihood change over multiple itertions
+			sdll = sum(dLL[iter-iterwin+1:iter])/iterwin
+			#Checks termination criterion
 			if (sdll > 0) && (sdll < mindll)
 				println("LL increase to low. Stop at iteration ", iter)
 				break
@@ -107,8 +77,10 @@ function amica!(myAmica::AbstractAmica,
 		
 		#M-step
 		try
-			update_loop!(myAmica, fp, lambda, rholrate, update_rho, iter, kappa, do_newton, newt_start_iter, lrate) #updates parameters and mixing matrix, todo: zeug übergeben was es für die anderen funktionen braucht
+			#Updates parameters and mixing matrix
+			update_loop!(myAmica, fp, lambda, shapelrate, update_shape, iter, do_newton, newt_start_iter, lrate)
 		catch e
+			#Terminates if NaNs are detected in parameters
 			if isa(e,AmicaNaNException)
 				println("\nNaN detected. Better stop. Current iteration: ", iter)
 				@goto escape_from_NaN
@@ -122,8 +94,9 @@ function amica!(myAmica::AbstractAmica,
 		show_progress && ProgressMeter.next!(prog; showvalues=[(:LL, myAmica.LL[iter])])
  
 	end
-
-    @label escape_from_NaN #If parameters contain NaNs, the algorithm skips the A update and terminates by jumping here
+	#If parameters contain NaNs, the algorithm skips the A update and terminates by jumping here
+    @label escape_from_NaN
+	#If means were removed, they are added back
 	if remove_mean
 		add_means_back!(myAmica, removed_mean)
 	end
