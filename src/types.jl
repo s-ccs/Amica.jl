@@ -5,13 +5,15 @@ mutable struct GGParameters
 	shape::AbstractArray{Float64} #source density shape paramters
 end
 
+abstract type AbstractAmica end
+
 mutable struct SingleModelAmica <:AbstractAmica
 	source_signals					   #Unmixed signals
 	learnedParameters::GGParameters	   #Parameters of the Gaussian mixtures
 	m::Union{Integer, Nothing} 		   #Number of gaussians
     A::AbstractArray 				   #Mixing matrix
-	z::AbstractArray				   
-	y::AbstractArray
+	z::AbstractArray				   #Densities for each sample per Gaussian (normalized)
+	y::AbstractArray				   #Source signals (scaled and shifted with scale and location parameter)
 	centers::AbstractArray 			   #Model centers
 	Lt::AbstractVector 				   #Log likelihood of time point for each model ( M x N )
 	LL::Union{AbstractVector, Nothing} #Log-Likelihood
@@ -29,6 +31,7 @@ mutable struct MultiModelAmica <:AbstractAmica
 	LL::AbstractVector				#Log-Likelihood
 end
 
+#Structure for Learning Rate type with initial value, minumum, maximum etc. Used for learning rate and rho lrate
 using Parameters
 @with_kw mutable struct LearningRate
 	lrate::Real = 0.1
@@ -39,16 +42,13 @@ using Parameters
 	decreaseFactor::Float64 = 0.5
 end
 
-#todo: rename gg parameters
+#Data type for AMICA with just one ICA model. todo: rename gg parameters
 function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...) where {T<:Real}
-	# M, m, maxiter, update_rho, mindll, iterwin, do_newton, remove_mean
 	(n, N) = size(data)
-	
-
 	#initialize parameters
 	
 	centers = zeros(n)
-	eye = Matrix(I, n, n) #todo: check if necessary
+	eye = Matrix(I, n, n)
 	if isnothing(A)
 		A = zeros(n,n)
 		A[:,:] = eye[n] .+ 0.1*rand(n,n)
@@ -70,44 +70,35 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, m
 	end
 	rho = ones(m, n)
 
-	
 	y = zeros(n,N,m)
-	
 	
 	Lt = zeros(N)
 	z = ones(n,N,m)/N
 
-
-	#Sets some parameters to nothing to only have them once in MultiModel
+	#Sets some parameters to nothing if used my MultiModel to only have them once
 	if isnothing(maxiter)
-		LL = nothing #todo: check if this works in Multimodel. maxiter will be given as nothing by MultiModel constructor
-		#Q = nothing
+		LL = nothing
 		m = nothing
 	else
 		LL = Float64[]
-		#Q = zeros(m,N)
 	end
 	ldet = 0.0
 	source_signals = zeros(n,N)
 
-
 	return SingleModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),m,A,z,y,#=Q,=#centers,Lt,LL,ldet,maxiter)
 end
 
+#Data type for AMICA with multiple ICA models
 function MultiModelAmica(data::Array; m=3, M=2, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...)
-	# multiModel = SingleModelAmica(data; m, M, maxiter, A, mu, beta, kwargs...)
-	# return MultiModelAmica(multiModel)
-	models = Array{SingleModelAmica}(undef, M)
+	models = Array{SingleModelAmica}(undef, M) #Array of SingleModelAmica opjects
 	normalized_ica_weights = (1/M) * ones(M,1)
 	(n, N) = size(data)
-	#ldet = zeros(M)
 	ica_weights_per_sample = ones(M,N)
 	ica_weights = zeros(M)
 	LL = Float64[]
-	#Q = zeros(m,N)
 
-	#This part only exists to allow for initial values to be set by the user. They are still required to have the old format (something, something, M)
-	eye = Matrix(I, n, n) #todo: check if necessary
+	#This part only exists to allow for initial values to be set by the user. They are still required to have the old format (something x something x M)
+	eye = Matrix(I, n, n)
 	if isnothing(A)
 		A = zeros(n,n,M)
 		for h in 1:M

@@ -1,3 +1,4 @@
+#Amica.jl is based on a MATLAB implementation of AMICA by Jason Palmer.
 module Amica
     using LinearAlgebra
 	using GaussianMixtures
@@ -14,8 +15,7 @@ module Amica
     include("parameters.jl")
     include("newton.jl")
     include("main.jl")
-    include("simulate.jl")
-    # Write your package code here.
+    
     export amica!
     export fit,fit!
     export AbstractAmica,MultiModelAmica,SingleModelAmica

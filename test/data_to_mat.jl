@@ -3,12 +3,14 @@ using Amica
 using SignalAnalysis
 using LinearAlgebra
 #using PyMNE
+#This script generates synthetic data and initial parameter values and saves them into a .mat file.
+#This allows to run amica with those initial values.
 
 #_____________________________________________
 #Generate multiple sin mixed with pink gaussian
-m = 3
-M = 2
-n = 5 #at least 4 to fit all sinusses
+m = 3 #Gaussians
+M = 2 #ICA models
+n = 5 #Data channels
 
 t = range(0,20*π,length=1000)
 s =rand(PinkGaussian(length(t)),n)'
