@@ -31,7 +31,7 @@ mutable struct MultiModelAmica <:AbstractAmica
 	LL::AbstractVector				#Log-Likelihood
 end
 
-#Structure for Learning Rate type with initial value, minumum, maximum etc. Used for learning rate and rho lrate
+#Structure for Learning Rate type with initial value, minumum, maximum etc. Used for learning rate and shape lrate
 using Parameters
 @with_kw mutable struct LearningRate
 	lrate::Real = 0.1
@@ -43,7 +43,7 @@ using Parameters
 end
 
 #Data type for AMICA with just one ICA model. todo: rename gg parameters
-function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...) where {T<:Real}
+function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, location=nothing, scale=nothing, kwargs...) where {T<:Real}
 	(n, N) = size(data)
 	#initialize parameters
 	
@@ -57,18 +57,18 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, m
 		end
 	end
 
-	alpha = (1/m) * ones(m,n)
-	if isnothing(mu)
+	proportions = (1/m) * ones(m,n)
+	if isnothing(location)
 		if m > 1
-			mu = 0.1 * randn(m, n)
+			location = 0.1 * randn(m, n)
 		else
-			mu = zeros(m, n)
+			location = zeros(m, n)
 		end
 	end
-	if isnothing(beta)
-		beta = ones(m, n) + 0.1 * randn(m, n)
+	if isnothing(scale)
+		scale = ones(m, n) + 0.1 * randn(m, n)
 	end
-	rho = ones(m, n)
+	shape = ones(m, n)
 
 	y = zeros(n,N,m)
 	
@@ -85,11 +85,11 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, m
 	ldet = 0.0
 	source_signals = zeros(n,N)
 
-	return SingleModelAmica(source_signals,GGParameters(alpha,beta,mu,rho),m,A,z,y,#=Q,=#centers,Lt,LL,ldet,maxiter)
+	return SingleModelAmica(source_signals,GGParameters(proportions,scale,location,shape),m,A,z,y,#=Q,=#centers,Lt,LL,ldet,maxiter)
 end
 
 #Data type for AMICA with multiple ICA models
-function MultiModelAmica(data::Array; m=3, M=2, maxiter=500, A=nothing, mu=nothing, beta=nothing, kwargs...)
+function MultiModelAmica(data::Array; m=3, M=2, maxiter=500, A=nothing, location=nothing, scale=nothing, kwargs...)
 	models = Array{SingleModelAmica}(undef, M) #Array of SingleModelAmica opjects
 	normalized_ica_weights = (1/M) * ones(M,1)
 	(n, N) = size(data)
@@ -109,20 +109,20 @@ function MultiModelAmica(data::Array; m=3, M=2, maxiter=500, A=nothing, mu=nothi
 		end
 	end
 
-	if isnothing(mu)
+	if isnothing(location)
 		if m > 1
-			mu = 0.1 * randn(m, n, M)
+			location = 0.1 * randn(m, n, M)
 		else
-			mu = zeros(m, n, M)
+			location = zeros(m, n, M)
 		end
 	end
 
-	if isnothing(beta)
-		beta = ones(m, n, M) + 0.1 * randn(m, n, M)
+	if isnothing(scale)
+		scale = ones(m, n, M) + 0.1 * randn(m, n, M)
 	end
 
 	for h in 1:M
-		models[h] = SingleModelAmica(data; m, maxiter=nothing, A=A[:,:,h], mu=mu[:,:,h], beta=beta[:,:,h], kwargs...)
+		models[h] = SingleModelAmica(data; m, maxiter=nothing, A=A[:,:,h], location=location[:,:,h], scale=scale[:,:,h], kwargs...)
 	end
 	return MultiModelAmica(models,normalized_ica_weights,ica_weights_per_sample,ica_weights,maxiter,m,LL#=,Q=#)
 end

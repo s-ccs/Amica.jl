@@ -3,8 +3,8 @@ Main AMICA algorithm
 
 """
 
-function fit(amicaType::Type{T}, data; m = 3, maxiter = 500, mu = nothing, beta = nothing, A = nothing, kwargs...) where {T<:AbstractAmica}
-	amica = T(data; m = m, maxiter = maxiter, mu = mu, beta = beta, A = A)
+function fit(amicaType::Type{T}, data; m = 3, maxiter = 500, location = nothing, scale = nothing, A = nothing, kwargs...) where {T<:AbstractAmica}
+	amica = T(data; m = m, maxiter = maxiter, location = location, scale = scale, A = A)
 	fit!(amica, data; kwargs...)
 	return amica
 end
