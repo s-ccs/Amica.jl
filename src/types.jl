@@ -1,25 +1,27 @@
-mutable struct GGParameters
-	proportions::AbstractArray{Float64} #source density mixture proportions
-	scale::AbstractArray{Float64} #source density inverse scale parameter
-	location::AbstractArray{Float64} #source density location parameter
-	shape::AbstractArray{Float64} #source density shape paramters
+mutable struct GGParameters{T}
+    proportions::Array{T} #source density mixture proportions
+    scale::Array{T} #source density inverse scale parameter
+    location::Array{T} #source density location parameter
+    shape::Array{T} #source density shape paramters
 end
+
 
 abstract type AbstractAmica end
 
-mutable struct SingleModelAmica <:AbstractAmica
-	source_signals					   #Unmixed signals
-	learnedParameters::GGParameters	   #Parameters of the Gaussian mixtures
-	m::Union{Integer, Nothing} 		   #Number of gaussians
-    A::AbstractArray 				   #Mixing matrix
-	z::AbstractArray				   #Densities for each sample per Gaussian (normalized)
-	y::AbstractArray				   #Source signals (scaled and shifted with scale and location parameter)
-	centers::AbstractArray 			   #Model centers
-	Lt::AbstractVector 				   #Log likelihood of time point for each model ( M x N )
-	LL::Union{AbstractVector, Nothing} #Log-Likelihood
-	ldet::Float64					   #log determinant of A
-	maxiter::Union{Int, Nothing} 	   #maximum number of iterations, can be nothing because it's not needed for multimodel
+mutable struct SingleModelAmica{T} <:AbstractAmica
+    source_signals::Array{T,2}
+    learnedParameters::GGParameters{T}
+    m::Int64 #number of gaussians
+    A::Array{T,2} #unmixing matrices for each model
+    z::Array{T,3}
+    y::Array{T,3}
+    centers::Array{T} #model centers
+    Lt::Array{Float64} #log likelihood of time point for each model ( M x N )
+    LL::Array{T} #log likelihood over iterations todo: change to tuple 
+    ldet::Float64
+    maxiter::Int
 end
+
 
 mutable struct MultiModelAmica <:AbstractAmica
 	models::Array{SingleModelAmica} #Array of SingleModelAmicas
@@ -85,7 +87,7 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, l
 	ldet = 0.0
 	source_signals = zeros(n,N)
 
-	return SingleModelAmica(source_signals,GGParameters(proportions,scale,location,shape),m,A,z,y,#=Q,=#centers,Lt,LL,ldet,maxiter)
+	return SingleModelAmica{T}(source_signals,GGParameters{T}(proportions,scale,location,shape),m,A,z,y,#=Q,=#centers,Lt,LL,ldet,maxiter)
 end
 
 #Data type for AMICA with multiple ICA models
