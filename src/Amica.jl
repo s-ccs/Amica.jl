@@ -5,10 +5,6 @@ module Amica
 	using Distributions
 	using SpecialFunctions
     using ProgressMeter
-    #using ComponentArrays
-    using Diagonalizations
-    #using MultivariateStats
-    #using StatsAPI
     include("types.jl")
     include("helper.jl")
     include("likelihood.jl")

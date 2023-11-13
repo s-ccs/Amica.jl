@@ -38,7 +38,7 @@ function amica!(myAmica::AbstractAmica,
 		removed_mean = removeMean!(data)
 	end
 	if do_sphering
-		data = sphering(data)
+		sphering!(data)
 	end
 	
 	dLL = zeros(1, maxiter)
@@ -46,9 +46,6 @@ function amica!(myAmica::AbstractAmica,
 
 	#todo put them into object
 	lambda = zeros(n, 1)
-	kappa = zeros(n, 1)
-	sigma2 = zeros(n, 1)
-
     prog = ProgressUnknown("Minimizing"; showspeed=true)
 
 	for iter in 1:maxiter
@@ -57,7 +54,7 @@ function amica!(myAmica::AbstractAmica,
 		calculate_ldet!(myAmica)
 		initialize_Lt!(myAmica)
 		calculate_y!(myAmica)
-		loopiloop(myAmica) #Updates y and Lt. Todo: Rename
+		loopiloop!(myAmica) #Updates y and Lt. Todo: Rename
 		calculate_LL!(myAmica)
 		
 		#Calculate difference in loglikelihood between iterations

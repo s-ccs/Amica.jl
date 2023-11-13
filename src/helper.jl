@@ -3,17 +3,17 @@ function removeMean!(input)
 	mn = mean(input,dims=2)
 	(n,N) = size(input)
 	for i in 1:n
-		input[i,:] = input[i,:] .- mn[i]
+		input[i,:] .= input[i,:] .- mn[i]
 	end
 	return mn
 end
 
 #Returns sphered data x. todo:replace with function from lib
-function sphering(x)
-	(n,N) = size(x)
-	Us,Ss,Vs = svd(x*x'/N)
+function sphering!(x)
+	(_,N) = size(x)
+	Us,Ss = svd(x*x'/N)
 	S = Us * diagm(vec(1 ./sqrt.(Ss))) * Us'
-    return x = S*x
+    x .= S*x
 end
 
 function bene_sphering(data)
