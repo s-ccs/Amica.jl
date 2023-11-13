@@ -11,7 +11,7 @@ abstract type AbstractAmica end
 mutable struct SingleModelAmica{T} <:AbstractAmica
     source_signals::Array{T,2}
     learnedParameters::GGParameters{T}
-    m::Int64 #number of gaussians
+	m::Union{Integer, Nothing} 		   #Number of gaussians
     A::Array{T,2} #unmixing matrices for each model
     z::Array{T,3}
     y::Array{T,3}
