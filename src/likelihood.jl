@@ -51,7 +51,7 @@ end
 
 
 #Calculates densities for each generalized Gaussian j. Currently used my MultiModelAmica too
-function calculate_Q(myAmica::SingleModelAmica,  i)
+function calculate_Q(myAmica::SingleModelAmica{T},  i) where {T<:Real}
 	@views @inbounds log.(myAmica.learnedParameters.proportions[:, i]) .+ 0.5 *log.(myAmica.learnedParameters.scale[:, i]) .+ logpfun.(myAmica.y[i, :, :]', myAmica.learnedParameters.shape[:, i])
 end
 
