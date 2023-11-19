@@ -1,8 +1,8 @@
 mutable struct GGParameters{T}
-    proportions::Array{T} #source density mixture proportions
-    scale::Array{T} #source density inverse scale parameter
-    location::Array{T} #source density location parameter
-    shape::Array{T} #source density shape paramters
+    proportions::Array{T, 2} #source density mixture proportions
+    scale::Array{T, 2} #source density inverse scale parameter
+    location::Array{T, 2} #source density location parameter
+    shape::Array{T, 2} #source density shape paramters
 end
 
 
