@@ -27,7 +27,7 @@ end
 function loopiloop!(myAmica::SingleModelAmica)
 	(n,N) = size(myAmica.source_signals)
 
-	for i in 1:n #32
+	Threads.@threads for i in 1:n #32
 		Q = calculate_Q(myAmica, i)
 		calculate_u!(myAmica, Q,i)
 		calculate_Lt!(myAmica, Q)
