@@ -34,11 +34,36 @@ end
 #taken from amica_a.m
 #L = det(A) * mult p(s|θ)
 function logpfun(x,rho)
-	return @inbounds -AppleAccelerate.pow(abs.(x), repeat([rho], length(x))) .- log(2) .- loggamma.(1 + 1 / rho)
+	return @inbounds -optimized_pow(abs.(x), repeat([rho], length(x))) .- log(2) .- loggamma.(1 + 1 / rho)
 end
 
 
 #taken from amica_a.m
 function ffun(x::AbstractArray{T, 1}, rho::T) where {T<:Real}
-	return @inbounds rho .* sign.(x) .* AppleAccelerate.pow(abs.(x), repeat([rho - 1], length(x)))
+	return @inbounds rho .* sign.(x) .* optimized_pow(abs.(x), repeat([rho - 1], length(x)))
+end
+
+# optimized power function for different cpu architectures
+function optimized_pow(lhs::AbstractArray{T, 1}, rhs::T) where {T<:Real}
+	optimized_pow(lhs, repeat([rhs], length(lhs)))
+end
+
+function optimized_pow(lhs::AbstractArray{T, 1}, rhs::AbstractArray{T, 1}) where {T<:Real}
+	if Sys.iswindows() || Sys.islinux()
+		return IVM.pow(lhs, rhs)
+	elseif Sys.isapple()
+		return AppleAccelerate.pow(lhs, rhs)
+	else 
+		return lhs .^ rhs
+	end
+end
+
+function optimized_log(val::AbstractArray{T, 1}) where {T<:Real}
+	if Sys.iswindows() || Sys.islinux()
+		return IVM.log(val)
+	elseif Sys.isapple()
+		return AppleAccelerate.log(val)
+	else 
+		return log.(val)
+	end
 end
