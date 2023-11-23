@@ -332,8 +332,8 @@ end
 #Updates the Gaussian mixture shape parameter
 @views function update_shape!(myAmica::SingleModelAmica, rho, j, i, lrate_rho::LearningRate)
 	rhomin, rhomax, shapelrate = lrate_rho.minimum, lrate_rho.maximum, lrate_rho.lrate
-	ytmp = AppleAccelerate.pow(abs.(myAmica.y[i,:,j]), repeat([rho[j,i]], size(myAmica.y)[2]))
-	dr = sum(myAmica.z[i,:,j].*AppleAccelerate.log(ytmp).*ytmp)
+	ytmp = optimized_pow(abs.(myAmica.y[i,:,j]), repeat([rho[j,i]], size(myAmica.y)[2]))
+	dr = sum(myAmica.z[i,:,j].*optimized_log(ytmp).*ytmp)
 
 	if rho[j,i] > 2
 		dr2 = digamma(1+1/rho[j,i]) / rho[j,i] - dr
