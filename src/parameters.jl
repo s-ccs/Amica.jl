@@ -202,8 +202,11 @@ end
 	kappa = zeros(n,1)
 	zfp = zeros(m, N)
 
-	
-	#Threads.@threads 
+
+	# update myAmica.learnedParameters.proportions & myAmica.z
+	# depends on 
+	# - myAmica.z
+	# - myAmica.source_signals
 	for i in 1:n
 		for j in 1:m
 			sumz = calculate_sumz(myAmica,i,j)
@@ -215,7 +218,27 @@ end
 			else
 				continue
 			end
+		end
+	end
 	
+	# update 
+	# - fp
+	# - zfp
+	# - g
+	# - kp
+	# - kappa
+	# - lambda
+	# - mu
+
+	# depends on 
+	# - myAmica.y
+	# - myAmica.z
+	# - rho
+	# - alpha
+	# - beta
+	# - mu
+	for i in 1:n
+		for j in 1:m
 			fp[j,:] .= ffun(myAmica.y[i,:,j], rho[j,i])
 
 			zfp[j,:] .= myAmica.z[i,:,j] .* fp[j,:]
@@ -227,19 +250,29 @@ end
 	
 			lambda[i] += alpha[j,i] .* (sum(myAmica.z[i,:,j].*(fp[j,:].*myAmica.y[i,:,j] .-1).^2) .+ mu[j,i]^2 .* kp)
 			mu[j,i] = update_location(myAmica,rho[j,i],zfp[j,:],myAmica.y[i,:,j],mu[j,i],beta[j,i],kp)
-			
-			
+
+
 			beta[j,i] = update_scale(zfp[j,:],myAmica.y[i,:,j],beta[j,i],myAmica.z[i,:,j],rho[j,i])
 
+		end
+	end
+
+	# update rho
+	# depends on rho, zfp, myAmica.y, mu, beta, kp
+	for i in 1:n
+		for j in 1:m
 			if update_shape == 1
 				update_shape!(myAmica, rho, j, i, lrate_rho)
 			end
 		end
 	end
+
+
 	myAmica.learnedParameters.proportions = alpha
 	myAmica.learnedParameters.scale = beta
 	myAmica.learnedParameters.location = mu
 	myAmica.learnedParameters.shape = rho
+
 	return g, kappa
 end
 
@@ -299,8 +332,8 @@ end
 #Updates the Gaussian mixture shape parameter
 @views function update_shape!(myAmica::SingleModelAmica, rho, j, i, lrate_rho::LearningRate)
 	rhomin, rhomax, shapelrate = lrate_rho.minimum, lrate_rho.maximum, lrate_rho.lrate
-	ytmp = abs.(myAmica.y[i,:,j]).^rho[j,i]
-	dr = sum(myAmica.z[i,:,j].*log.(ytmp).*ytmp)
+	ytmp = AppleAccelerate.pow(abs.(myAmica.y[i,:,j]), repeat([rho[j,i]], size(myAmica.y)[2]))
+	dr = sum(myAmica.z[i,:,j].*AppleAccelerate.log(ytmp).*ytmp)
 
 	if rho[j,i] > 2
 		dr2 = digamma(1+1/rho[j,i]) / rho[j,i] - dr
@@ -313,6 +346,8 @@ end
 			rho[j,i] += shapelrate *dr2
 		end
 	end
+
+	# todo clamp?
 	rho[j,i] = min(rhomax, rho[j,i])
 	rho[j,i] = max(rhomin, rho[j,i])
 end

@@ -25,11 +25,12 @@ end
 
 #Update loop for Lt and u (which is saved in z). Todo: Rename
 function loopiloop!(myAmica::SingleModelAmica)
-	(n,N) = size(myAmica.source_signals)
+	(n,_) = size(myAmica.source_signals)
+
 
 	Threads.@threads for i in 1:n #32
 		Q = calculate_Q(myAmica, i)
-		calculate_u!(myAmica, Q,i)
+		calculate_u!(myAmica, Q, i)
 		calculate_Lt!(myAmica, Q)
 	end
 end
@@ -48,11 +49,16 @@ function loopiloop!(myAmica::MultiModelAmica)
 	end
 end
 
+function calculate_Q(myAmica::SingleModelAmica, i)
+	(n,N) = size(myAmica.source_signals)
+	m = myAmica.m
+	Q = zeros(m,N)
+	
+	for j in 1:m
+		Q[j,:] .= log(myAmica.learnedParameters.proportions[j,i]) + 0.5 * log(myAmica.learnedParameters.scale[j,i]) .+ logpfun(myAmica.y[i,:,j], myAmica.learnedParameters.shape[j,i])
+	end
 
-
-#Calculates densities for each generalized Gaussian j. Currently used my MultiModelAmica too
-function calculate_Q(myAmica::SingleModelAmica{T},  i) where {T<:Real}
-	@views @inbounds log.(myAmica.learnedParameters.proportions[:, i]) .+ 0.5 *log.(myAmica.learnedParameters.scale[:, i]) .+ logpfun.(myAmica.y[i, :, :]', myAmica.learnedParameters.shape[:, i])
+	return Q
 end
 
 #calculates u but saves it into z. MultiModel also uses the SingleModel version
