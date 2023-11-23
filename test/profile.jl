@@ -15,8 +15,9 @@ function profile_test()
 
     close(file)
     # before: ca 1.2s / iter
-    myAmica = @time fit(SingleModelAmica, x; maxiter=30, do_sphering=true, remove_mean=true, m=3, scale=beta_init[:, :, 1], location=mu_init[:, :, 1], A=copy(A_init[:, :, 1]))
-
+    # last best: 0,61s / iter
+    myAmica = fit(SingleModelAmica, x; maxiter=100, do_sphering=true, remove_mean=true, m=3, scale=beta_init[:, :, 1], location=mu_init[:, :, 1], A=copy(A_init[:, :, 1]))
+    @test myAmica.A ≈ reshape(reinterpret(Float64, read("test/fortran_out/A")), (32, 32))
 
     x = [1 4; 4 1]*Float64.([1.0 2 3; 4 5 6])
     A_init = [1.0 0.003; -0.05 1.0]
