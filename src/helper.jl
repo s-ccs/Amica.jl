@@ -34,13 +34,13 @@ end
 #taken from amica_a.m
 #L = det(A) * mult p(s|θ)
 function logpfun(x,rho)
-	return @inbounds -optimized_pow(abs.(x), repeat([rho], length(x))) .- log(2) .- loggamma.(1 + 1 / rho)
+	return @inbounds -optimized_pow(abs.(x), repeat([rho], length(x))) .- log(2) .- loggamma(1 + 1 / rho)
 end
 
 
 #taken from amica_a.m
 function ffun(x::AbstractArray{T, 1}, rho::T) where {T<:Real}
-	return @inbounds rho .* sign.(x) .* optimized_pow(abs.(x), repeat([rho - 1], length(x)))
+	return @inbounds rho * sign.(x) .* optimized_pow(abs.(x), repeat([rho - 1], length(x)))
 end
 
 # optimized power function for different cpu architectures
