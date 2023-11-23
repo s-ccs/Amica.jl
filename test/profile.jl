@@ -30,4 +30,4 @@ function profile_test()
 end
 
 
- profile_test()
+profile_test()
