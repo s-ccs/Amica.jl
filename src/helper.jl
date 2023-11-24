@@ -58,12 +58,23 @@ function optimized_pow(lhs::AbstractArray{T, 1}, rhs::AbstractArray{T, 1}) where
 	end
 end
 
-function optimized_log(val::AbstractArray{T, 1}) where {T<:Real}
+function optimized_log(val)
 	if Sys.iswindows() || Sys.islinux()
 		return IVM.log(val)
 	elseif Sys.isapple()
 		return AppleAccelerate.log(val)
 	else 
 		return log.(val)
+	end
+end
+
+
+function optimized_exp(val) 
+	if Sys.iswindows() || Sys.islinux()
+		return IVM.exp(val)
+	elseif Sys.isapple()
+		return AppleAccelerate.exp(val)
+	else 
+		return exp.(val)
 	end
 end
