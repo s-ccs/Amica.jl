@@ -66,7 +66,7 @@ end
 	m = size(myAmica.learnedParameters.scale,1)
 	if m > 1
 		for j in 1:m
-            myAmica.z[i, :, j] .= (1 ./ sum(exp.(Q .- Q[j, :]'), dims=1))[:]
+            myAmica.z[i, :, j] .= (1 ./ sum(optimized_exp(Q .- Q[j, :]'), dims=1))[:]
 		end
 	end
 end
@@ -76,7 +76,7 @@ end
 	m = size(myAmica.learnedParameters.scale,1)
 	if m > 1
 		Qmax = maximum(Q);
-		myAmica.Lt .+= Qmax .+ log.(sum(exp.(Q .- Qmax), dims = 1))'
+		myAmica.Lt .+= Qmax .+ optimized_log(sum(optimized_exp(Q .- Qmax), dims = 1))'
 	else
 		myAmica.Lt .+= Q[1,:]' #todo: test
 	end
