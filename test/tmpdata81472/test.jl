@@ -1,7 +1,7 @@
 using Amica
 using Test
 
-x = reshape(reinterpret(Float32, read("test/tmpdata81472/tmpdata81472.fdt")), (71, :))
+x = reshape(reinterpret(Float32, read("test/tmpdata81472/tmpdata81472.fdt")), (32, :))
 
 amica = fit(SingleModelAmica, x;
     lrate=Amica.LearningRate(;
