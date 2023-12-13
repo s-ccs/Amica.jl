@@ -33,6 +33,8 @@ function amica!(myAmica::AbstractAmica,
 	(n, N) = size(data)
 	m = myAmica.m
 
+	println("m: $(m), n: $(n), N: $(N)")
+
 	#Prepares data by removing means and/or sphering
 	if remove_mean
 		removed_mean = removeMean!(data)
