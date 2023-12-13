@@ -202,7 +202,6 @@ end
 	kappa = zeros(n,1)
 	zfp = zeros(m, N)
 
-
 	# update myAmica.learnedParameters.proportions & myAmica.z
 	# depends on 
 	# - myAmica.z
@@ -332,7 +331,7 @@ end
 #Updates the Gaussian mixture shape parameter
 @views function update_shape!(myAmica::SingleModelAmica, rho, j, i, lrate_rho::LearningRate)
 	rhomin, rhomax, shapelrate = lrate_rho.minimum, lrate_rho.maximum, lrate_rho.lrate
-	ytmp = optimized_pow(abs.(myAmica.y[i,:,j]), repeat([rho[j,i]], size(myAmica.y)[2]))
+	ytmp = optimized_pow(abs.(myAmica.y[i,:,j]), rho[j,i])
 	dr = sum(myAmica.z[i,:,j].*optimized_log(ytmp).*ytmp)
 
 	if rho[j,i] > 2
@@ -347,9 +346,7 @@ end
 		end
 	end
 
-	# todo clamp?
-	rho[j,i] = min(rhomax, rho[j,i])
-	rho[j,i] = max(rhomin, rho[j,i])
+	rho[j,i] = clamp(rho[j,i], rhomin, rhomax)
 end
 
 #Updates the Gaussian mixture shape parameter. MultiModel version no longer in use
