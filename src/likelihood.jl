@@ -24,7 +24,7 @@ function calculate_LL!(myAmica::MultiModelAmica)
 end
 
 #Update loop for Lt and u (which is saved in z). Todo: Rename
-function loopiloop(myAmica::SingleModelAmica)
+function loopiloop!(myAmica::SingleModelAmica)
 	(n,N) = size(myAmica.source_signals)
 	m = myAmica.m
 	Q = zeros(m,N)
@@ -71,17 +71,6 @@ end
 		for j in 1:m
             myAmica.z[i, :, j] .= (1 ./ sum(optimized_exp(Q .- Q[j, :]'), dims=1))[:]
 		end
-	end
-end
-
-#Calculates Likelihood for each time sample and for each ICA model
-@views function calculate_Lt!(myAmica::SingleModelAmica, Q)
-	m = size(myAmica.learnedParameters.scale,1)
-	if m > 1
-		Qmax = maximum(Q);
-		myAmica.Lt .+= Qmax .+ optimized_log(sum(optimized_exp(Q .- Qmax), dims = 1))'
-	else
-		myAmica.Lt .+= Q[1,:]' #todo: test
 	end
 end
 

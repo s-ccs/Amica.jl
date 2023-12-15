@@ -145,9 +145,9 @@ function initialize_shape_parameter(myAmica::MultiModelAmica, shapelrate::Learni
 end
 
 #Updates Gaussian mixture Parameters and mixing matrix. todo: rename since its not a loop for single model
-function update_loop!(myAmica::SingleModelAmica, fp, lambda, shapelrate, update_shape, iter, do_newton, newt_start_iter, lrate)
+function update_loop!(myAmica::SingleModelAmica, lambda, shapelrate, update_shape, iter, do_newton, newt_start_iter, lrate)
 		#Update parameters
-		g, kappa = update_parameters!(myAmica, fp, lambda, shapelrate, update_shape)
+		g, kappa = update_parameters!(myAmica, lambda, shapelrate, update_shape)
 		
 		#Checks for NaN in parameters before updating the mixing matrix
 		if any(isnan, kappa) || any(isnan, myAmica.source_signals) || any(isnan, lambda) || any(isnan, g) || any(isnan, myAmica.learnedParameters.proportions)
@@ -191,7 +191,7 @@ end
 
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
 #Todo: Save g, kappa, lambda in structure, remove return
-@views function update_parameters!(myAmica::SingleModelAmica, fp, lambda, lrate_rho::LearningRate, update_shape)
+@views function update_parameters!(myAmica::SingleModelAmica, lambda, lrate_rho::LearningRate, update_shape)
 	alpha = myAmica.learnedParameters.proportions
 	beta = myAmica.learnedParameters.scale
 	mu = myAmica.learnedParameters.location
@@ -202,7 +202,10 @@ end
 	kappa = zeros(n,1)
 	zfp = zeros(m, N)
 
-	# update myAmica.learnedParameters.proportions & myAmica.z
+	# update 
+	# - myAmica.learnedParameters.proportions 
+	# - myAmica.z
+
 	# depends on 
 	# - myAmica.z
 	# - myAmica.source_signals
@@ -229,6 +232,8 @@ end
 	# - lambda
 	# - mu
 
+	fp = zeros(n, m, N)
+
 	# depends on 
 	# - myAmica.y
 	# - myAmica.z
@@ -238,7 +243,7 @@ end
 	# - mu
 	for i in 1:n
 		for j in 1:m
-			fp[j,:] .= ffun(myAmica.y[i,:,j], rho[j,i])
+			fp[i, j, :] .= ffun(myAmica.y[i,:,j], rho[j,i])
 
 			zfp[j,:] .= myAmica.z[i,:,j] .* fp[j,:]
 			g[i,:] .+= alpha[j,i] .* sqrt(beta[j,i]) .*zfp[j,:]
