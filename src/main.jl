@@ -35,7 +35,8 @@ function amica!(myAmica::AbstractAmica,
 
 	#Prepares data by removing means and/or sphering
 	if remove_mean
-		removed_mean = removeMean!(data)
+		myAmica.centers = removeMean!(data)
+		
 	end
 	if do_sphering
 		sphering!(data)
@@ -53,10 +54,11 @@ function amica!(myAmica::AbstractAmica,
 		update_sources!(myAmica, data)
 		calculate_ldet!(myAmica)
 		initialize_Lt!(myAmica)
+		#@show "det" myAmica.Lt
 		calculate_y!(myAmica)
 		loopiloop!(myAmica) #Updates y and Lt. Todo: Rename
 		calculate_LL!(myAmica)
-		
+		#@show myAmica.Lt
 		#Calculate difference in loglikelihood between iterations
 		if iter > 1
 			dLL[iter] = myAmica.LL[iter] - myAmica.LL[iter-1]
@@ -95,7 +97,7 @@ function amica!(myAmica::AbstractAmica,
     @label escape_from_NaN
 	#If means were removed, they are added back
 	if remove_mean
-		add_means_back!(myAmica, removed_mean)
+		add_means_back!(myAmica, myAmica.centers)
 	end
 	return myAmica
 end
