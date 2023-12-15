@@ -372,7 +372,9 @@ end
 
 #Calculates determinant of mixing Matrix A (with log). first log-likelihood part of L = |A| * p(sources)
 function calculate_ldet!(myAmica::SingleModelAmica)
-	myAmica.ldet = -log(abs(det(myAmica.A)))
+	#myAmica.ldet = -log(abs(det(myAmica.A)))
+	myAmica.ldet = -logabsdet(myAmica.A)[1]
+	@debug :ldet myAmica.ldet
 end
 
 function calculate_ldet!(myAmica::MultiModelAmica)

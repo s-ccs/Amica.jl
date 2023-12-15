@@ -58,7 +58,7 @@ function amica!(myAmica::AbstractAmica,
 		calculate_y!(myAmica)
 		loopiloop!(myAmica) #Updates y and Lt. Todo: Rename
 		calculate_LL!(myAmica)
-		
+		@debug (:LL,myAmica.LL)
 		#Calculate difference in loglikelihood between iterations
 		if iter > 1
 			dLL[iter] = myAmica.LL[iter] - myAmica.LL[iter-1]
