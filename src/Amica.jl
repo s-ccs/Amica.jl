@@ -9,6 +9,11 @@ module Amica
     using LoopVectorization
     using AppleAccelerate
 
+    #using ComponentArrays
+    using Diagonalizations
+    using LogExpFunctions
+    #using MultivariateStats
+    #using StatsAPI
     include("types.jl")
     include("helper.jl")
     include("likelihood.jl")
