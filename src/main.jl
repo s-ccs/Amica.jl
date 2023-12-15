@@ -44,7 +44,6 @@ function amica!(myAmica::AbstractAmica,
 	end
 	
 	dLL = zeros(1, maxiter)
-	fp = zeros(m ,N)
 
 	#todo put them into object
 	lambda = zeros(n, 1)
@@ -77,7 +76,7 @@ function amica!(myAmica::AbstractAmica,
 		#M-step
 		try
 			#Updates parameters and mixing matrix
-			update_loop!(myAmica, fp, lambda, shapelrate, update_shape, iter, do_newton, newt_start_iter, lrate)
+			update_loop!(myAmica, lambda, shapelrate, update_shape, iter, do_newton, newt_start_iter, lrate)
 		catch e
 			#Terminates if NaNs are detected in parameters
 			if isa(e,AmicaNaNException)
