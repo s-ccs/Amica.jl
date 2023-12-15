@@ -7,6 +7,7 @@ module Amica
     using ProgressMeter
     #using ComponentArrays
     using Diagonalizations
+    using LogExpFunctions
     #using MultivariateStats
     #using StatsAPI
     include("types.jl")

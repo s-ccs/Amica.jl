@@ -28,12 +28,14 @@ function loopiloop(myAmica::SingleModelAmica)
 	(n,N) = size(myAmica.source_signals)
 	m = myAmica.m
 	Q = zeros(m,N)
-
-	Threads.@threads for i in 1:n
-		Q = calculate_Q(myAmica,Q,i)
-		calculate_u!(myAmica,Q,i)
-		calculate_Lt!(myAmica,Q) #Has to be in loop because it uses current Q
+	@debug (:prop,myAmica.learnedParameters.proportions[1,1],:shape,myAmica.learnedParameters.shape[1],:y,myAmica.y[1])
+	for i in 1:n
+		Q = calculate_Q(myAmica,Q,i) # myAmica.Q
+		calculate_u!(myAmica,Q,i) # myAmica.z
+		@debug (:z,myAmica.z[1,1:5,1])
+		calculate_Lt!(myAmica,Q) # myAmica.Q
 	end
+	@debug (:Q,Q[1,1])
 end
 
 function loopiloop(myAmica::MultiModelAmica)
@@ -99,6 +101,7 @@ end
 #Calculates densities for each generalized Gaussian j. Currently used my MultiModelAmica too
 function calculate_Q(myAmica::SingleModelAmica, Q, i)
 	m = size(myAmica.learnedParameters.scale, 1) #m = number of GGs, can't use myAmica.m in case this gets used my MultiModelAmica
+
 	for j in 1:m
 		Q[j,:] = log(myAmica.learnedParameters.proportions[j,i]) + 0.5*log(myAmica.learnedParameters.scale[j,i]) .+ logpfun(myAmica.y[i,:,j],myAmica.learnedParameters.shape[j,i])
 	end
@@ -118,7 +121,7 @@ function calculate_Lt!(myAmica::SingleModelAmica,Q)
 	m = size(myAmica.learnedParameters.scale,1)
 	if m > 1
 		Qmax = ones(m,1).*maximum(Q,dims=1);
-		myAmica.Lt[:] = myAmica.Lt' .+ Qmax[1,:]' .+ log.(sum(exp.(Q - Qmax),dims = 1))
+		myAmica.Lt[:] = myAmica.Lt' .+ Qmax[1,:]' .+ logsumexp(Q - Qmax,dims = 1)
 	else
 		myAmica.Lt[:] = myAmica.Lt .+ Q[1,:]#todo: test
 	end
