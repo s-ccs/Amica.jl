@@ -50,16 +50,16 @@ function reparameterize!(myAmica::MultiModelAmica, data)
 end
 
 #Calculates sum of z. Returns N if there is just one generalized Gaussian
-@views function calculate_sumz(myAmica::SingleModelAmica,i,j)
+@views function calculate_sumz(myAmica::SingleModelAmica)
 	if myAmica.m == 1
 		return size(myAmica.source_signals, 2)
 	else
-		return sum(myAmica.z[i,:,j])
+		return sum(myAmica.z, dims=2)
 	end
 end
 
-@views function calculate_sumz(myAmica::MultiModelAmica,i,j,h)
-	return sum(myAmica.models[h].z[i,:,j])
+@views function calculate_sumz(myAmica::MultiModelAmica,h)
+	return sum(myAmica.models[h].z, dims = 2)
 end
 
 #Calculates densities for each sample per ICA model and per Gaussian mixture
@@ -211,17 +211,14 @@ end
 	# depends on 
 	# - myAmica.z
 	# - myAmica.source_signals
+	sumz = calculate_sumz(myAmica)
+	if m > 0
+		sumz[sumz .< 0] .= 1
+		myAmica.z ./= sumz
+	end
 	for i in 1:n
 		for j in 1:m
-			sumz = calculate_sumz(myAmica,i,j)
-			update_mixture_proportions!(sumz,myAmica,j,i)
-			if sumz > 0
-				if m > 1
-					myAmica.z[i,:,j] ./= sumz
-				end
-			else
-				continue
-			end
+			update_mixture_proportions!(sumz[i, 1, j],myAmica,j,i)
 		end
 	end
 	
@@ -296,14 +293,20 @@ end
 	zfp = zeros(m, N)
 
 	
+	sumz = calculate_sumz(myAmica,h)
+	if m > 0
+		sumz[sumz .< 0] .= 1
+		myAmica.models[h].z ./= sumz
+	end
+
+
 	#=Threads.@threads=# for i in 1:n
 		for j in 1:m
 			sumz = 0
 			calculate_z!(myAmica, i, j, h)
-			sumz = calculate_sumz(myAmica,i,j,h)
-			update_mixture_proportions!(sumz,myAmica,j,i,h)
-			if sumz > 0
-				myAmica.models[h].z[i,:,j] .= myAmica.models[h].z[i,:,j] / sumz
+			update_mixture_proportions!(sumz[i, 1, j],myAmica,j,i,h)
+			if sumz[i, 1, j] > 0
+				myAmica.models[h].z[i,:,j] ./= sumz[i, 1, j]
 			else
 				continue
 			end
