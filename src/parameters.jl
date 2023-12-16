@@ -191,7 +191,7 @@ end
 
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
 #Todo: Save g, kappa, lambda in structure, remove return
-@views function update_parameters!(myAmica::SingleModelAmica, lambda, y_rho, lrate_rho::LearningRate, update_shape)
+@views function update_parameters!(myAmica::SingleModelAmica, lambda, y_rho, lrate_rho::LearningRate, upd_shape)
 	alpha = myAmica.learnedParameters.proportions
 	beta = myAmica.learnedParameters.scale
 	mu = myAmica.learnedParameters.location
@@ -201,8 +201,6 @@ end
 	g = zeros(n,N)
 	kappa = zeros(n,1)
 	zfp = zeros(m, N)
-
-	log_y_rho = optimized_log(y_rho)
 
 	# update 
 	# - myAmica.learnedParameters.proportions 
@@ -264,10 +262,12 @@ end
 
 	# update rho
 	# depends on rho, zfp, myAmica.y, mu, beta
-	for i in 1:n
-		for j in 1:m
-			if update_shape == 1
-				update_shape!(myAmica, rho, y_rho, log_y_rho, j, i, lrate_rho)
+	if upd_shape == 1
+		dr = sum(myAmica.z .* optimized_log(y_rho) .* y_rho, dims=2)
+
+		for i in 1:n
+			for j in 1:m
+				rho[j, i] = update_shape(rho[j, i], dr[i, 1, j], lrate_rho)
 			end
 		end
 	end
@@ -283,7 +283,7 @@ end
 
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
 #Todo: Save g, kappa, lambda in structure, remove return
-@views function update_parameters!(myAmica::MultiModelAmica, h, fp, y_rho, lambda, lrate_rho::LearningRate, update_shape)
+@views function update_parameters!(myAmica::MultiModelAmica, h, fp, y_rho, lambda, lrate_rho::LearningRate, upd_shape)
 	alpha = myAmica.models[h].learnedParameters.proportions #todo: move into loop and add h
 	beta = myAmica.models[h].learnedParameters.scale
 	mu = myAmica.models[h].learnedParameters.location
@@ -295,7 +295,6 @@ end
 	kappa = zeros(n,1)
 	zfp = zeros(m, N)
 
-	log_y_rho = optimized_log(y_rho)
 	
 	#=Threads.@threads=# for i in 1:n
 		for j in 1:m
@@ -323,8 +322,10 @@ end
 			
 			beta[j,i] = update_scale(zfp[j,:],myAmica.models[h].y[i,:,j],beta[j,i],myAmica.models[h].z[i,:,j],rho[j,i])
 
-			if update_shape == 1
-				update_shape!(myAmica.models[h], rho, log_y_rho, y_rho, j, i, lrate_rho) #uses SingleModel version on each model
+			if upd_shape == 1
+				log_y_rho = optimized_log(y_rho)
+				dr = sum(myAmica.models[h].z .* log_y_rho .* y_rho, dims=2)
+				rho[j, i] = update_shape(rho[j, i], dr[i, 1, j], lrate_rho)
 			end
 		end
 	end
@@ -336,23 +337,20 @@ end
 end
 
 #Updates the Gaussian mixture shape parameter
-@views function update_shape!(myAmica::SingleModelAmica, rho, log_y_rho, y_rho, j, i, lrate_rho::LearningRate)
-	rhomin, rhomax, shapelrate = lrate_rho.minimum, lrate_rho.maximum, lrate_rho.lrate
-	dr = sum(myAmica.z[i,:,j] .* log_y_rho[i, :, j] .* y_rho[i, :, j])
-
-	if rho[j,i] > 2
-		dr2 = digamma(1+1/rho[j,i]) / rho[j,i] - dr
+@views function update_shape(rho, dr, lrate_rho::LearningRate)
+	if rho > 2
+		dr2 = digamma(1+1/rho) / rho - dr
 		if ~isnan(dr2)
-			rho[j,i] += 0.5 * dr2
+			rho += 0.5 * dr2
 		end
 	else
-		dr2 = 1 - rho[j,i] * dr / digamma(1+1/rho[j,i])
+		dr2 = 1 - rho * dr / digamma(1+1/rho)
 		if ~isnan(dr2)
-			rho[j,i] += shapelrate *dr2
+			rho += lrate_rho.lrate * dr2
 		end
 	end
 
-	rho[j,i] = clamp(rho[j,i], rhomin, rhomax)
+	return clamp(rho, lrate_rho.minimum, lrate_rho.maximum)
 end
 
 #Calculates determinant of mixing Matrix A (with log). first log-likelihood part of L = |A| * p(sources)
