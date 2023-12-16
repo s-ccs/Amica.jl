@@ -14,7 +14,7 @@ A_init = read(file, "A_init")
 
 close(file)
 # before: ca 1.2s / iter
-# last best: 0,55s / iter
+# last best: 0,53s / iter
 @profview myAmica = fit(SingleModelAmica, x; maxiter=30, do_sphering=true, remove_mean=true, m=3, scale=beta_init[:, :, 1], location=mu_init[:, :, 1], A=copy(A_init[:, :, 1]))
 
 x = [1 4; 4 1]*Float64.([1.0 2 3; 4 5 6])
