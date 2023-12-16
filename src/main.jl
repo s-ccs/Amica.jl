@@ -49,13 +49,25 @@ function amica!(myAmica::AbstractAmica,
 	lambda = zeros(n, 1)
     prog = ProgressUnknown("Minimizing"; showspeed=true)
 
+	y_rho = zeros(size(myAmica.y))
+
 	for iter in 1:maxiter
 		#E-step
 		update_sources!(myAmica, data)
 		calculate_ldet!(myAmica)
 		initialize_Lt!(myAmica)
 		calculate_y!(myAmica)
-		loopiloop!(myAmica) #Updates y and Lt. Todo: Rename
+		
+		# pre-calculate abs(y)^rho
+		for j in 1:m
+			for i in 1:n
+				y_rho[i,:,j] .= optimized_pow(abs.(myAmica.y[i,:,j]), myAmica.learnedParameters.shape[j,i])
+			end
+		end
+
+
+
+		loopiloop!(myAmica, y_rho) #Updates y and Lt. Todo: Rename
 		calculate_LL!(myAmica)
 		@debug (:LL,myAmica.LL)
 		#Calculate difference in loglikelihood between iterations
@@ -76,7 +88,7 @@ function amica!(myAmica::AbstractAmica,
 		#M-step
 		try
 			#Updates parameters and mixing matrix
-			update_loop!(myAmica, lambda, shapelrate, update_shape, iter, do_newton, newt_start_iter, lrate)
+			update_loop!(myAmica, lambda, y_rho, shapelrate, update_shape, iter, do_newton, newt_start_iter, lrate)
 		catch e
 			#Terminates if NaNs are detected in parameters
 			if isa(e,AmicaNaNException)
