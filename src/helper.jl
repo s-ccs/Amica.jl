@@ -14,6 +14,7 @@ function sphering!(x)
 	Us,Ss = svd(x*x'/N)
 	S = Us * diagm(vec(1 ./sqrt.(Ss))) * Us'
     x .= S*x
+	return S
 end
 
 function bene_sphering(data)
