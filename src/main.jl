@@ -40,7 +40,12 @@ function amica!(myAmica::AbstractAmica,
 		removed_mean = removeMean!(data)
 	end
 	if do_sphering
-		sphering!(data)
+		S = sphering!(data)
+		myAmica.S = S
+		LLdetS = logabsdet(S)[1]
+	else
+		myAmica.S = I
+		LLdetS = 0
 	end
 	
 	dLL = zeros(1, maxiter)
@@ -56,6 +61,7 @@ function amica!(myAmica::AbstractAmica,
 		update_sources!(myAmica, data)
 		calculate_ldet!(myAmica)
 		initialize_Lt!(myAmica)
+		myAmica.Lt .+= LLdetS
 		calculate_y!(myAmica)
 		
 		# pre-calculate abs(y)^rho
@@ -69,6 +75,8 @@ function amica!(myAmica::AbstractAmica,
 
 		loopiloop!(myAmica, y_rho) #Updates y and Lt. Todo: Rename
 		calculate_LL!(myAmica)
+
+
 		@debug (:LL,myAmica.LL)
 		#Calculate difference in loglikelihood between iterations
 		if iter > 1
@@ -106,6 +114,8 @@ function amica!(myAmica::AbstractAmica,
 	end
 	#If parameters contain NaNs, the algorithm skips the A update and terminates by jumping here
     @label escape_from_NaN
+
+
 	#If means were removed, they are added back
 	if remove_mean
 		add_means_back!(myAmica, removed_mean)

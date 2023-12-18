@@ -12,7 +12,8 @@ mutable struct SingleModelAmica{T} <:AbstractAmica
     source_signals::Array{T,2}
     learnedParameters::GGParameters{T}
 	m::Union{Integer, Nothing} 		   #Number of gaussians
-    A::Array{T,2} #unmixing matrices for each model
+    A::Array{T,2} # unmixing matrices for each model
+	S::Array{T,2} # sphering matrix
     z::Array{T,3}
     y::Array{T,3}
     centers::Array{T} #model centers
@@ -87,7 +88,7 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, l
 	ldet = 0.0
 	source_signals = zeros(n,N)
 
-	return SingleModelAmica{T}(source_signals,GGParameters{T}(proportions,scale,location,shape),m,A,z,y,#=Q,=#centers,Lt,LL,ldet,maxiter)
+	return SingleModelAmica{T}(source_signals,GGParameters{T}(proportions,scale,location,shape),m,A,I(size(A,1)), z,y,#=Q,=#centers,Lt,LL,ldet,maxiter)
 end
 
 #Data type for AMICA with multiple ICA models
