@@ -83,15 +83,8 @@ end
 	end
 end
 
-@views function calculate_y!(myAmica::MultiModelAmica)
-	n = size(myAmica.models[1].A,1)
-	for h in 1:size(myAmica.models,1)
-		#=Threads.@threads=# for i in 1:n
-			for j in 1:myAmica.m
-				myAmica.models[h].y[i,:,j] = sqrt(myAmica.models[h].learnedParameters.scale[j,i]) * (myAmica.models[h].source_signals[i,:] .- myAmica.models[h].learnedParameters.location[j,i])
-			end
-		end
-	end
+function calculate_y!(myAmica::MultiModelAmica)
+		calculate_y!.(myAmica.models[h])
 end
 
 #Calculates Likelihood for each time sample and for each ICA model
