@@ -91,10 +91,14 @@ end
 function calculate_Lt!(myAmica::SingleModelAmica,Q)
 	m = size(myAmica.learnedParameters.scale,1)
 	if m > 1
-		Qmax = ones(m,1).*maximum(Q,dims=1);
-		myAmica.Lt[:] = myAmica.Lt' .+ Qmax[1,:]' .+ logsumexp(Q - Qmax,dims = 1)
+		Qmax = maximum(Q,dims=1);
+		#@show size(Q), size(Qmax)
+		Q .= Q .- Qmax
+		logsumexp!(@view(Qmax[1,:]),Q')
+		myAmica.Lt .= myAmica.Lt .+ @view(Qmax[1,:])
+	
 	else
-		myAmica.Lt[:] = myAmica.Lt .+ Q[1,:]#todo: test
+		myAmica.Lt[:] = myAmica.Lt .+ Q[1,:] #todo: test
 	end
 end
 
