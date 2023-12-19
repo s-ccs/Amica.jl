@@ -24,12 +24,14 @@ function calculate_LL!(myAmica::MultiModelAmica)
 end
 
 #Update loop for Lt and u (which is saved in z). Todo: Rename
-function loopiloop!(myAmica::SingleModelAmica, y_rho)
-	(n,_) = size(myAmica.source_signals)
-	
-	for i in 1:n
-		Q = calculate_Q(myAmica,i, y_rho) # myAmica.Q
-		calculate_u!(myAmica,Q,i) # myAmica.z
+function loopiloop!(myAmica::SingleModelAmica{T}, y_rho) where {T}
+	(ncomponents,N) = size(myAmica.source_signals)
+	Q = Array{T}(undef,myAmica.m,N)
+	gg = myAmica.learnedParameters
+	for comps in 1:ncomponents
+		@views calculate_Q!(Q,gg.proportions[:,comps],gg.scale[:,comps],gg.shape[:,comps],y_rho[comps,:,:])
+		#Q = calculate_Q(myAmica,i, y_rho) # myAmica.Q
+		calculate_u!(myAmica,Q,comps) # myAmica.z
 		calculate_Lt!(myAmica,Q) # myAmica.Q
 	end
 end
@@ -47,13 +49,17 @@ function loopiloop!(myAmica::MultiModelAmica, y_rho)
 	end
 end
 
-@views function calculate_Q(myAmica::SingleModelAmica, i, y_rho)
+function calculate_Q(myAmica::SingleModelAmica, i, y_rho)
 	(n,N) = size(myAmica.source_signals)
 	m = myAmica.m
 	Q = zeros(m,N)
-	
-	for j in 1:m
-		Q[j,:] .= log(myAmica.learnedParameters.proportions[j,i]) + 0.5 * log(myAmica.learnedParameters.scale[j,i]) .+ logpfun(myAmica.learnedParameters.shape[j,i], y_rho[i, :, j])
+	gg = myAmica.learnedParameters
+	@views calculate_Q!(Q,gg.proportions[:,i],gg.scale[:,i],gg.shape[:,i],y_rho[i,:,:])
+	return Q
+end
+	function calculate_Q!(Q,proportions,scale,shape,y_rho)
+	for j in 1:length(proportions)
+		Q[j,:] .= log(proportions[j]) + 0.5 * log(scale[j]) .+ logpfun(shape[j], y_rho[ :, j])
 	end
 
 	return Q
