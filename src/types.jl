@@ -11,27 +11,28 @@ abstract type AbstractAmica end
 mutable struct SingleModelAmica{T} <:AbstractAmica
     source_signals::Array{T,2}
     learnedParameters::GGParameters{T}
-	m::Union{Integer, Nothing} 		   #Number of gaussians
+	m::Int 		   #Number of gaussians
     A::Array{T,2} # unmixing matrices for each model
 	S::Array{T,2} # sphering matrix
     z::Array{T,3}
     y::Array{T,3}
-    centers::Array{T} #model centers
-    Lt::Array{Float64} #log likelihood of time point for each model ( M x N )
-    LL::Array{T} #log likelihood over iterations todo: change to tuple 
-    ldet::Float64
+    centers::Array{T,1} #model centers
+    Lt::Array{T,1} #log likelihood of time point for each model ( M x N )
+    LL::Array{T,1} #log likelihood over iterations todo: change to tuple 
+    ldet::T
     maxiter::Int
 end
 
 
-mutable struct MultiModelAmica <:AbstractAmica
-	models::Array{SingleModelAmica} #Array of SingleModelAmicas
+
+mutable struct MultiModelAmica{T} <:AbstractAmica
+	models::Array{SingleModelAmica{T}} #Array of SingleModelAmicas
 	normalized_ica_weights 			#Model weights (normalized)
 	ica_weights_per_sample 			#Model weight for each sample
 	ica_weights						#Model weight for all samples
 	maxiter::Int					#Number of iterations
 	m::Int 							#Number of Gaussians
-	LL::AbstractVector				#Log-Likelihood
+	LL::Array{T,1}				#Log-Likelihood
 end
 
 #Structure for Learning Rate type with initial value, minumum, maximum etc. Used for learning rate and shape lrate
