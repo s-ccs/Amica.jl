@@ -33,33 +33,51 @@ function amica!(myAmica::AbstractAmica,
 	(n, N) = size(data)
 	m = myAmica.m
 
+	println("m: $(m), n: $(n), N: $(N)")
+
 	#Prepares data by removing means and/or sphering
 	if remove_mean
 		removed_mean = removeMean!(data)
 	end
 	if do_sphering
-		data = sphering(data)
+		S = sphering!(data)
+		myAmica.S = S
+		LLdetS = logabsdet(S)[1]
+	else
+		myAmica.S = I
+		LLdetS = 0
 	end
 	
 	dLL = zeros(1, maxiter)
-	fp = zeros(m ,N)
 
 	#todo put them into object
 	lambda = zeros(n, 1)
-	kappa = zeros(n, 1)
-	sigma2 = zeros(n, 1)
-
     prog = ProgressUnknown("Minimizing"; showspeed=true)
+
+	y_rho = zeros(size(myAmica.y))
 
 	for iter in 1:maxiter
 		#E-step
 		update_sources!(myAmica, data)
 		calculate_ldet!(myAmica)
 		initialize_Lt!(myAmica)
+		myAmica.Lt .+= LLdetS
 		calculate_y!(myAmica)
-		loopiloop(myAmica) #Updates y and Lt. Todo: Rename
-		calculate_LL!(myAmica)
 		
+		# pre-calculate abs(y)^rho
+		for j in 1:m
+			for i in 1:n
+				y_rho[i,:,j] .= optimized_pow(abs.(myAmica.y[i,:,j]), myAmica.learnedParameters.shape[j,i])
+			end
+		end
+
+
+
+		loopiloop!(myAmica, y_rho) #Updates y and Lt. Todo: Rename
+		calculate_LL!(myAmica)
+
+
+		@debug (:LL,myAmica.LL)
 		#Calculate difference in loglikelihood between iterations
 		if iter > 1
 			dLL[iter] = myAmica.LL[iter] - myAmica.LL[iter-1]
@@ -78,7 +96,7 @@ function amica!(myAmica::AbstractAmica,
 		#M-step
 		try
 			#Updates parameters and mixing matrix
-			update_loop!(myAmica, fp, lambda, shapelrate, update_shape, iter, do_newton, newt_start_iter, lrate)
+			update_loop!(myAmica, lambda, y_rho, shapelrate, update_shape, iter, do_newton, newt_start_iter, lrate)
 		catch e
 			#Terminates if NaNs are detected in parameters
 			if isa(e,AmicaNaNException)
@@ -96,6 +114,8 @@ function amica!(myAmica::AbstractAmica,
 	end
 	#If parameters contain NaNs, the algorithm skips the A update and terminates by jumping here
     @label escape_from_NaN
+
+
 	#If means were removed, they are added back
 	if remove_mean
 		add_means_back!(myAmica, removed_mean)
