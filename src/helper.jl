@@ -35,7 +35,7 @@ end
 #taken from amica_a.m
 #L = det(A) * mult p(s|θ)
 function logpfun(rho, y_rho)
-	return @inbounds - y_rho .- log(2) .- loggamma(1 + 1 / rho)
+	return .- y_rho .- log(2) .- loggamma(1 + 1 / rho)
 end
 
 
