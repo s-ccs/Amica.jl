@@ -41,7 +41,7 @@ function loopiloop!(myAmica::MultiModelAmica, y_rho)
 	(n,_) = size(myAmica.models[1].source_signals)
 
 	for h in 1:M #run along models
-		Threads.@threads for i in 1:n #run along components
+		for i in 1:n #run along components
 			Q = calculate_Q(myAmica.models[h], i, y_rho)
 			calculate_u!(myAmica.models[h], @view(Q[:, n, :]),i)
 			calculate_Lt!(myAmica.models[h], @view(Q[:, n, :]))
@@ -65,14 +65,36 @@ end
 	return Q
 end
 
+function calculate_Q(myAmica::SingleModelAmica, i, y_rho)
+	(n,N) = size(myAmica.source_signals)
+	m = myAmica.m
+	Q = zeros(m,N)
+	
+	for k in 1:n
+	for j in 1:m
+		Q[j,k] = log(myAmica.learnedParameters.proportions[j,i]) + 
+				0.5 * log(myAmica.learnedParameters.scale[j,i]) +
+				 logpfun(myAmica.learnedParameters.shape[j,i], y_rho[i, k, j])
+	end
+	end
+
+	return Q
+end
+
 #calculates u but saves it into z. MultiModel also uses the SingleModel version
-@views function calculate_u!(myAmica::SingleModelAmica, Q, i)
+ function calculate_u!(myAmica::SingleModelAmica, Q, i)
 	m = size(myAmica.learnedParameters.scale,1)
+	#scratch_Q = similar(@view(Q[1,:]))
+	#scratch_Q = similar(Q)
 	if m > 1
-		for j in 1:m
-            myAmica.z[i, :, j] .= (1 ./ sum(optimized_exp(Q .- Q[j, :]'), dims=1))[:]
+		# i is component/channel
+		for j in 1:m # 1:3 m mixtures
+			# I think it is very hard to optimize the Q .- Q[j,:] inner term
+			sum!( @view(myAmica.z[i,:,j]),exp.(Q .- @view(Q[j, :])')')
+
 		end
 	end
+	myAmica.z[i,:,:] .= 1 ./ @view(myAmica.z[i,:,:])
 end
 
 #Applies location and scale parameter to source signals (per generalized Gaussian)
