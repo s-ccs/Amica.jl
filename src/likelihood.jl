@@ -71,8 +71,15 @@ end
 
 #Applies location and scale parameter to source signals (per generalized Gaussian)
 @views function calculate_y!(myAmica::SingleModelAmica)
+	#for j in 1:myAmica.m
+	#	myAmica.y[:,:,j] .= sqrt.(myAmica.learnedParameters.scale[j,:]) .* (myAmica.source_signals .- myAmica.learnedParameters.location[j,:])
+	#end
 	for j in 1:myAmica.m
-		myAmica.y[:,:,j] .= sqrt.(myAmica.learnedParameters.scale[j,:]) .* (myAmica.source_signals[:,:] .- myAmica.learnedParameters.location[j,:])
+		for k = 1: size(myAmica.m,1)
+			for i = 1:size(myAmica.m,2)
+				myAmica.y[k,i,j] = sqrt(myAmica.learnedParameters.scale[j,k]) * (myAmica.source_signals[k,i] - myAmica.learnedParameters.location[j,k])
+			end
+		end
 	end
 end
 
