@@ -1,34 +1,38 @@
-mutable struct GGParameters
-	proportions::AbstractArray{Float64} #source density mixture proportions
-	scale::AbstractArray{Float64} #source density inverse scale parameter
-	location::AbstractArray{Float64} #source density location parameter
-	shape::AbstractArray{Float64} #source density shape paramters
+mutable struct GGParameters{T}
+    proportions::Array{T, 2} #source density mixture proportions
+    scale::Array{T, 2} #source density inverse scale parameter
+    location::Array{T, 2} #source density location parameter
+    shape::Array{T, 2} #source density shape paramters
 end
+
 
 abstract type AbstractAmica end
 
-mutable struct SingleModelAmica <:AbstractAmica
-	source_signals					   #Unmixed signals
-	learnedParameters::GGParameters	   #Parameters of the Gaussian mixtures
-	m::Union{Integer, Nothing} 		   #Number of gaussians
-    A::AbstractArray 				   #Mixing matrix
-	z::AbstractArray				   #Densities for each sample per Gaussian (normalized)
-	y::AbstractArray				   #Source signals (scaled and shifted with scale and location parameter)
-	centers::AbstractArray 			   #Model centers
-	Lt::AbstractVector 				   #Log likelihood of time point for each model ( M x N )
-	LL::Union{AbstractVector, Nothing} #Log-Likelihood
-	ldet::Float64					   #log determinant of A
-	maxiter::Union{Int, Nothing} 	   #maximum number of iterations, can be nothing because it's not needed for multimodel
+mutable struct SingleModelAmica{T} <:AbstractAmica
+    source_signals::Array{T,2}
+    learnedParameters::GGParameters{T}
+	m::Int 		   #Number of gaussians
+    A::Array{T,2} # unmixing matrices for each model
+	S::Array{T,2} # sphering matrix
+    z::Array{T,3}
+    y::Array{T,3}
+    centers::Array{T,1} #model centers
+    Lt::Array{T,1} #log likelihood of time point for each model ( M x N )
+    LL::Array{T,1} #log likelihood over iterations todo: change to tuple 
+    ldet::T
+    maxiter::Int
 end
 
-mutable struct MultiModelAmica <:AbstractAmica
-	models::Array{SingleModelAmica} #Array of SingleModelAmicas
+
+
+mutable struct MultiModelAmica{T} <:AbstractAmica
+	models::Array{SingleModelAmica{T}} #Array of SingleModelAmicas
 	normalized_ica_weights 			#Model weights (normalized)
 	ica_weights_per_sample 			#Model weight for each sample
 	ica_weights						#Model weight for all samples
 	maxiter::Int					#Number of iterations
 	m::Int 							#Number of Gaussians
-	LL::AbstractVector				#Log-Likelihood
+	LL::Array{T,1}				#Log-Likelihood
 end
 
 #Structure for Learning Rate type with initial value, minumum, maximum etc. Used for learning rate and shape lrate
@@ -85,7 +89,7 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, l
 	ldet = 0.0
 	source_signals = zeros(n,N)
 
-	return SingleModelAmica(source_signals,GGParameters(proportions,scale,location,shape),m,A,z,y,#=Q,=#centers,Lt,LL,ldet,maxiter)
+	return SingleModelAmica{T}(source_signals,GGParameters{T}(proportions,scale,location,shape),m,A,I(size(A,1)), z,y,#=Q,=#centers,Lt,LL,ldet,maxiter)
 end
 
 #Data type for AMICA with multiple ICA models
