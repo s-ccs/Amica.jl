@@ -57,14 +57,24 @@ function amica!(myAmica::AbstractAmica,
 	y_rho = similar(myAmica.y)
 
 	for iter in 1:maxiter
+		gg = myAmica.learnedParameters
+		@debug :scale,gg.scale[2],:location,gg.location[2],:proportions,gg.proportions[2],:shape,gg.shape[2]
+		@debug println("")
 		#E-step
 		#@show typeof(myAmica.A),typeof(data)
+		@debug :A myAmica.A[1:2,1:2]
+		
+		@debug :source_signals myAmica.source_signals[1],myAmica.source_signals[end]
 		update_sources!(myAmica, data)
+		@debug :source_signals myAmica.source_signals[1],myAmica.source_signals[end]
 		calculate_ldet!(myAmica)
 		initialize_Lt!(myAmica)
 		myAmica.Lt .+= LLdetS
-		calculate_y!(myAmica)
+
 		
+		
+		calculate_y!(myAmica)
+		@debug :y, myAmica.y[1,1:3,1]
 		# pre-calculate abs(y)^rho
 		for j in 1:m
 			for i in 1:n
@@ -75,6 +85,8 @@ function amica!(myAmica::AbstractAmica,
 
 
 		loopiloop!(myAmica, y_rho) #Updates y and Lt. Todo: Rename
+
+		
 		calculate_LL!(myAmica)
 
 
@@ -107,8 +119,11 @@ function amica!(myAmica::AbstractAmica,
 				rethrow()
 			end
 		end
-		
+		@debug iter, :A myAmica.A[1:2,1:2]
+
 		reparameterize!(myAmica, data)
+
+		@debug iter, :A myAmica.A[1:2,1:2]
 		#Shows current progress
 		show_progress && ProgressMeter.next!(prog; showvalues=[(:LL, myAmica.LL[iter])])
  
@@ -121,5 +136,6 @@ function amica!(myAmica::AbstractAmica,
 	if remove_mean
 		add_means_back!(myAmica, removed_mean)
 	end
+	@debug myAmica.LL
 	return myAmica
 end
