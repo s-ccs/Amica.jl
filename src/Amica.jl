@@ -8,7 +8,7 @@ module Amica
     using ProgressMeter
     using LoopVectorization
     using AppleAccelerate
-
+    using StaticArrays
     #using ComponentArrays
     using Diagonalizations
     using LogExpFunctions
@@ -30,12 +30,14 @@ module Amica
 
     function Base.show(io::Core.IO,m::SingleModelAmica)
         try
-            global like = m.LL[findlast(m.LL .!= 0)]
+            ix = findlast(.!isnan.(m.LL))
+            @show ix
+            global like = string(m.LL[ix]) * " (after $(string(ix)) iterations)"
         catch
             global like = "not run"
         end
         println(io,"""
-        Amica with:
+        $(typeof(m)) with:
             - signal-size: $(size(m.source_signals))
             - likelihood: $(like) 
         """)

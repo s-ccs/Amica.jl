@@ -13,9 +13,9 @@ function fit!(amica::AbstractAmica, data; kwargs...)
 end
 
 function amica!(myAmica::AbstractAmica,
-	data;
-	lrate = LearningRate(),
-	shapelrate = LearningRate(;lrate = 0.1,minimum=0.5,maximum=5,init=1.5),
+	data::AbstractMatrix{T};
+	lrate = LearningRate{T}(),
+	shapelrate = LearningRate{T}(;lrate = 0.1,minimum=0.5,maximum=5,init=1.5),
 	remove_mean = true,
 	do_sphering = true,
 	show_progress = true,
@@ -26,9 +26,9 @@ function amica!(myAmica::AbstractAmica,
 	update_shape = 1,
 	mindll = 1e-8,
 
-	kwargs...)
+	kwargs...) where {T}
 	
-	initialize_shape_parameter(myAmica,shapelrate)
+	initialize_shape_parameter!(myAmica,shapelrate)
 
 	(n, N) = size(data)
 	m = myAmica.m
@@ -54,10 +54,11 @@ function amica!(myAmica::AbstractAmica,
 	lambda = zeros(n, 1)
     prog = ProgressUnknown("Minimizing"; showspeed=true)
 
-	y_rho = zeros(size(myAmica.y))
+	y_rho = similar(myAmica.y)
 
 	for iter in 1:maxiter
 		#E-step
+		#@show typeof(myAmica.A),typeof(data)
 		update_sources!(myAmica, data)
 		calculate_ldet!(myAmica)
 		initialize_Lt!(myAmica)
