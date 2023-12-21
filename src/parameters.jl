@@ -4,15 +4,16 @@ function reparameterize!(myAmica::SingleModelAmica, data)
 	mu = myAmica.learnedParameters.location
 	beta = myAmica.learnedParameters.scale
 
-	for i in 1:n
-		tau = norm(myAmica.A[:,i])
-		myAmica.A[:,i] ./= tau
-		mu[:,i] .*= tau
-		beta[:,i] ./= tau^2
-	end
+	tau = norm.(eachcol(myAmica.A))
+	#for i in 1:n
+	#	tau = norm(myAmica.A[:,i])
+		myAmica.A == myAmica.A ./ tau
+		myAmica.learnedParameters.location = myAmica.learnedParameters.location .* tau'
+		myAmica.learnedParameters.scale = myAmica.learnedParameters.scale ./tau'.^2
+	
 
-	myAmica.learnedParameters.location .= mu
-	myAmica.learnedParameters.scale .= beta
+	#myAmica.learnedParameters.location .= mu
+	#myAmica.learnedParameters.scale .= beta
 
 	return myAmica
 end
@@ -73,14 +74,15 @@ function calculate_z!(myAmica::MultiModelAmica, i,j,h)
 end
 
 #Updates the Gaussian mixture proportion parameter
-function update_mixture_proportions!(sumz, myAmica::SingleModelAmica,j,i)
+function update_mixture_proportions!(myAmica::SingleModelAmica,sumz)
 	N = size(myAmica.source_signals,2)
 	if myAmica.m > 1
-		myAmica.learnedParameters.proportions[j,i] = sumz / N
+		myAmica.learnedParameters.proportions = sumz ./ N
 	end
 end
 
 function update_mixture_proportions!(sumz, myAmica::MultiModelAmica,j,i,h)
+	error("outdated")
 	if myAmica.m > 1
 		myAmica.models[h].learnedParameters.proportions[j,i] = sumz / myAmica.ica_weights[h]
 	end
@@ -133,15 +135,12 @@ function update_scale(zfp,y,scale,z,shape)
 end
 
 #Sets the initial value for the shape parameter of the GeneralizedGaussians for each Model
-function initialize_shape_parameter(myAmica::SingleModelAmica, shapelrate::LearningRate)
-	myAmica.learnedParameters.shape .= shapelrate.init .*myAmica.learnedParameters.shape
+function initialize_shape_parameter!(myAmica::SingleModelAmica, shapelrate::LearningRate)
+	myAmica.learnedParameters.shape = shapelrate.init .*myAmica.learnedParameters.shape
 end
 
-function initialize_shape_parameter(myAmica::MultiModelAmica, shapelrate::LearningRate)
-	M = size(myAmica.models,1)
-	for h in 1:M
-		myAmica.models[h].learnedParameters.shape .= shapelrate.init .*myAmica.models[h].learnedParameters.shape
-	end
+function initialize_shape_parameter!(myAmica::MultiModelAmica, shapelrate::LearningRate)
+	initialize_shape_parameter!.(myAmica.models)
 end
 
 #Updates Gaussian mixture Parameters and mixing matrix. todo: rename since its not a loop for single model
@@ -191,7 +190,7 @@ end
 
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
 #Todo: Save g, kappa, lambda in structure, remove return
-@views function update_parameters!(myAmica::SingleModelAmica, lambda, y_rho, lrate_rho::LearningRate, upd_shape)
+@views function update_parameters!(myAmica::SingleModelAmica{T,ncomps,nmix}, lambda, y_rho, lrate_rho::LearningRate, upd_shape) where {T,ncomps,nmix}
 	alpha = myAmica.learnedParameters.proportions
 	beta = myAmica.learnedParameters.scale
 	mu = myAmica.learnedParameters.location
@@ -216,11 +215,9 @@ end
 		sumz[sumz .< 0] .= 1
 		myAmica.z ./= sumz
 	end
-	for i in 1:n
-		for j in 1:m
-			update_mixture_proportions!(sumz[i, 1, j],myAmica,j,i)
-		end
-	end
+
+	update_mixture_proportions!(myAmica,sumz[:, 1, :])
+
 	
 	# update 
 	# - fp
@@ -238,42 +235,55 @@ end
 	# - alpha
 	# - beta
 	# - mu
+	kp = similar(rho)
+	fp = Vector{T}(undef,N)
 	for i in 1:n
 		for j in 1:m
-			fp = ffun(myAmica.y[i,:,j], rho[j,i])
+			#@show size(fp), size(myAmica.y)
+			ffun!(fp,myAmica.y[i,:,j], rho[j,i])
 			zfp[j,:] .= myAmica.z[i,:,j] .* fp
 			g[i,:] .+= alpha[j,i] .* sqrt(beta[j,i]) .*zfp[j,:]
+			
+			kp[j,i] = beta[j,i] .* sum(zfp[j,:].*fp)
 	
-			kp = beta[j,i] .* sum(zfp[j,:].*fp)
+			kappa[i] += alpha[j,i] * kp[j,i]
 	
-			kappa[i] += alpha[j,i] * kp
-	
-			lambda[i] += alpha[j,i] * (sum(myAmica.z[i,:,j].*(fp.*myAmica.y[i,:,j] .-1).^2) + mu[j,i]^2 * kp)
-			mu[j,i] = update_location(myAmica,rho[j,i],zfp[j,:],myAmica.y[i,:,j],mu[j,i],beta[j,i],kp)
-
-
-			beta[j,i] = update_scale(zfp[j,:],myAmica.y[i,:,j],beta[j,i],myAmica.z[i,:,j],rho[j,i])
-
+			lambda[i] += alpha[j,i] * (sum(myAmica.z[i,:,j].*(fp.*myAmica.y[i,:,j] .-1).^2) + mu[j,i]^2 * kp[j,i])
 		end
 	end
+	
+	#mu = update_location(myAmica,rho,zfp,mu,beta,kp)
+
+	updated_mu = Array(similar(rho)) # convert from StaticMatrix to Mutable
+	updated_beta = Array(similar(rho)) 
+	
+	for i in 1:n
+		for j in 1:m
+			updated_mu[j,i] = update_location(myAmica,rho[j,i],zfp[j,:],myAmica.y[i,:,j],mu[j,i],beta[j,i],kp[j,i])
+			updated_beta[j,i] =  update_scale(zfp[j,:],myAmica.y[i,:,j],beta[j,i],myAmica.z[i,:,j],rho[j,i])
+		end
+	end
+
+		
+	
 
 	# update rho
 	# depends on rho, zfp, myAmica.y, mu, beta
 	if upd_shape == 1
 		dr = sum(myAmica.z .* optimized_log(y_rho) .* y_rho, dims=2)
-
+		updated_rho = Array(similar(rho))
 		for i in 1:n
 			for j in 1:m
-				rho[j, i] = update_shape(rho[j, i], dr[i, 1, j], lrate_rho)
+				updated_rho[j, i] = update_shape(rho[j, i], dr[i, 1, j], lrate_rho)
 			end
 		end
 	end
 
 
 	myAmica.learnedParameters.proportions = alpha
-	myAmica.learnedParameters.scale = beta
-	myAmica.learnedParameters.location = mu
-	myAmica.learnedParameters.shape = rho
+	myAmica.learnedParameters.scale = updated_beta
+	myAmica.learnedParameters.location = updated_mu
+	myAmica.learnedParameters.shape = updated_rho
 
 	return g, kappa
 end
@@ -371,7 +381,11 @@ end
 
 #Updates source singal estimations by unmixing the data
 function update_sources!(myAmica::SingleModelAmica, data)
-	myAmica.source_signals = pinv(myAmica.A) * data
+	#myAmica.source_signals .= myAmica.A \ data#
+	#myAmica.source_signals .= myAmica.A \ data#
+	#ldiv!(myAmica.source_signals,myAmica.A,data)
+
+	myAmica.source_signals .= pinv(myAmica.A) * data
 end
 
 function update_sources!(myAmica::MultiModelAmica, data)

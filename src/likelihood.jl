@@ -24,12 +24,13 @@ function calculate_LL!(myAmica::MultiModelAmica)
 end
 
 #Update loop for Lt and u (which is saved in z). Todo: Rename
-function loopiloop!(myAmica::SingleModelAmica{T}, y_rho) where {T}
-	(ncomponents,N) = size(myAmica.source_signals)
-	Q = Array{T}(undef,myAmica.m,N)
+function loopiloop!(myAmica::SingleModelAmica{T,ncomps,nmix}, y_rho) where {T,ncomps,nmix}
+	N = size(myAmica.source_signals,2)
+	n = size(myAmica.source_signals,1)
+	Q = Array{T}(undef,nmix,N)
 	gg = myAmica.learnedParameters
-	for comps in 1:ncomponents
-		@views calculate_Q!(Q,gg.proportions[:,comps],gg.scale[:,comps],gg.shape[:,comps],y_rho[comps,:,:])
+	for comps in 1:n
+		calculate_Q!(Q,gg.proportions[:,comps],gg.scale[:,comps],gg.shape[:,comps],@view(y_rho[comps,:,:]))
 		#Q = calculate_Q(myAmica,i, y_rho) # myAmica.Q
 		calculate_u!(myAmica,Q,comps) # myAmica.z
 		calculate_Lt!(myAmica,Q) # myAmica.Q
@@ -57,7 +58,8 @@ function calculate_Q(myAmica::SingleModelAmica, i, y_rho)
 	@views calculate_Q!(Q,gg.proportions[:,i],gg.scale[:,i],gg.shape[:,i],y_rho[i,:,:])
 	return Q
 end
-	function calculate_Q!(Q,proportions,scale,shape,y_rho)
+
+function calculate_Q!(Q,proportions,scale,shape,y_rho)
 	for j in 1:length(proportions)
 		Q[j,:] .= log(proportions[j]) + 0.5 * log(scale[j]) .+ logpfun(shape[j], y_rho[ :, j])
 	end
@@ -65,32 +67,39 @@ end
 	return Q
 end
 
-function calculate_Q(myAmica::SingleModelAmica, i, y_rho)
-	(n,N) = size(myAmica.source_signals)
-	m = myAmica.m
-	Q = zeros(m,N)
-	
-	for k in 1:n
-	for j in 1:m
-		Q[j,k] = log(myAmica.learnedParameters.proportions[j,i]) + 
-				0.5 * log(myAmica.learnedParameters.scale[j,i]) +
-				 logpfun(myAmica.learnedParameters.shape[j,i], y_rho[i, k, j])
-	end
-	end
-
-	return Q
-end
+#function calculate_Q(myAmica::SingleModelAmica, i, y_rho)
+#	(n,N) = size(myAmica.source_signals)
+#	m = myAmica.m
+#	Q = zeros(m,N)
+#	
+#	for k in 1:n
+#	for j in 1:m
+#		Q[j,k] = log(myAmica.learnedParameters.proportions[j,i]) + 
+#				0.5 * log(myAmica.learnedParameters.scale[j,i]) +
+#				 logpfun(myAmica.learnedParameters.shape[j,i], y_rho[i, k, j])
+#	end
+#	end
+#
+#	return Q
+#end
 
 #calculates u but saves it into z. MultiModel also uses the SingleModel version
- function calculate_u!(myAmica::SingleModelAmica, Q, i)
+ function calculate_u!(myAmica::SingleModelAmica{T,ncomps,nmix}, Q, i) where {T,ncomps,nmix}
 	m = size(myAmica.learnedParameters.scale,1)
 	#scratch_Q = similar(@view(Q[1,:]))
 	#scratch_Q = similar(Q)
+	tmp = Array{T}(undef,size(Q,1)-1,size(Q,2))
 	if m > 1
 		# i is component/channel
-		for j in 1:m # 1:3 m mixtures
+		ixes = 1:m
+		for j in ixes # 1:3 m mixtures
 			# I think it is very hard to optimize the Q .- Q[j,:] inner term
-			sum!( @view(myAmica.z[i,:,j]),exp.(Q .- @view(Q[j, :])')')
+			ix = (ixes)[ixes .∈ 2]
+			tmp .= @view(Q[ix,:]) .- @view(Q[j, :])'
+			#tmp .= exp.(tmp)
+			#IVM.exp!(tmp)
+			optimized_exp!(tmp)
+			sum!( @view(myAmica.z[i,:,j])',tmp)
 
 		end
 	end

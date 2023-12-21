@@ -44,6 +44,16 @@ end
 	return @inbounds copysign.(optimized_pow(abs.(x), rho - 1), x) .* rho
 end
 
+function ffun!(fp,x,rho)
+	#f = rho * sign(x).*abs(x).^(rho-1);
+	#rho .*  (IVM.pow(x, rho - 1), x)
+	for k = eachindex(x)
+			fp[k] = sign(x[k]) * rho * abs(x[k])^(rho-1)
+	end
+#	fp .= sign.(x).*rho .* abs.(x).^(rho-1)
+end
+
+
 # optimized power function for different cpu architectures
 function optimized_pow(lhs::AbstractArray{T, 1}, rhs::T) where {T<:Real}
 	optimized_pow(lhs, repeat([rhs], length(lhs)))
@@ -70,6 +80,15 @@ function optimized_log(val)
 end
 
 
+function optimized_exp!(val) 
+	if Sys.iswindows() || Sys.islinux()
+		IVM.exp!(val)
+	elseif Sys.isapple()
+		return AppleAccelerate.exp!(val)
+	else 
+	val .= exp.(val)
+	end
+end
 function optimized_exp(val) 
 	#if Sys.iswindows() || Sys.islinux()
 	#		return IVM.exp(val)
