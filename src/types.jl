@@ -76,10 +76,10 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, l
 	end
 	shape = ones(T,m, n)
 
-	y = zeros(T,n,N,m)
+	y = zeros(T,m,n,N)
 	
 	Lt = zeros(T,N)
-	z = ones(T,n,N,m)/N
+	z = ones(T,m,n,N)/N
 
 	#Sets some parameters to nothing if used my MultiModel to only have them once
 	if isnothing(maxiter)
@@ -106,7 +106,7 @@ function MultiModelAmica(data::Array; m=3, M=2, maxiter=500, A=nothing, location
 	#This part only exists to allow for initial values to be set by the user. They are still required to have the old format (something x something x M)
 	eye = Matrix(I, n, n)
 	if isnothing(A)
-		A = zeros(n,n,M)
+		A = zeros(m,n,N)
 		for h in 1:M
 			A[:,:,h] = eye[n] .+ 0.1*rand(n,n)
 			for i in 1:n

@@ -7,8 +7,6 @@ function reparameterize!(myAmica::SingleModelAmica, data)
 	myAmica.learnedParameters.location = myAmica.learnedParameters.location .* tau'
 	myAmica.learnedParameters.scale = myAmica.learnedParameters.scale ./tau'.^2
 	
-
-	return myAmica
 end
 
 #Reparameterizes the parameters for the active models
@@ -46,32 +44,31 @@ end
 #Calculates sum of z. Returns N if there is just one generalized Gaussian
 @views function calculate_sumz(myAmica::SingleModelAmica)
 	if myAmica.m == 1
-		return size(myAmica.source_signals, 2)
+		return size(myAmica.source_signals, 3)
 	else
-		return sum(myAmica.z, dims=2)
+		return sum(myAmica.z, dims=3)
 	end
 end
 
 @views function calculate_sumz(myAmica::MultiModelAmica,h)
-	return sum(myAmica.models[h].z, dims = 2)
+	return sum(myAmica.models[h].z, dims = 3)
 end
 
 #Calculates densities for each sample per ICA model and per Gaussian mixture
 calculate_z!(myAmica::SingleModelAmica, i,j) = nothing
 function calculate_z!(myAmica::MultiModelAmica, i,j,h)
 	if myAmica.m > 1
-		myAmica.models[h].z[i,:,j] .= myAmica.ica_weights_per_sample[h,:] .* myAmica.models[h].z[i,:,j]
+		myAmica.models[h].z[j, i, :] .= myAmica.ica_weights_per_sample[h,:] .* myAmica.models[h].z[j, i, :]
 	elseif myAmica.m == 1
-		myAmica.models[h].z[i,:,j] .= myAmica.ica_weights_per_sample[h,:]
+		myAmica.models[h].z[j, i, :] .= myAmica.ica_weights_per_sample[h,:]
 	end
 end
 
 #Updates the Gaussian mixture proportion parameter
-function update_mixture_proportions!(myAmica::SingleModelAmica,sumz)
-	N = size(myAmica.source_signals,2)
+function update_mixture_proportions!(myAmica::SingleModelAmica, sumz)
+	N = size(myAmica.source_signals, 2)
 	if myAmica.m > 1
-		
-		myAmica.learnedParameters.proportions = sumz' ./ N
+		myAmica.learnedParameters.proportions = sumz ./ N
 	end
 end
 
@@ -212,7 +209,7 @@ end
 		myAmica.z ./= sumz
 	end
 	
-	update_mixture_proportions!(myAmica,sumz[:, 1, :])
+	update_mixture_proportions!(myAmica,sumz[:, :, 1])
 
 	
 	# update 
@@ -240,8 +237,8 @@ end
 	for i in 1:n
 		for j in 1:m
 			#@show size(fp), size(myAmica.y)
-			ffun!(fp,myAmica.y[i,:,j], gg.shape[j,i])
-			zfp[j,:] .= myAmica.z[i,:,j] .* fp
+			ffun!(fp,myAmica.y[j, i, :], gg.shape[j,i])
+			zfp[j,:] .= myAmica.z[j, i, :] .* fp
 			g[i,:] .+= gg.proportions[j,i] .* sqrt(gg.scale[j,i]) .*zfp[j,:]
 			
 			
@@ -249,13 +246,13 @@ end
 			
 			kappa[i] += gg.proportions[j,i] * kp[j,i]
 			
-			lambda[i] += gg.proportions[j,i] * (sum(myAmica.z[i,:,j].*(fp.*myAmica.y[i,:,j] .-1).^2) + gg.location[j,i]^2 * kp[j,i])
+			lambda[i] += gg.proportions[j,i] * (sum(myAmica.z[j, i, :].*(fp.*myAmica.y[j, i, :] .-1).^2) + gg.location[j,i]^2 * kp[j,i])
 			@debug fp[1],zfp[j,1],g[i,1],gg.proportions[j,i],gg.scale[j,i], kp[j,i],kappa[i]
-			updated_location[j,i] = update_location(myAmica,gg.shape[j,i],zfp[j,:],myAmica.y[i,:,j],gg.location[j,i],gg.scale[j,i],kp[j,i])
+			updated_location[j,i] = update_location(myAmica,gg.shape[j,i],zfp[j,:],myAmica.y[j, i, :],gg.location[j,i],gg.scale[j,i],kp[j,i])
 
-			@debug :zfp,zfp[j,1],:y,myAmica.y[i,1,j],:z,myAmica.z[i,1,j]
+			@debug :zfp,zfp[j,1],:y,myAmica.y[j,i,1],:z,myAmica.z[j,i,1]
 
-			updated_scale[j,i] =  update_scale(zfp[j,:],myAmica.y[i,:,j],gg.scale[j,i],myAmica.z[i,:,j],gg.shape[j,i])
+			updated_scale[j,i] =  update_scale(zfp[j,:],myAmica.y[j, i, :],gg.scale[j,i],myAmica.z[j, i, :],gg.shape[j,i])
 		end
 	end
 	
@@ -266,11 +263,11 @@ end
 	# update rho
 	# depends on rho, zfp, myAmica.y, mu, beta
 	if upd_shape == 1
-		dr = sum(myAmica.z .* optimized_log(y_rho) .* y_rho, dims=2)
+		dr = sum(myAmica.z .* optimized_log(y_rho) .* y_rho, dims=3)
 		updated_shape = Array(similar(gg.shape))
 		for i in 1:n
 			for j in 1:m
-				updated_shape[j, i] = update_shape(gg.shape[j, i], dr[i, 1, j], lrate_rho)
+				updated_shape[j, i] = update_shape(gg.shape[j, i], dr[j, i, 1], lrate_rho)
 			end
 		end
 	end
@@ -310,31 +307,31 @@ end
 		for j in 1:m
 			sumz = 0
 			calculate_z!(myAmica, i, j, h)
-			update_mixture_proportions!(sumz[i, 1, j],myAmica,j,i,h)
-			if sumz[i, 1, j] > 0
-				myAmica.models[h].z[i,:,j] ./= sumz[i, 1, j]
+			update_mixture_proportions!(sumz[j,i,1],myAmica,j,i,h)
+			if sumz[j,i,1] > 0
+				myAmica.models[h].z[j, i, :] ./= sumz[j,i,1]
 			else
 				continue
 			end
 	
-			fp[j,:] .= ffun(myAmica.models[h].y[i,:,j], rho[j,i])
-			zfp[j,:] .= myAmica.models[h].z[i,:,j] .* fp[j,:]
+			fp[j,:] .= ffun(myAmica.models[h].y[j, i, :], rho[j,i])
+			zfp[j,:] .= myAmica.models[h].z[j, i, :] .* fp[j,:]
 			g[i,:] .+= alpha[j,i] .* sqrt(beta[j,i]) .*zfp[j,:]
 	
 			kp = beta[j,i] .* sum(zfp[j,:].*fp[j,:])
 	
 			kappa[i] += alpha[j,i] * kp
 	
-			lambda[i] += alpha[j,i] .* (sum(myAmica.models[h].z[i,:,j].*(fp[j,:].*myAmica.models[h].y[i,:,j] .-1).^2) .+ mu[j,i]^2 .* kp)
-			mu[j,i] = update_location(myAmica,rho[j,i],zfp[j,:],myAmica.models[h].y[i,:,j],mu[j,i],beta[j,i],kp)
+			lambda[i] += alpha[j,i] .* (sum(myAmica.models[h].z[j, i, :].*(fp[j,:].*myAmica.models[h].y[j, i, :] .-1).^2) .+ mu[j,i]^2 .* kp)
+			mu[j,i] = update_location(myAmica,rho[j,i],zfp[j,:],myAmica.models[h].y[j, i, :],mu[j,i],beta[j,i],kp)
 			
 			
-			beta[j,i] = update_scale(zfp[j,:],myAmica.models[h].y[i,:,j],beta[j,i],myAmica.models[h].z[i,:,j],rho[j,i])
+			beta[j,i] = update_scale(zfp[j,:],myAmica.models[h].y[j, i, :],beta[j,i],myAmica.models[h].z[j, i, :],rho[j,i])
 
 			if upd_shape == 1
 				log_y_rho = optimized_log(y_rho)
 				dr = sum(myAmica.models[h].z .* log_y_rho .* y_rho, dims=2)
-				rho[j, i] = update_shape(rho[j, i], dr[i, 1, j], lrate_rho)
+				rho[j, i] = update_shape(rho[j, i], dr[j, i, 1], lrate_rho)
 			end
 		end
 	end

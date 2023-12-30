@@ -33,7 +33,7 @@ function amica!(myAmica::AbstractAmica,
 	(n, N) = size(data)
 	m = myAmica.m
 
-	println("m: $(m), n: $(n), N: $(N)")
+	println("m[j]: $(m), n[i]: $(n), N: $(N)")
 
 	#Prepares data by removing means and/or sphering
 	if remove_mean
@@ -76,9 +76,15 @@ function amica!(myAmica::AbstractAmica,
 		calculate_y!(myAmica)
 		@debug :y, myAmica.y[1,1:3,1]
 		# pre-calculate abs(y)^rho
+		# for i in 1:n
+		# 	for j in 1:m
+		# 		optimized_pow!(y_rho[j, i, :], abs.(myAmica.y[j, i, :]), myAmica.learnedParameters.shape[j, i])
+		# 	end
+		# end
+
 		for j in 1:m
 			for i in 1:n
-				@views y_rho[i,:,j] .= (abs.(myAmica.y[i,:,j]) .^myAmica.learnedParameters.shape[j,i])
+				@views y_rho[j, i, :] .= (abs.(myAmica.y[j, i, :]) .^myAmica.learnedParameters.shape[j,i])
 			end
 		end
 

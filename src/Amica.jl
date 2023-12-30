@@ -3,7 +3,7 @@ module Amica
     using LinearAlgebra
 	using GaussianMixtures
 	using Distributions
-    using IntelVectorMath
+    using MKL_jll
 	using SpecialFunctions
     using ProgressMeter
     using LoopVectorization
