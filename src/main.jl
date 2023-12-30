@@ -76,15 +76,9 @@ function amica!(myAmica::AbstractAmica,
 		calculate_y!(myAmica)
 		@debug :y, myAmica.y[1,1:3,1]
 		# pre-calculate abs(y)^rho
-		# for i in 1:n
-		# 	for j in 1:m
-		# 		optimized_pow!(y_rho[j, i, :], abs.(myAmica.y[j, i, :]), myAmica.learnedParameters.shape[j, i])
-		# 	end
-		# end
-
-		for j in 1:m
-			for i in 1:n
-				@views y_rho[j, i, :] .= (abs.(myAmica.y[j, i, :]) .^myAmica.learnedParameters.shape[j,i])
+		for i in 1:n
+			for j in 1:m
+				@views optimized_pow!(y_rho[j, i, :], abs.(myAmica.y[j, i, :]), myAmica.learnedParameters.shape[j, i])
 			end
 		end
 
