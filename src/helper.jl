@@ -44,57 +44,62 @@ end
 	return @inbounds copysign.(optimized_pow(abs.(x), rho - 1), x) .* rho
 end
 
-function ffun!(fp,x,rho)
-	#f = rho * sign(x).*abs(x).^(rho-1);
-	#rho .*  (IVM.pow(x, rho - 1), x)
-	for k = eachindex(x)
-			fp[k] = sign(x[k]) * rho * abs(x[k])^(rho-1)
-	end
-#	fp .= sign.(x).*rho .* abs.(x).^(rho-1)
+function ffun!(fp::AbstractArray{T, 1}, x::AbstractArray{T, 1}, rho::T) where {T <: Real}
+	optimized_pow!(fp, abs.(x), rho - 1)
+	fp .*= sign.(x) .* rho
 end
 
-
-# optimized power function for different cpu architectures
-function optimized_pow(lhs::AbstractArray{T, 1}, rhs::T) where {T<:Real}
-	optimized_pow(lhs, repeat([rhs], length(lhs)))
+# intelvectormath Pow
+function optimized_pow(lhs::AbstractArray{T, 1}, rhs::T)::AbstractArray{T, 1} where {T <: Real}
+	out = similar(lhs)
+	optimized_pow!(out, lhs, rhs)
+	return out
 end
 
-function optimized_pow(lhs::AbstractArray{T, 1}, rhs::AbstractArray{T, 1}) where {T<:Real}
-#	if Sys.iswindows() || Sys.islinux()
-#		return IVM.pow(lhs, rhs)
-#	elseif Sys.isapple()
-#		return AppleAccelerate.pow(lhs, rhs)
-#	else 
-		return lhs .^ rhs
-#	end
+function optimized_pow!(out::AbstractArray{Float64, 1}, lhs::AbstractArray{Float64, 1}, rhs::Float64)
+	@ccall MKL_jll.libmkl_rt.vdPowx(length(lhs)::Cint, lhs::Ref{Float64}, rhs::Float64, out::Ref{Float64})::Cvoid	
 end
 
-function optimized_log(val)
-	if Sys.iswindows() || Sys.islinux()
-		return IVM.log(val)
-	elseif Sys.isapple()
-		return AppleAccelerate.log(val)
-	else 
-		return log.(val)
-	end
+function optimized_pow!(out::AbstractArray{Float32, 1}, lhs::AbstractArray{Float32, 1}, rhs::Float32)
+	@ccall MKL_jll.libmkl_rt.vsPowx(length(lhs)::Cint, lhs::Ref{Float32}, rhs::Float32, out::Ref{Float32})::Cvoid	
 end
 
+# intelvectormath Log
 
-function optimized_exp!(val) 
-	if Sys.iswindows() || Sys.islinux()
-		IVM.exp!(val)
-	elseif Sys.isapple()
-		return AppleAccelerate.exp!(val)
-	else 
-	val .= exp.(val)
-	end
+function optimized_log(in::AbstractArray{T})::AbstractArray{T} where {T <: Real}
+	out = similar(in)
+	optimized_log!(out, in)
+	return out
 end
-function optimized_exp(val) 
-	#if Sys.iswindows() || Sys.islinux()
-	#		return IVM.exp(val)
-	#elseif Sys.isapple()
-#		return AppleAccelerate.exp(val)
-	#else 
-		return exp.(val)
-	#end
+
+function optimized_log!(inout::AbstractArray{T}) where {T <: Real}
+	optimized_log!(inout, inout)
+end
+
+function optimized_log!(out::AbstractArray{Float64}, in::AbstractArray{Float64})
+	@ccall MKL_jll.libmkl_rt.vdLn(length(in)::Cint, in::Ref{Float64}, out::Ref{Float64})::Cvoid	
+end
+
+function optimized_log!(out::AbstractArray{Float32}, in::AbstractArray{Float32})
+	@ccall MKL_jll.libmkl_rt.vsLn(length(in)::Cint, in::Ref{Float32}, out::Ref{Float32})::Cvoid	
+end
+
+# intelvectormath Exp
+
+function optimized_exp(in::AbstractArray{T})::AbstractArray{T} where {T <: Real}
+	out = similar(in)
+	optimized_exp!(out, in)
+	return out
+end
+
+function optimized_exp!(inout::AbstractArray{T}) where {T <: Real}
+	optimized_exp!(inout, inout)
+end
+
+function optimized_exp!(out::AbstractArray{Float64}, in::AbstractArray{Float64})
+	@ccall MKL_jll.libmkl_rt.vdExp(length(in)::Cint, in::Ref{Float64}, out::Ref{Float64})::Cvoid	
+end
+
+function optimized_exp!(out::AbstractArray{Float32}, in::AbstractArray{Float32})
+	@ccall MKL_jll.libmkl_rt.vsExp(length(in)::Cint, in::Ref{Float32}, out::Ref{Float32})::Cvoid	
 end
