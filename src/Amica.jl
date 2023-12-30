@@ -4,6 +4,7 @@ module Amica
 	using GaussianMixtures
 	using Distributions
     using MKL_jll
+    using IntelVectorMath
 	using SpecialFunctions
     using ProgressMeter
     using LoopVectorization

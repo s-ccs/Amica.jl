@@ -50,56 +50,62 @@ function ffun!(fp::AbstractArray{T, 1}, x::AbstractArray{T, 1}, rho::T) where {T
 end
 
 # intelvectormath Pow
+
 function optimized_pow(lhs::AbstractArray{T, 1}, rhs::T)::AbstractArray{T, 1} where {T <: Real}
 	out = similar(lhs)
 	optimized_pow!(out, lhs, rhs)
 	return out
 end
 
-function optimized_pow!(out::AbstractArray{Float64, 1}, lhs::AbstractArray{Float64, 1}, rhs::Float64)
-	@ccall MKL_jll.libmkl_rt.vdPowx(length(lhs)::Cint, lhs::Ref{Float64}, rhs::Float64, out::Ref{Float64})::Cvoid	
+function optimized_pow!(out::AbstractArray{Float32}, lhs::AbstractArray{Float32}, rhs::Float32)
+	sta = IVM.stride1(lhs)
+	sto = IVM.stride1(out)
+	dense = (sta == 1 && sto == 1) 
+
+	if dense
+		@ccall MKL_jll.libmkl_rt.vsPowx(length(lhs)::Cint, lhs::Ptr{Float32}, rhs::Float32, out::Ptr{Float32})::Cvoid
+	else
+		@ccall MKL_jll.libmkl_rt.vsPowxI(length(lhs)::Cint, lhs::Ptr{Float32}, sta::Cint, rhs::Float32, out::Ptr{Float32}, sto::Cint)::Cvoid
+	end
 end
 
-function optimized_pow!(out::AbstractArray{Float32, 1}, lhs::AbstractArray{Float32, 1}, rhs::Float32)
-	@ccall MKL_jll.libmkl_rt.vsPowx(length(lhs)::Cint, lhs::Ref{Float32}, rhs::Float32, out::Ref{Float32})::Cvoid	
+function optimized_pow!(out::AbstractArray{Float64}, lhs::AbstractArray{Float64}, rhs::Float64)
+	sta = IVM.stride1(lhs)
+	sto = IVM.stride1(out)
+	dense = (sta == 1 && sto == 1) 
+
+	if dense
+		@ccall MKL_jll.libmkl_rt.vdPowx(length(lhs)::Cint, lhs::Ptr{Float64}, rhs::Float64, out::Ptr{Float64})::Cvoid
+	else
+		@ccall MKL_jll.libmkl_rt.vdPowxI(length(lhs)::Cint, lhs::Ptr{Float64}, sta::Cint, rhs::Float64, out::Ptr{Float64}, sto::Cint)::Cvoid
+	end
 end
 
 # intelvectormath Log
 
 function optimized_log(in::AbstractArray{T})::AbstractArray{T} where {T <: Real}
-	out = similar(in)
-	optimized_log!(out, in)
-	return out
+	return IVM.log(in)
 end
 
 function optimized_log!(inout::AbstractArray{T}) where {T <: Real}
-	optimized_log!(inout, inout)
+	IVM.log!(inout)
 end
 
-function optimized_log!(out::AbstractArray{Float64}, in::AbstractArray{Float64})
-	@ccall MKL_jll.libmkl_rt.vdLn(length(in)::Cint, in::Ref{Float64}, out::Ref{Float64})::Cvoid	
+function optimized_log!(out::AbstractArray{T}, in::AbstractArray{T}) where {T <: Real}
+	IVM.log!(out, in)
 end
 
-function optimized_log!(out::AbstractArray{Float32}, in::AbstractArray{Float32})
-	@ccall MKL_jll.libmkl_rt.vsLn(length(in)::Cint, in::Ref{Float32}, out::Ref{Float32})::Cvoid	
-end
 
 # intelvectormath Exp
 
 function optimized_exp(in::AbstractArray{T})::AbstractArray{T} where {T <: Real}
-	out = similar(in)
-	optimized_exp!(out, in)
-	return out
+	return IVM.exp(in)
 end
 
 function optimized_exp!(inout::AbstractArray{T}) where {T <: Real}
-	optimized_exp!(inout, inout)
+	IVM.exp!(inout)
 end
 
-function optimized_exp!(out::AbstractArray{Float64}, in::AbstractArray{Float64})
-	@ccall MKL_jll.libmkl_rt.vdExp(length(in)::Cint, in::Ref{Float64}, out::Ref{Float64})::Cvoid	
-end
-
-function optimized_exp!(out::AbstractArray{Float32}, in::AbstractArray{Float32})
-	@ccall MKL_jll.libmkl_rt.vsExp(length(in)::Cint, in::Ref{Float32}, out::Ref{Float32})::Cvoid	
+function optimized_exp!(out::AbstractArray{T}, in::AbstractArray{T}) where {T <: Real}
+	IVM.exp!(out, in)
 end
