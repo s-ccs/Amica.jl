@@ -181,17 +181,14 @@ function update_loop!(myAmica::MultiModelAmica, fp, lambda, y_rho, shapelrate, u
 end
 
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
-@views function update_parameters!(myAmica::SingleModelAmica{T,ncomps,nmix}, y_rho, lrate_rho::LearningRate, upd_shape) where {T,ncomps,nmix}
+@views function update_parameters!(myAmica::SingleModelAmica{T,ncomps,nmix}, y_rho::AbstractArray{T, 3}, lrate_rho::LearningRate, upd_shape) where {T,ncomps,nmix}
 	gg = myAmica.learnedParameters
-	#alpha = myAmica.learnedParameters.proportions
-	#beta = myAmica.learnedParameters.scale
-	#mu = myAmica.learnedParameters.location
-	#rho = myAmica.learnedParameters.shape
-	(n,N) = size(myAmica.source_signals)
-	m = myAmica.m
-	g = zeros(T,n,N)
+	
+	(m,n,N) = size(myAmica.y)
+	
 	kappa = zeros(T, n, 1)
-	zfp = zeros(T, m, N)
+	g = zeros(T, n, N)
+	zfp = zeros(T, N)
 
 	# update 
 	# - myAmica.learnedParameters.proportions 
@@ -227,35 +224,31 @@ end
 	# - beta
 	# - mu
 	kp = similar(gg.shape)
-	lambda = zeros(T, n)
 
 	updated_location = Array(similar(gg.shape)) # convert from StaticMatrix to Mutable
 	updated_scale = Array(similar(gg.shape)) 
 
-	fp = zeros(T, m, n, N)
-	
-	ffun!(fp, myAmica.y, gg.shape)
+	fp = ffun(myAmica.y, gg.shape)
+
 
 	for i in 1:n
 		for j in 1:m
+			zfp .= myAmica.z[j, i, :] .* fp[j, i, :]
 
-			zfp[j,:] .= myAmica.z[j, i, :] .* fp[j, i, :]
-			g[i,:] .+= gg.proportions[j,i] .* sqrt(gg.scale[j,i]) .*zfp[j,:]
+			g[i,:] .+= gg.proportions[j,i] .* sqrt(gg.scale[j,i]) .*zfp
 			
 			
-			kp[j,i] = gg.scale[j,i] .* sum(zfp[j,:].*fp[j, i, :])
+			kp[j,i] = gg.scale[j,i] .* sum(zfp.*fp[j, i, :])
 			
 			kappa[i] += gg.proportions[j,i] * kp[j,i]
 			
-			lambda[i] += gg.proportions[j,i] * (sum(myAmica.z[j, i, :].*(fp[j, i, :].*myAmica.y[j, i, :] .-1).^2) + gg.location[j,i]^2 * kp[j,i])
-			@debug fp[j,i,1],zfp[j,1],g[i,1],gg.proportions[j,i],gg.scale[j,i], kp[j,i],kappa[i]
-			updated_location[j,i] = update_location(myAmica,gg.shape[j,i],zfp[j,:],myAmica.y[j, i, :],gg.location[j,i],gg.scale[j,i],kp[j,i])
-
-			@debug :zfp,zfp[j,1],:y,myAmica.y[j,i,1],:z,myAmica.z[j,i,1]
-
-			updated_scale[j,i] =  update_scale(zfp[j,:],myAmica.y[j, i, :],gg.scale[j,i],myAmica.z[j, i, :],gg.shape[j,i])
+			updated_location[j,i] = update_location(myAmica,gg.shape[j,i],zfp,myAmica.y[j, i, :],gg.location[j,i],gg.scale[j,i],kp[j,i])
+		
+			updated_scale[j,i] =  update_scale(zfp,myAmica.y[j, i, :],gg.scale[j,i],myAmica.z[j, i, :],gg.shape[j,i])
 		end
 	end
+
+	lambda = calc_lambda(myAmica, fp, kp)
 
 	# update rho
 	# depends on rho, zfp, myAmica.y, mu, beta
