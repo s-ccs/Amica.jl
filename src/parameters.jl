@@ -282,6 +282,30 @@ end
 	return g, kappa, lambda
 end
 
+function calc_lambda(myAmica::SingleModelAmica{T}, fp::AbstractArray{T, 3}, kp::AbstractArray{T, 2}) where {T <: Real}
+	m,n,N = size(myAmica.y)
+	
+	lambda = zeros(T, n)
+
+	# precompute z * (fp * y - 1)
+	zfpy = myAmica.z .* (fp .* myAmica.y .- 1)
+
+	# zfpy ^ 2.0
+	optimized_pow!(zfpy, zfpy, T(2))
+
+	# sum along N
+	zfpy_sum = sum(zfpy, dims=3)
+
+	for i in 1:n
+		for j in 1:m
+			lambda[i] += myAmica.learnedParameters.proportions[j,i] * (zfpy_sum[j, i, 1] + myAmica.learnedParameters.location[j,i]^2 * kp[j,i])
+		end
+	end
+
+	return lambda
+end
+
+
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
 #Todo: Save g, kappa, lambda in structure, remove return
 @views function update_parameters!(myAmica::MultiModelAmica, h, fp, y_rho, lambda, lrate_rho::LearningRate, upd_shape)

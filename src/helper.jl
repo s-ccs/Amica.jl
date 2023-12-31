@@ -38,10 +38,19 @@ function logpfun(rho, y_rho)
 	return .- y_rho .- log(2) .- loggamma(1 + 1 / rho)
 end
 
+function ffun(x::AbstractArray{T, 3}, rho::AbstractArray{T, 2})::AbstractArray{T, 3} where {T <: Real}
+	fp = abs.(x)
+	m, n = size(x)
 
-#taken from amica_a.m
-@views function ffun(x::AbstractArray{T, 1}, rho::T) where {T<:Real}
-	return @inbounds copysign.(optimized_pow(abs.(x), rho - 1), x) .* rho
+	for j in 1:m 
+		for i in 1:n
+			@views optimized_pow!(fp[j, i, :], fp[j, i, :], rho[j, i] - 1)
+		end
+	end
+
+	fp .*= sign.(x) .* rho
+
+	return fp
 end
 
 function ffun!(fp::AbstractArray{T, 3}, x::AbstractArray{T, 3}, rho::AbstractArray{T, 2}) where {T <: Real}
