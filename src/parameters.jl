@@ -257,10 +257,6 @@ end
 		end
 	end
 
-	lambda2 = sum(gg.proportions .* (sum(myAmica.z .* (fp .* myAmica.y .- 1) .^ 2, dims = 3)[:, :, 1] .+ gg.location .^ 2 .* kp), dims = 2)[: , 1]
-
-	println(lambda2)
-
 	# update rho
 	# depends on rho, zfp, myAmica.y, mu, beta
 	if upd_shape == 1
