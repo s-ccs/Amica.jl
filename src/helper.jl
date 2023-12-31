@@ -38,6 +38,8 @@ function logpfun(rho, y_rho)
 	return .- y_rho .- log(2) .- loggamma(1 + 1 / rho)
 end
 
+
+#taken from amica_a.m
 function ffun(x::AbstractArray{T, 3}, rho::AbstractArray{T, 2})::AbstractArray{T, 3} where {T <: Real}
 	fp = abs.(x)
 	m, n = size(x)
@@ -52,7 +54,6 @@ function ffun(x::AbstractArray{T, 3}, rho::AbstractArray{T, 2})::AbstractArray{T
 
 	return fp
 end
-
 # intelvectormath Pow
 
 function optimized_pow(lhs::AbstractArray{T, 1}, rhs::T)::AbstractArray{T, 1} where {T <: Real}

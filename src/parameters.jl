@@ -230,7 +230,6 @@ end
 
 	fp = ffun(myAmica.y, gg.shape)
 
-
 	for i in 1:n
 		for j in 1:m
 			zfp .= myAmica.z[j, i, :] .* fp[j, i, :]
@@ -241,7 +240,7 @@ end
 			kp[j,i] = gg.scale[j,i] .* sum(zfp.*fp[j, i, :])
 			
 			kappa[i] += gg.proportions[j,i] * kp[j,i]
-			
+
 			updated_location[j,i] = update_location(myAmica,gg.shape[j,i],zfp,myAmica.y[j, i, :],gg.location[j,i],gg.scale[j,i],kp[j,i])
 		
 			updated_scale[j,i] =  update_scale(zfp,myAmica.y[j, i, :],gg.scale[j,i],myAmica.z[j, i, :],gg.shape[j,i])
@@ -276,18 +275,18 @@ function calc_lambda(myAmica::SingleModelAmica{T}, fp::AbstractArray{T, 3}, kp::
 	
 	lambda = zeros(T, n)
 
-	# precompute z * (fp * y - 1)
-	zfpy = myAmica.z .* (fp .* myAmica.y .- 1)
+	# precompute (fp * y - 1)
+	fpy =  (fp .* myAmica.y .- 1)
 
-	# zfpy ^ 2.0
-	optimized_pow!(zfpy, zfpy, T(2))
+	# fpy ^ 2.0
+	optimized_pow!(fpy, fpy, T(2))
 
-	# sum along N
-	zfpy_sum = sum(zfpy, dims=3)
+	# multiply with z & sum along N
+	fpy .= sum(fpy .* myAmica.z, dims=3)
 
 	for i in 1:n
 		for j in 1:m
-			lambda[i] += myAmica.learnedParameters.proportions[j,i] * (zfpy_sum[j, i, 1] + myAmica.learnedParameters.location[j,i]^2 * kp[j,i])
+			lambda[i] += myAmica.learnedParameters.proportions[j,i] * (fpy[j, i, 1] + myAmica.learnedParameters.location[j,i]^2 * kp[j,i])
 		end
 	end
 
