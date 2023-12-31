@@ -44,8 +44,16 @@ end
 	return @inbounds copysign.(optimized_pow(abs.(x), rho - 1), x) .* rho
 end
 
-function ffun!(fp::AbstractArray{T, 1}, x::AbstractArray{T, 1}, rho::T) where {T <: Real}
-	optimized_pow!(fp, abs.(x), rho - 1)
+function ffun!(fp::AbstractArray{T, 3}, x::AbstractArray{T, 3}, rho::AbstractArray{T, 2}) where {T <: Real}
+	abs_x = abs.(x)
+	m, n = size(x)
+
+	for j in 1:m 
+		for i in 1:n
+			@views optimized_pow!(fp[j, i, :], abs_x[j, i, :], rho[j, i] - 1)
+		end
+	end
+
 	fp .*= sign.(x) .* rho
 end
 

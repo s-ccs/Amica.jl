@@ -233,10 +233,11 @@ end
 	updated_scale = Array(similar(gg.shape)) 
 
 	fp = zeros(T, m, n, N)
+	
+	ffun!(fp, myAmica.y, gg.shape)
 
 	for i in 1:n
 		for j in 1:m
-			ffun!(fp[j, i, :], myAmica.y[j, i, :], gg.shape[j,i])
 
 			zfp[j,:] .= myAmica.z[j, i, :] .* fp[j, i, :]
 			g[i,:] .+= gg.proportions[j,i] .* sqrt(gg.scale[j,i]) .*zfp[j,:]
@@ -258,7 +259,7 @@ end
 
 	lambda2 = sum(gg.proportions .* (sum(myAmica.z .* (fp .* myAmica.y .- 1) .^ 2, dims = 3)[:, :, 1] .+ gg.location .^ 2 .* kp), dims = 2)[: , 1]
 
-	println(lambda2 == lambda)
+	println(lambda2)
 
 	# update rho
 	# depends on rho, zfp, myAmica.y, mu, beta
