@@ -58,6 +58,12 @@ function optimized_pow(lhs::AbstractArray{T, 1}, rhs::T)::AbstractArray{T, 1} wh
 end
 
 function optimized_pow!(out::AbstractArray{Float32}, lhs::AbstractArray{Float32}, rhs::Float32)
+
+	if !hasproperty(MKL_jll, :libmkl_rt) 
+		out .= lhs .^ rhs
+		return
+	end
+
 	sta = IVM.stride1(lhs)
 	sto = IVM.stride1(out)
 	dense = (sta == 1 && sto == 1) 
@@ -70,6 +76,11 @@ function optimized_pow!(out::AbstractArray{Float32}, lhs::AbstractArray{Float32}
 end
 
 function optimized_pow!(out::AbstractArray{Float64}, lhs::AbstractArray{Float64}, rhs::Float64)
+	if !hasproperty(MKL_jll, :libmkl_rt) 
+		out .= lhs .^ rhs
+		return
+	end
+
 	sta = IVM.stride1(lhs)
 	sto = IVM.stride1(out)
 	dense = (sta == 1 && sto == 1) 
@@ -84,14 +95,27 @@ end
 # intelvectormath Log
 
 function optimized_log(in::AbstractArray{T})::AbstractArray{T} where {T <: Real}
+	if !hasproperty(MKL_jll, :libmkl_rt) 
+		return log.(in)
+	end
+
 	return IVM.log(in)
 end
 
 function optimized_log!(inout::AbstractArray{T}) where {T <: Real}
+	if !hasproperty(MKL_jll, :libmkl_rt) 
+		inout .= log.(inout)
+		return
+	end
 	IVM.log!(inout)
 end
 
 function optimized_log!(out::AbstractArray{T}, in::AbstractArray{T}) where {T <: Real}
+	if !hasproperty(MKL_jll, :libmkl_rt) 
+		out .= log.(in)
+		return
+	end
+
 	IVM.log!(out, in)
 end
 
@@ -99,13 +123,27 @@ end
 # intelvectormath Exp
 
 function optimized_exp(in::AbstractArray{T})::AbstractArray{T} where {T <: Real}
+	if !hasproperty(MKL_jll, :libmkl_rt) 
+		return exp.(in)
+	end
+
 	return IVM.exp(in)
 end
 
 function optimized_exp!(inout::AbstractArray{T}) where {T <: Real}
+	if !hasproperty(MKL_jll, :libmkl_rt) 
+		inout .= exp.(inout)
+		return
+	end
+
 	IVM.exp!(inout)
 end
 
 function optimized_exp!(out::AbstractArray{T}, in::AbstractArray{T}) where {T <: Real}
+	if !hasproperty(MKL_jll, :libmkl_rt) 
+		out .= exp.(in)
+		return
+	end
+
 	IVM.exp!(out, in)
 end
