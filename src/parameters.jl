@@ -136,9 +136,9 @@ function initialize_shape_parameter!(myAmica::MultiModelAmica, shapelrate::Learn
 end
 
 #Updates Gaussian mixture Parameters and mixing matrix. todo: rename since its not a loop for single model
-function update_loop!(myAmica::SingleModelAmica, lambda, y_rho, shapelrate, update_shape, iter, do_newton, newt_start_iter, lrate)
+function update_loop!(myAmica::SingleModelAmica, y_rho, shapelrate, update_shape, iter, do_newton, newt_start_iter, lrate)
 		#Update parameters
-		g, kappa = update_parameters!(myAmica, lambda, y_rho, shapelrate, update_shape)
+		g, kappa, lambda = update_parameters!(myAmica, y_rho, shapelrate, update_shape)
 		@debug :g, g[1],:kappa kappa[1]
 		#Checks for NaN in parameters before updating the mixing matrix
 		if any(isnan, kappa) || any(isnan, myAmica.source_signals) || any(isnan, lambda) || any(isnan, g) || any(isnan, myAmica.learnedParameters.proportions)
@@ -181,8 +181,7 @@ function update_loop!(myAmica::MultiModelAmica, fp, lambda, y_rho, shapelrate, u
 end
 
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
-#Todo: Save g, kappa, lambda in structure, remove return
-@views function update_parameters!(myAmica::SingleModelAmica{T,ncomps,nmix}, lambda, y_rho, lrate_rho::LearningRate, upd_shape) where {T,ncomps,nmix}
+@views function update_parameters!(myAmica::SingleModelAmica{T,ncomps,nmix}, y_rho, lrate_rho::LearningRate, upd_shape) where {T,ncomps,nmix}
 	gg = myAmica.learnedParameters
 	#alpha = myAmica.learnedParameters.proportions
 	#beta = myAmica.learnedParameters.scale
@@ -191,8 +190,8 @@ end
 	(n,N) = size(myAmica.source_signals)
 	m = myAmica.m
 	g = zeros(T,n,N)
-	kappa = zeros(T,n,1)
-	zfp = zeros(T,m, N)
+	kappa = zeros(T, n, 1)
+	zfp = zeros(T, m, N)
 
 	# update 
 	# - myAmica.learnedParameters.proportions 
@@ -218,7 +217,6 @@ end
 	# - g
 	# - kp
 	# - kappa
-	# - lambda
 	# - mu
 
 	# depends on 
@@ -229,25 +227,27 @@ end
 	# - beta
 	# - mu
 	kp = similar(gg.shape)
+	lambda = zeros(T, n)
 
 	updated_location = Array(similar(gg.shape)) # convert from StaticMatrix to Mutable
 	updated_scale = Array(similar(gg.shape)) 
 
-	fp = Vector{T}(undef,N)
+	fp = zeros(T, m, n, N)
+
 	for i in 1:n
 		for j in 1:m
-			#@show size(fp), size(myAmica.y)
-			ffun!(fp,myAmica.y[j, i, :], gg.shape[j,i])
-			zfp[j,:] .= myAmica.z[j, i, :] .* fp
+			ffun!(fp[j, i, :], myAmica.y[j, i, :], gg.shape[j,i])
+
+			zfp[j,:] .= myAmica.z[j, i, :] .* fp[j, i, :]
 			g[i,:] .+= gg.proportions[j,i] .* sqrt(gg.scale[j,i]) .*zfp[j,:]
 			
 			
-			kp[j,i] = gg.scale[j,i] .* sum(zfp[j,:].*fp)
+			kp[j,i] = gg.scale[j,i] .* sum(zfp[j,:].*fp[j, i, :])
 			
 			kappa[i] += gg.proportions[j,i] * kp[j,i]
 			
-			lambda[i] += gg.proportions[j,i] * (sum(myAmica.z[j, i, :].*(fp.*myAmica.y[j, i, :] .-1).^2) + gg.location[j,i]^2 * kp[j,i])
-			@debug fp[1],zfp[j,1],g[i,1],gg.proportions[j,i],gg.scale[j,i], kp[j,i],kappa[i]
+			lambda[i] += gg.proportions[j,i] * (sum(myAmica.z[j, i, :].*(fp[j, i, :].*myAmica.y[j, i, :] .-1).^2) + gg.location[j,i]^2 * kp[j,i])
+			@debug fp[j,i,1],zfp[j,1],g[i,1],gg.proportions[j,i],gg.scale[j,i], kp[j,i],kappa[i]
 			updated_location[j,i] = update_location(myAmica,gg.shape[j,i],zfp[j,:],myAmica.y[j, i, :],gg.location[j,i],gg.scale[j,i],kp[j,i])
 
 			@debug :zfp,zfp[j,1],:y,myAmica.y[j,i,1],:z,myAmica.z[j,i,1]
@@ -255,10 +255,10 @@ end
 			updated_scale[j,i] =  update_scale(zfp[j,:],myAmica.y[j, i, :],gg.scale[j,i],myAmica.z[j, i, :],gg.shape[j,i])
 		end
 	end
-	
-	#mu = update_location(myAmica,rho,zfp,mu,beta,kp)
 
-	
+	lambda2 = sum(gg.proportions .* (sum(myAmica.z .* (fp .* myAmica.y .- 1) .^ 2, dims = 3)[:, :, 1] .+ gg.location .^ 2 .* kp), dims = 2)[: , 1]
+
+	println(lambda2 == lambda)
 
 	# update rho
 	# depends on rho, zfp, myAmica.y, mu, beta
@@ -278,7 +278,7 @@ end
 	myAmica.learnedParameters.location = updated_location
 	myAmica.learnedParameters.shape = updated_shape
 
-	return g, kappa
+	return g, kappa, lambda
 end
 
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
