@@ -16,6 +16,8 @@ mutable struct SingleModelAmica{T,ncomps,nmix} <:AbstractAmica
 	S::Array{T,2} # sphering matrix
     z::Array{T,3}
     y::Array{T,3}
+
+	lambda::Array{T,1}
     centers::Array{T,1} #model centers
     Lt::Array{T,1} #log likelihood of time point for each model ( M x N )
     LL::Array{T,1} #log likelihood over iterations todo: change to tuple 
@@ -54,6 +56,8 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, l
 	#initialize parameters
 	
 	centers = zeros(T,n)
+	lambda = zeros(T, n)
+
 	eye = Matrix(I, n, n)
 	if isnothing(A)
 		A = zeros(T,n,n)
@@ -91,7 +95,7 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, l
 	ldet = 0.0
 	source_signals = zeros(T,n,N)
 
-	return SingleModelAmica{T,ncomps,nmix}(source_signals,GGParameters{T,ncomps,nmix}(proportions,scale,location,shape),m,A,I(size(A,1)), z,y,#=Q,=#centers,Lt,LL,ldet,maxiter)
+	return SingleModelAmica{T,ncomps,nmix}(source_signals,GGParameters{T,ncomps,nmix}(proportions,scale,location,shape),m,A,I(size(A,1)), z,y,#=Q,=#centers, lambda, Lt,LL,ldet,maxiter)
 end
 
 #Data type for AMICA with multiple ICA models

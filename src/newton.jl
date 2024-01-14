@@ -1,5 +1,5 @@
 #Updates the mixing matrix with the newton method
-function newton_method!(myAmica::SingleModelAmica, iter, g, kappa, do_newton, newt_start_iter, lrate::LearningRate, lambda)
+function newton_method!(myAmica::SingleModelAmica, iter, g, kappa, do_newton, newt_start_iter, lrate::LearningRate)
 	
 	lnatrate = lrate.natural_rate
 	lrate = lrate.lrate
@@ -14,7 +14,7 @@ function newton_method!(myAmica::SingleModelAmica, iter, g, kappa, do_newton, ne
 	for i in 1:n
 		for k = 1:n
 			if i == k
-				B[i,i] = dA[i,i] / (lambda[i])
+				B[i,i] = dA[i,i] / (myAmica.lambda[i])
 			else
 				denom = kappa[i]*kappa[k]*sigma2[i]*sigma2[k] - 1
 				if denom > 0
@@ -32,7 +32,7 @@ function newton_method!(myAmica::SingleModelAmica, iter, g, kappa, do_newton, ne
 	end
 end
 
-@views function newton_method!(myAmica::MultiModelAmica, h, iter, g, kappa, do_newton, newt_start_iter, lrate::LearningRate, lambda)
+@views function newton_method!(myAmica::MultiModelAmica, h, iter, g, kappa, do_newton, newt_start_iter, lrate::LearningRate)
 	
 	lnatrate = lrate.natural_rate
 	lrate = lrate.lrate
@@ -48,7 +48,7 @@ end
 	for i in 1:n
 		for k = 1:n
 			if i == k
-				B[i,i] = dA[i,i] / (lambda[i])
+				B[i,i] = dA[i,i] / (myAmica.lambda[i])
 			else
 				denom = kappa[i]*kappa[k]*sigma2[i]*sigma2[k] - 1
 				if denom > 0

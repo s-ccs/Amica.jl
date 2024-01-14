@@ -2,6 +2,8 @@ using Amica
 using MAT
 using Profile
 using Test
+#---
+using CairoMakie
 
 file = matopen("test/testdata/eeg_data.mat")
 #file = matopen("test/testdata/pink_sinus_data.mat")
@@ -21,8 +23,18 @@ close(file)
 #     - likelihood: -0.7354624215419704 (after 30 iterations) 
 
 
-myAmica = fit(SingleModelAmica, x; maxiter=30, do_sphering=true, remove_mean=true, m=3, scale=beta_init[:, :, 1], location=mu_init[:, :, 1], A=copy(A_init[:, :, 1]))
+@profview fit(SingleModelAmica, x; maxiter=100, do_sphering=true, remove_mean=true, m=3, scale=beta_init[:, :, 1], location=mu_init[:, :, 1], A=copy(A_init[:, :, 1]))
 
+f = Figure(size=(512,512))
+ax = f[1,1] = Axis(f)
+labels = ["julia64"]
+for (ix,d) = enumerate([myAmica.LL])
+    lines!(ax,d;label=labels[ix])
+end
+axislegend(ax)
+ylims!(ax,-2.3,-0.5)
+
+f
 # x = [1 4; 4 1]*Float64.([1.0 2 3; 4 5 6])
 # A_init = [1.0 0.003; -0.05 1.0]
 # beta_init = [1.1 0.9; 1.0 0.9; 0.9 0.8]
