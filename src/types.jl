@@ -1,94 +1,97 @@
-mutable struct GGParameters{T}
-    proportions::Array{T, 2} #source density mixture proportions
-    scale::Array{T, 2} #source density inverse scale parameter
-    location::Array{T, 2} #source density location parameter
-    shape::Array{T, 2} #source density shape paramters
+mutable struct GGParameters{T,ncomps,nmix}
+    proportions::SMatrix{nmix,ncomps,T} #source density mixture proportions
+    scale::SMatrix{nmix,ncomps,T} #source density inverse scale parameter
+    location::SMatrix{nmix,ncomps,T} #source density location parameter
+    shape::SMatrix{nmix,ncomps,T} #source density shape paramters
 end
 
 
 abstract type AbstractAmica end
 
-mutable struct SingleModelAmica{T} <:AbstractAmica
+mutable struct SingleModelAmica{T,ncomps,nmix} <:AbstractAmica
     source_signals::Array{T,2}
-    learnedParameters::GGParameters{T}
-	m::Union{Integer, Nothing} 		   #Number of gaussians
-    A::Array{T,2} # unmixing matrices for each model
+    learnedParameters::GGParameters{T,ncomps,nmix}
+	m::Int 		   #Number of gaussians
+    A::SMatrix{ncomps,ncomps,T} # unmixing matrices for each model
 	S::Array{T,2} # sphering matrix
     z::Array{T,3}
     y::Array{T,3}
-    centers::Array{T} #model centers
-    Lt::Array{Float64} #log likelihood of time point for each model ( M x N )
-    LL::Array{T} #log likelihood over iterations todo: change to tuple 
-    ldet::Float64
+    centers::Array{T,1} #model centers
+    Lt::Array{T,1} #log likelihood of time point for each model ( M x N )
+    LL::Array{T,1} #log likelihood over iterations todo: change to tuple 
+    ldet::T
     maxiter::Int
 end
 
 
-mutable struct MultiModelAmica <:AbstractAmica
-	models::Array{SingleModelAmica} #Array of SingleModelAmicas
+
+mutable struct MultiModelAmica{T} <:AbstractAmica
+	models::Array{SingleModelAmica{T}} #Array of SingleModelAmicas
 	normalized_ica_weights 			#Model weights (normalized)
 	ica_weights_per_sample 			#Model weight for each sample
 	ica_weights						#Model weight for all samples
 	maxiter::Int					#Number of iterations
 	m::Int 							#Number of Gaussians
-	LL::AbstractVector				#Log-Likelihood
+	LL::Array{T,1}				#Log-Likelihood
 end
 
 #Structure for Learning Rate type with initial value, minumum, maximum etc. Used for learning rate and shape lrate
 using Parameters
-@with_kw mutable struct LearningRate
-	lrate::Real = 0.1
-	init::Float64 = 0.1
-	minimum::Float64 = 0.
-	maximum::Float64 = 1.0
-	natural_rate::Float64 = 0.1
-	decreaseFactor::Float64 = 0.5
+@with_kw mutable struct LearningRate{T} 
+	lrate::T = 0.1
+	init::T = 0.1
+	minimum::T = 0.
+	maximum::T = 1.0
+	natural_rate::T = 0.1
+	decreaseFactor::T = 0.5
 end
 
 #Data type for AMICA with just one ICA model. todo: rename gg parameters
 function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, location=nothing, scale=nothing, kwargs...) where {T<:Real}
 	(n, N) = size(data)
+	ncomps = n
+	nmix = m
 	#initialize parameters
 	
-	centers = zeros(n)
+	centers = zeros(T,n)
 	eye = Matrix(I, n, n)
 	if isnothing(A)
-		A = zeros(n,n)
+		A = zeros(T,n,n)
 		A[:,:] = eye[n] .+ 0.1*rand(n,n)
 		for i in 1:n
 			A[:,i] = A[:,i] / norm(A[:,i])
 		end
 	end
 
-	proportions = (1/m) * ones(m,n)
+	proportions = (1/m) * ones(T,m,n)
 	if isnothing(location)
 		if m > 1
-			location = 0.1 * randn(m, n)
+			location = 0.1 * randn(T,m, n)
 		else
-			location = zeros(m, n)
+			location = zeros(T,m, n)
 		end
 	end
 	if isnothing(scale)
-		scale = ones(m, n) + 0.1 * randn(m, n)
+		scale = ones(T,m, n) + 0.1 * randn(T,m, n)
 	end
-	shape = ones(m, n)
+	shape = ones(T,m, n)
 
-	y = zeros(n,N,m)
+	y = zeros(T,n,N,m)
 	
-	Lt = zeros(N)
-	z = ones(n,N,m)/N
+	Lt = zeros(T,N)
+	z = ones(T,n,N,m)/N
 
 	#Sets some parameters to nothing if used my MultiModel to only have them once
 	if isnothing(maxiter)
 		LL = nothing
 		m = nothing
 	else
-		LL = Float64[]
+		LL = T[]
 	end
 	ldet = 0.0
-	source_signals = zeros(n,N)
+	source_signals = zeros(T,n,N)
 
-	return SingleModelAmica{T}(source_signals,GGParameters{T}(proportions,scale,location,shape),m,A,I(size(A,1)), z,y,#=Q,=#centers,Lt,LL,ldet,maxiter)
+	return SingleModelAmica{T,ncomps,nmix}(source_signals,GGParameters{T,ncomps,nmix}(proportions,scale,location,shape),m,A,I(size(A,1)), z,y,#=Q,=#centers,Lt,LL,ldet,maxiter)
 end
 
 #Data type for AMICA with multiple ICA models

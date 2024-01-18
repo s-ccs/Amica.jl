@@ -35,7 +35,7 @@ end
 #taken from amica_a.m
 #L = det(A) * mult p(s|θ)
 function logpfun(rho, y_rho)
-	return @inbounds - y_rho .- log(2) .- loggamma(1 + 1 / rho)
+	return .- y_rho .- log(2) .- loggamma(1 + 1 / rho)
 end
 
 
@@ -44,19 +44,29 @@ end
 	return @inbounds copysign.(optimized_pow(abs.(x), rho - 1), x) .* rho
 end
 
+function ffun!(fp,x,rho)
+	#f = rho * sign(x).*abs(x).^(rho-1);
+	#rho .*  (IVM.pow(x, rho - 1), x)
+	for k = eachindex(x)
+			fp[k] = sign(x[k]) * rho * abs(x[k])^(rho-1)
+	end
+#	fp .= sign.(x).*rho .* abs.(x).^(rho-1)
+end
+
+
 # optimized power function for different cpu architectures
 function optimized_pow(lhs::AbstractArray{T, 1}, rhs::T) where {T<:Real}
 	optimized_pow(lhs, repeat([rhs], length(lhs)))
 end
 
 function optimized_pow(lhs::AbstractArray{T, 1}, rhs::AbstractArray{T, 1}) where {T<:Real}
-	if Sys.iswindows() || Sys.islinux()
-		return IVM.pow(lhs, rhs)
-	elseif Sys.isapple()
-		return AppleAccelerate.pow(lhs, rhs)
-	else 
+#	if Sys.iswindows() || Sys.islinux()
+#		return IVM.pow(lhs, rhs)
+#	elseif Sys.isapple()
+#		return AppleAccelerate.pow(lhs, rhs)
+#	else 
 		return lhs .^ rhs
-	end
+#	end
 end
 
 function optimized_log(val)
@@ -70,12 +80,21 @@ function optimized_log(val)
 end
 
 
-function optimized_exp(val) 
+function optimized_exp!(val) 
 	if Sys.iswindows() || Sys.islinux()
-		return IVM.exp(val)
+		IVM.exp!(val)
 	elseif Sys.isapple()
-		return AppleAccelerate.exp(val)
+		return AppleAccelerate.exp!(val)
 	else 
-		return exp.(val)
+	val .= exp.(val)
 	end
+end
+function optimized_exp(val) 
+	#if Sys.iswindows() || Sys.islinux()
+	#		return IVM.exp(val)
+	#elseif Sys.isapple()
+#		return AppleAccelerate.exp(val)
+	#else 
+		return exp.(val)
+	#end
 end

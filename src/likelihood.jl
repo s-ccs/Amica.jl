@@ -24,14 +24,20 @@ function calculate_LL!(myAmica::MultiModelAmica)
 end
 
 #Update loop for Lt and u (which is saved in z). Todo: Rename
-function loopiloop!(myAmica::SingleModelAmica, y_rho)
-	(n,_) = size(myAmica.source_signals)
-	
-	for i in 1:n
-		Q = calculate_Q(myAmica,i, y_rho) # myAmica.Q
-		calculate_u!(myAmica,Q,i) # myAmica.z
+function loopiloop!(myAmica::SingleModelAmica{T,ncomps,nmix}, y_rho) where {T,ncomps,nmix}
+	N = size(myAmica.source_signals,2)
+	n = size(myAmica.source_signals,1)
+	Q = Array{T}(undef,nmix,N)
+	gg = myAmica.learnedParameters
+	for comps in 1:n
+		calculate_Q!(Q,gg.proportions[:,comps],gg.scale[:,comps],gg.shape[:,comps],@view(y_rho[comps,:,:]))
+		@debug :Q, Q[1,1],gg.proportions[1,comps],gg.scale[1,comps],gg.shape[1,comps],myAmica.y[comps,1,1] #,@view(y_rho[comps,:,:]))
+		#Q = calculate_Q(myAmica,i, y_rho) # myAmica.Q
+		calculate_u!(myAmica,Q,comps) # myAmica.z
+		@debug "z",myAmica.z[comps,1,1]
 		calculate_Lt!(myAmica,Q) # myAmica.Q
 	end
+	@debug "lt",myAmica.Lt[[1,end]]
 end
 
 function loopiloop!(myAmica::MultiModelAmica, y_rho)
@@ -39,7 +45,7 @@ function loopiloop!(myAmica::MultiModelAmica, y_rho)
 	(n,_) = size(myAmica.models[1].source_signals)
 
 	for h in 1:M #run along models
-		Threads.@threads for i in 1:n #run along components
+		for i in 1:n #run along components
 			Q = calculate_Q(myAmica.models[h], i, y_rho)
 			calculate_u!(myAmica.models[h], @view(Q[:, n, :]),i)
 			calculate_Lt!(myAmica.models[h], @view(Q[:, n, :]))
@@ -47,54 +53,92 @@ function loopiloop!(myAmica::MultiModelAmica, y_rho)
 	end
 end
 
-@views function calculate_Q(myAmica::SingleModelAmica, i, y_rho)
+function calculate_Q(myAmica::SingleModelAmica, i, y_rho)
 	(n,N) = size(myAmica.source_signals)
 	m = myAmica.m
 	Q = zeros(m,N)
-	
-	for j in 1:m
-		Q[j,:] .= log(myAmica.learnedParameters.proportions[j,i]) + 0.5 * log(myAmica.learnedParameters.scale[j,i]) .+ logpfun(myAmica.learnedParameters.shape[j,i], y_rho[i, :, j])
+	gg = myAmica.learnedParameters
+	@views calculate_Q!(Q,gg.proportions[:,i],gg.scale[:,i],gg.shape[:,i],y_rho[i,:,:])
+	return Q
+end
+
+function calculate_Q!(Q,proportions,scale,shape,y_rho)
+	for j in 1:length(proportions)
+		Q[j,:] .= log(proportions[j]) + 0.5 * log(scale[j]) .+ logpfun(shape[j], y_rho[ :, j])
 	end
 
 	return Q
 end
 
+#function calculate_Q(myAmica::SingleModelAmica, i, y_rho)
+#	(n,N) = size(myAmica.source_signals)
+#	m = myAmica.m
+#	Q = zeros(m,N)
+#	
+#	for k in 1:n
+#	for j in 1:m
+#		Q[j,k] = log(myAmica.learnedParameters.proportions[j,i]) + 
+#				0.5 * log(myAmica.learnedParameters.scale[j,i]) +
+#				 logpfun(myAmica.learnedParameters.shape[j,i], y_rho[i, k, j])
+#	end
+#	end
+#
+#	return Q
+#end
+
 #calculates u but saves it into z. MultiModel also uses the SingleModel version
-@views function calculate_u!(myAmica::SingleModelAmica, Q, i)
+ function calculate_u!(myAmica::SingleModelAmica{T,ncomps,nmix}, Q, i) where {T,ncomps,nmix}
 	m = size(myAmica.learnedParameters.scale,1)
+	#scratch_Q = similar(@view(Q[1,:]))
+	#scratch_Q = similar(Q)
+	tmp = Array{T}(undef,size(Q,1),size(Q,2))
 	if m > 1
-		for j in 1:m
-            myAmica.z[i, :, j] .= (1 ./ sum(optimized_exp(Q .- Q[j, :]'), dims=1))[:]
+		# i is component/channel
+		ixes = 1:m
+		for j in ixes # 1:3 m mixtures
+			# I think it is very hard to optimize the Q .- Q[j,:] inner term
+#			ix = (ixes)[ixes .∈ 2]
+			tmp .= @view(Q[:,:]) .- @view(Q[j, :])'
+			#tmp .= exp.(tmp)
+			#IVM.exp!(tmp)
+			optimized_exp!(tmp)
+			sum!( @view(myAmica.z[i,:,j])',tmp)
+
 		end
 	end
+	myAmica.z[i,:,:] .= 1 ./ @view(myAmica.z[i,:,:])
 end
 
 #Applies location and scale parameter to source signals (per generalized Gaussian)
 @views function calculate_y!(myAmica::SingleModelAmica)
-	for j in 1:myAmica.m
-		myAmica.y[:,:,j] .= sqrt.(myAmica.learnedParameters.scale[j,:]) .* (myAmica.source_signals[:,:] .- myAmica.learnedParameters.location[j,:])
-	end
+
+	
+		for j in 1:myAmica.m
+			myAmica.y[:,:,j] .= sqrt.(myAmica.learnedParameters.scale[j,:]) .* (myAmica.source_signals .- myAmica.learnedParameters.location[j,:])
+		end
+#		@debug myAmica.y[1,1,1:3],myAmica.learnedParameters.scale[1:3,1], myAmica.learnedParameters.location[1:3,1]
+#	for j in 1:myAmica.m
+#		for i = 1:size(myAmica.source_signals,2)
+#			for k = 1: size(myAmica.source_signals,1)
+#				myAmica.y[k,i,j] = sqrt(myAmica.learnedParameters.scale[j,k]) * (myAmica.source_signals[k,i] - myAmica.learnedParameters.location[j,k])
+#			end
+#		end
+	#end
+
+	
 end
 
-@views function calculate_y!(myAmica::MultiModelAmica)
-	n = size(myAmica.models[1].A,1)
-	for h in 1:size(myAmica.models,1)
-		#=Threads.@threads=# for i in 1:n
-			for j in 1:myAmica.m
-				myAmica.models[h].y[i,:,j] = sqrt(myAmica.models[h].learnedParameters.scale[j,i]) * (myAmica.models[h].source_signals[i,:] .- myAmica.models[h].learnedParameters.location[j,i])
-			end
-		end
-	end
+function calculate_y!(myAmica::MultiModelAmica)
+		calculate_y!.(myAmica.models[h])
 end
 
 #Calculates Likelihood for each time sample and for each ICA model
 function calculate_Lt!(myAmica::SingleModelAmica,Q)
 	m = size(myAmica.learnedParameters.scale,1)
 	if m > 1
-		Qmax = ones(m,1).*maximum(Q,dims=1);
-		myAmica.Lt[:] = myAmica.Lt' .+ Qmax[1,:]' .+ logsumexp(Q - Qmax,dims = 1)
+		myAmica.Lt .+= logsumexp(Q;dims=1)[1,:]
 	else
-		myAmica.Lt[:] = myAmica.Lt .+ Q[1,:]#todo: test
+		myAmica.Lt[:] = myAmica.Lt .+ Q[1,:] #todo: test
 	end
 end
 
