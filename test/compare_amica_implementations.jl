@@ -1,3 +1,5 @@
+ENV["MATLAB_ROOT"] = "/opt/common/apps/matlab/r2021a/"
+
 using MATLAB
 using Amica
 using SignalAnalysis
@@ -6,8 +8,8 @@ using Revise
 #---
 using CairoMakie
 #---
-includet("../../src/simulate_data.jl")
-includet("../../src/fortran_tools.jl")
+includet("/scratch/projects/fapra_amica/src/simulate_data.jl")
+includet("/scratch/projects/fapra_amica/src/fortran_tools.jl")
 n_chan=10
 n_time=500_000
 x,A,s = simulate_data(;T=50,n_chan,n_time,type=:gg6)

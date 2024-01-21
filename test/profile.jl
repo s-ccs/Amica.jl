@@ -20,7 +20,6 @@ close(file)
 #     - signal-size: (32, 59850)
 #     - likelihood: -0.7354624215419704 (after 30 iterations) 
 
-
 @profview myAmica = fit(SingleModelAmica, x; maxiter=20, do_sphering=true, remove_mean=true, m=3, scale=beta_init[:, :, 1], location=mu_init[:, :, 1], A=copy(A_init[:, :, 1]))
 
 # x = [1 4; 4 1]*Float64.([1.0 2 3; 4 5 6])
