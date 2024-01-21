@@ -71,8 +71,7 @@ end
 
 #Updates the Gaussian mixture location parameter. Todo: merge again with MultiModel version
 function update_location!(location::AbstractArray{T,2}, shape::AbstractArray{T,2}, zfp::AbstractArray{T,3}, y::AbstractArray{T,3}, scale::AbstractArray{T,2}, kp::AbstractArray{T,2}) where {T<:Real}
-
-    (m, n, _) = size(y)
+    (m, _, _) = size(y)
 
     if m <= 1
         return
@@ -81,17 +80,13 @@ function update_location!(location::AbstractArray{T,2}, shape::AbstractArray{T,2
     dm = sum(zfp ./ y, dims=3)[:, :, 1]
     sum_zfp = sum(zfp, dims=3)[:, :, 1]
 
-    for i in 1:n
-        for j in 1:m
-            if shape[j, i] <= 2
-                if dm[j, i] > 0
-                    location[j, i] += (1 / sqrt(scale[j, i])) * sum_zfp[j, i] / dm[j, i]
-                end
-            elseif kp > 0
-                location[j, i] += sqrt(scale[j, i]) * sum_zfp[j, i] / kp[j, i]
-            end
-        end
-    end
+    dm[dm.<=0] .= 1
+
+    a = shape .<= 2
+    b = .!a .&& kp .> 0
+
+    location[a] .+= (1 ./ sqrt.(scale[a])) .* sum_zfp[a] ./ dm[a]
+    location[b] .+= sqrt.(scale[b]) .* sum_zfp[b] ./ kp[b]
 end
 
 
@@ -183,7 +178,6 @@ end
 
     gg = myAmica.learnedParameters
 
-    kappa = zeros(T, n, 1)
 
     sumz = calculate_sumz(myAmica.z)
 
@@ -200,29 +194,14 @@ end
     myAmica.g .= sum(gg.proportions .* sqrt.(gg.scale) .* myAmica.zfp, dims=1)[1, :, :]
     kp = gg.scale .* sum(myAmica.zfp .* myAmica.fp, dims=3)[:, :, 1]
     myAmica.lambda .+= sum(gg.proportions .* (sum(myAmica.z .* (myAmica.fp .* myAmica.y .- 1) .^ 2, dims=3)[:, :, 1] .+ gg.location .^ 2 .* kp), dims=1)[1, :]
-
-
-    for i in 1:n
-        for j in 1:m
-            _kp = kp[j, i]
-
-            kappa[i] += gg.proportions[j, i] * _kp
-        end
-    end
+    kappa = sum(gg.proportions .* kp, dims=1)[1, :]
 
     update_location!(gg.location, gg.shape, myAmica.zfp, myAmica.y, gg.scale, kp)
     update_scale!(gg.scale, myAmica.zfp, myAmica.y, myAmica.z, gg.shape)
 
-    # update rho
-    # depends on rho, zfp, myAmica.y, mu, beta
+
     if upd_shape
-        dr = sum(myAmica.z .* optimized_log(myAmica.y_rho) .* myAmica.y_rho, dims=3)
-        updated_shape = Array(similar(gg.shape))
-        for i in 1:n
-            for j in 1:m
-                updated_shape[j, i] = update_shape(gg.shape[j, i], dr[j, i, 1], shapelrate)
-            end
-        end
+        update_shape!(gg.shape, myAmica.z, myAmica.y_rho, shapelrate)
     end
 
     return myAmica.g, kappa
@@ -290,20 +269,29 @@ end
 end
 
 #Updates the Gaussian mixture shape parameter
-@views function update_shape(rho, dr, lrate_rho::LearningRate)
-    if rho > 2
-        dr2 = digamma(1 + 1 / rho) / rho - dr
-        if ~isnan(dr2)
-            rho += 0.5 * dr2
-        end
-    else
-        dr2 = 1 - rho * dr / digamma(1 + 1 / rho)
-        if ~isnan(dr2)
-            rho += lrate_rho.lrate * dr2
+@views function update_shape!(shape::AbstractArray{T,2}, z::AbstractArray{T,3}, y_rho::AbstractArray{T,3}, shapelrate::LearningRate) where {T<:Real}
+    (m, n, _) = size(z)
+
+    dr = sum(z .* optimized_log(y_rho) .* y_rho, dims=3)
+
+    for i in 1:n
+        for j in 1:m
+            _shape = shape[j, i]
+            if _shape > 2
+                dr2 = digamma(1 + 1 / _shape) / _shape - dr[j, i]
+                if !isnan(dr2)
+                    shape[j, i] += 0.5 * dr2
+                end
+            else
+                dr2 = 1 - _shape * dr[j, i] / digamma(1 + 1 / _shape)
+                if !isnan(dr2)
+                    shape[j, i] += shapelrate.lrate * dr2
+                end
+            end
         end
     end
 
-    return clamp(rho, lrate_rho.minimum, lrate_rho.maximum)
+    clamp!(shape, shapelrate.minimum, shapelrate.maximum)
 end
 
 #Calculates determinant of mixing Matrix A (with log). first log-likelihood part of L = |A| * p(sources)

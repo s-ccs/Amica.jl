@@ -65,15 +65,15 @@ function amica!(myAmica::AbstractAmica,
         initialize_Lt!(myAmica)
         myAmica.Lt .+= LLdetS
 
-
-
         calculate_y!(myAmica)
 
         @debug :y, myAmica.y[1, 1:3, 1]
         # pre-calculate abs(y)^rho
+        myAmica.y_rho .= abs.(myAmica.y)
         for i in 1:n
             for j in 1:m
-                @views optimized_pow!(myAmica.y_rho[j, i, :], abs.(myAmica.y[j, i, :]), myAmica.learnedParameters.shape[j, i])
+                @views _y_rho = myAmica.y_rho[j, i, :]
+                optimized_pow!(_y_rho, _y_rho, myAmica.learnedParameters.shape[j, i])
             end
         end
 
