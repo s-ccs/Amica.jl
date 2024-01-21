@@ -42,11 +42,16 @@ function reparameterize!(myAmica::MultiModelAmica, data)
 end
 
 #Calculates sum of z. Returns N if there is just one generalized Gaussian
-@views function calculate_sumz(myAmica::SingleModelAmica)
-    if myAmica.m == 1
-        return size(myAmica.source_signals, 3)
+function calculate_sumz(z::AbstractArray{T,3})::AbstractArray{T,2} where {T<:Real}
+    (m, n, N) = size(z)
+
+    if m == 1
+        return ones(m, n) * N
     else
-        return sum(myAmica.z, dims=3)
+        sumz = sum(z, dims=3)[:, :, 1]
+        sumz[sumz.<0] .= 1
+
+        return sumz
     end
 end
 
@@ -65,22 +70,30 @@ function calculate_z!(myAmica::MultiModelAmica, i, j, h)
 end
 
 #Updates the Gaussian mixture location parameter. Todo: merge again with MultiModel version
-function update_location(myAmica::SingleModelAmica, shape, zfp, y, location, scale, kp)
-    m = myAmica.m
-    if shape <= 2
-        if (m > 1)
-            dm = sum(zfp ./ y)
-            if dm > 0
-                return location + (1 / sqrt(scale)) * sum(zfp) / dm
+function update_location!(location::AbstractArray{T,2}, shape::AbstractArray{T,2}, zfp::AbstractArray{T,3}, y::AbstractArray{T,3}, scale::AbstractArray{T,2}, kp::AbstractArray{T,2}) where {T<:Real}
+
+    (m, n, _) = size(y)
+
+    if m <= 1
+        return
+    end
+
+    dm = sum(zfp ./ y, dims=3)[:, :, 1]
+    sum_zfp = sum(zfp, dims=3)[:, :, 1]
+
+    for i in 1:n
+        for j in 1:m
+            if shape[j, i] <= 2
+                if dm[j, i] > 0
+                    location[j, i] += (1 / sqrt(scale[j, i])) * sum_zfp[j, i] / dm[j, i]
+                end
+            elseif kp > 0
+                location[j, i] += sqrt(scale[j, i]) * sum_zfp[j, i] / kp[j, i]
             end
         end
-    else
-        if (m > 1) && kp > 0
-            return location + sqrt(scale) * sum(zfp) / kp
-        end
     end
-    return location
 end
+
 
 function update_location(myAmica::MultiModelAmica, shape, zfp, y, location, scale, kp)
     if shape <= 2
@@ -97,18 +110,17 @@ function update_location(myAmica::MultiModelAmica, shape, zfp, y, location, scal
 end
 
 #Updates the Gaussian mixture scale parameter
-function update_scale(zfp, y, scale, z, shape)
-    if shape <= 2
-        db = sum(zfp .* y)
-        #@show db
-        if db > 0
-            scale = scale ./ db
-        end
-    else
-        db = (shape .* sum(z .* abs.(y) .^ shape)) .^ (.-2 ./ shape)
-        scale = scale .* db
-    end
-    return scale
+@views function update_scale!(scale::AbstractArray{T,2}, zfp::AbstractArray{T,3}, y::AbstractArray{T,3}, z::AbstractArray{T,3}, shape::AbstractArray{T,2}) where {T<:Real}
+    a = shape .<= 2
+    b = .!a
+
+    db_a = sum(zfp[a, :] .* y[a, :], dims=2)[:, 1]
+    db_b = (shape[b] .* sum(z[b, :] .* abs.(y[b, :]) .^ shape[b], dims=2)[:, 1]) .^ (.-2 ./ shape[b])
+
+    db_a[db_a.<=0] .= 1
+
+    scale[a] ./= db_a
+    scale[b] .*= db_b
 end
 
 #Sets the initial value for the shape parameter of the GeneralizedGaussians for each Model
@@ -167,84 +179,43 @@ end
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
 #Todo: Save g, kappa, lambda in structure, remove return
 @views function update_parameters!(myAmica::SingleModelAmica{T,ncomps,nmix}, shapelrate::LearningRate, upd_shape::Bool) where {T,ncomps,nmix}
-    gg = myAmica.learnedParameters
     (m, n, N) = size(myAmica.y)
 
-    g = zeros(T, n, N)
+    gg = myAmica.learnedParameters
+
     kappa = zeros(T, n, 1)
-    zfp = zeros(T, m, N)
 
-    # update 
-    # - myAmica.learnedParameters.proportions 
-    # - myAmica.z
+    sumz = calculate_sumz(myAmica.z)
 
-    # this has to run because calculate_u updates z
-
-    # depends on 
-    # - myAmica.z
-    # - myAmica.source_signals
-    sumz = calculate_sumz(myAmica)
     if m > 0
-        sumz[sumz.<0] .= 1
         myAmica.z ./= sumz
     end
 
-    # update mixture proportions
-    if myAmica.m > 1
+    if m > 1
         myAmica.learnedParameters.proportions = sumz ./ N
     end
 
-    # update 
-    # - fp
-    # - zfp
-    # - g
-    # - kp
-    # - kappa
-    # - lambda
-    # - mu
+    ffun!(myAmica.fp, myAmica.y, gg.shape)
+    myAmica.zfp .= myAmica.z .* myAmica.fp
+    myAmica.g .= sum(gg.proportions .* sqrt.(gg.scale) .* myAmica.zfp, dims=1)[1, :, :]
+    kp = gg.scale .* sum(myAmica.zfp .* myAmica.fp, dims=3)[:, :, 1]
+    myAmica.lambda .+= sum(gg.proportions .* (sum(myAmica.z .* (myAmica.fp .* myAmica.y .- 1) .^ 2, dims=3)[:, :, 1] .+ gg.location .^ 2 .* kp), dims=1)[1, :]
 
-    # depends on 
-    # - myAmica.y
-    # - myAmica.z
-    # - rho
-    # - alpha
-    # - beta
-    # - mu
-    kp = similar(gg.shape)
 
-    updated_location = Array(similar(gg.shape)) # convert from StaticMatrix to Mutable
-    updated_scale = Array(similar(gg.shape))
-
-    fp = Vector{T}(undef, N)
     for i in 1:n
         for j in 1:m
-            #@show size(fp), size(myAmica.y)
-            ffun!(fp, myAmica.y[j, i, :], gg.shape[j, i])
-            zfp[j, :] .= myAmica.z[j, i, :] .* fp
-            g[i, :] .+= gg.proportions[j, i] .* sqrt(gg.scale[j, i]) .* zfp[j, :]
+            _kp = kp[j, i]
 
-
-            kp[j, i] = gg.scale[j, i] .* sum(zfp[j, :] .* fp)
-
-            kappa[i] += gg.proportions[j, i] * kp[j, i]
-
-            myAmica.lambda[i] += gg.proportions[j, i] * (sum(myAmica.z[j, i, :] .* (fp .* myAmica.y[j, i, :] .- 1) .^ 2) + gg.location[j, i]^2 * kp[j, i])
-            @debug fp[1], zfp[j, 1], g[i, 1], gg.proportions[j, i], gg.scale[j, i], kp[j, i], kappa[i]
-            updated_location[j, i] = update_location(myAmica, gg.shape[j, i], zfp[j, :], myAmica.y[j, i, :], gg.location[j, i], gg.scale[j, i], kp[j, i])
-
-            @debug :zfp, zfp[j, 1], :y, myAmica.y[j, i, 1], :z, myAmica.z[j, i, 1]
-
-            updated_scale[j, i] = update_scale(zfp[j, :], myAmica.y[j, i, :], gg.scale[j, i], myAmica.z[j, i, :], gg.shape[j, i])
+            kappa[i] += gg.proportions[j, i] * _kp
         end
     end
 
-    #mu = update_location(myAmica,rho,zfp,mu,beta,kp)
-
-
+    update_location!(gg.location, gg.shape, myAmica.zfp, myAmica.y, gg.scale, kp)
+    update_scale!(gg.scale, myAmica.zfp, myAmica.y, myAmica.z, gg.shape)
 
     # update rho
     # depends on rho, zfp, myAmica.y, mu, beta
-    if upd_shape == 1
+    if upd_shape
         dr = sum(myAmica.z .* optimized_log(myAmica.y_rho) .* myAmica.y_rho, dims=3)
         updated_shape = Array(similar(gg.shape))
         for i in 1:n
@@ -254,13 +225,7 @@ end
         end
     end
 
-
-    #myAmica.learnedParameters.proportions = alpha
-    myAmica.learnedParameters.scale = updated_scale
-    myAmica.learnedParameters.location = updated_location
-    myAmica.learnedParameters.shape = updated_shape
-
-    return g, kappa
+    return myAmica.g, kappa
 end
 
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.

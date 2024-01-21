@@ -38,18 +38,29 @@ function logpfun(rho, y_rho)
     return .-y_rho .- log(2) .- loggamma(1 + 1 / rho)
 end
 
+function ffun!(fp::AbstractArray{T,3}, y::AbstractArray{T,3}, rho::AbstractArray{T,2}) where {T<:Real}
+    (m, n, N) = size(y)
 
-#taken from amica_a.m
-@views function ffun(x::AbstractArray{T,1}, rho::T) where {T<:Real}
-    return @inbounds copysign.(optimized_pow(abs.(x), rho - 1), x) .* rho
-end
+    fp .= abs.(y)
 
-function ffun!(fp::AbstractArray{T,1}, x::AbstractArray{T,1}, rho::T) where {T<:Real}
-    optimized_pow!(fp, abs.(x), rho - 1)
-    fp .*= sign.(x) .* rho
+    for i in 1:n
+        for j in 1:m
+            @views _fp = fp[j, i, :]
+            @views optimized_pow!(_fp, _fp, rho[j, i] - 1)
+        end
+    end
+
+    fp .*= sign.(y) .* rho
 end
 
 # intelvectormath Pow
+
+function optimized_pow(lhs::AbstractArray{T,1}, rhs::T)::AbstractArray{T,1} where {T<:Real}
+    out = similar(lhs)
+    optimized_pow!(out, lhs, rhs)
+    return out
+end
+
 
 function optimized_pow(lhs::AbstractArray{T,1}, rhs::T)::AbstractArray{T,1} where {T<:Real}
     out = similar(lhs)
