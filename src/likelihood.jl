@@ -25,8 +25,8 @@ end
 
 #Update loop for Lt and u (which is saved in z). Todo: Rename
 function loopiloop!(myAmica::SingleModelAmica{T,ncomps,nmix}) where {T,ncomps,nmix}
-    N = size(myAmica.source_signals, 2)
-    n = size(myAmica.source_signals, 1)
+    (m, n, N) = size(myAmica.y)
+
     Q = Array{T}(undef, nmix, N)
     gg = myAmica.learnedParameters
 

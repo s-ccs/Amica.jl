@@ -1,8 +1,8 @@
 mutable struct GGParameters{T,ncomps,nmix}
-    proportions::SMatrix{nmix,ncomps,T} #source density mixture proportions
-    scale::SMatrix{nmix,ncomps,T} #source density inverse scale parameter
-    location::SMatrix{nmix,ncomps,T} #source density location parameter
-    shape::SMatrix{nmix,ncomps,T} #source density shape paramters
+    proportions::Array{T,2} #source density mixture proportions
+    scale::Array{T,2} #source density inverse scale parameter
+    location::Array{T,2} #source density location parameter
+    shape::Array{T,2} #source density shape paramters
 end
 
 
@@ -26,6 +26,10 @@ mutable struct SingleModelAmica{T,ncomps,nmix} <: AbstractAmica
     # precalculated abs(y)^rho
     y_rho::Array{T,3}
     lambda::Array{T,1}
+    fp::Array{T,3}
+    # z * fp
+    zfp::Array{T,3}
+    g::Array{T,2}
 end
 
 
@@ -97,6 +101,10 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, l
     ldet = 0.0
     source_signals = zeros(T, n, N)
     lambda = zeros(T, n)
+    fp = zeros(T, m, n, N)
+    zfp = zeros(T, m, n, N)
+    g = zeros(T, n, N)
+
 
     return SingleModelAmica{T,ncomps,nmix}(
         source_signals,
@@ -112,7 +120,10 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, l
         ldet,
         maxiter,
         y_rho,
-        lambda
+        lambda,
+        fp,
+        zfp,
+        g
     )
 end
 
