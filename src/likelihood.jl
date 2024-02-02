@@ -58,6 +58,7 @@ end
     (m, n, N) = size(z)
 
     if (m <= 1)
+        z .= 1 ./ z
         return
     end
 
