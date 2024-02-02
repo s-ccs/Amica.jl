@@ -312,8 +312,9 @@ function update_sources!(myAmica::SingleModelAmica, data)
     #myAmica.source_signals .= myAmica.A \ data#
     #myAmica.source_signals .= myAmica.A \ data#
     #ldiv!(myAmica.source_signals,myAmica.A,data)
-
-    myAmica.source_signals = pinv(myAmica.A) * data
+    #lu!(myAmica.A)
+    LinearAlgebra.ldiv!(myAmica.source_signals, LinearAlgebra.qr(Matrix(myAmica.A)), data)
+    #myAmica.source_signals = pinv(myAmica.A) * data
 end
 
 function update_sources!(myAmica::MultiModelAmica, data)
