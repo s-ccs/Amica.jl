@@ -30,6 +30,7 @@ mutable struct SingleModelAmica{T,ncomps,nmix} <: AbstractAmica
     # z * fp
     zfp::Array{T,3}
     g::Array{T,2}
+    Q::Array{T,3}
 end
 
 
@@ -103,6 +104,7 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, l
     lambda = zeros(T, n)
     fp = zeros(T, m, n, N)
     zfp = zeros(T, m, n, N)
+    Q = zeros(T, m, n, N)
     g = zeros(T, n, N)
 
 
@@ -123,7 +125,8 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, l
         lambda,
         fp,
         zfp,
-        g
+        g,
+        Q
     )
 end
 
