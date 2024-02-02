@@ -5,3 +5,4 @@
 /docs/build/
 /.CondaPkg/
 .DS_Store
+*.mem
