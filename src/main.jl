@@ -69,7 +69,7 @@ function amica!(myAmica::AbstractAmica,
 
         @debug :y, myAmica.y[1, 1:3, 1]
         # pre-calculate abs(y)^rho
-        myAmica.y_rho .= abs.(myAmica.y)
+        IVM.abs!(myAmica.y_rho, myAmica.y)
         for i in 1:n
             for j in 1:m
                 @views _y_rho = myAmica.y_rho[j, i, :]
