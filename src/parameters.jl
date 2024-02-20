@@ -71,13 +71,18 @@ end
 
 #Updates the Gaussian mixture location parameter. Todo: merge again with MultiModel version
 function update_location!(location::AbstractArray{T,2}, shape::AbstractArray{T,2}, zfp::AbstractArray{T,3}, y::AbstractArray{T,3}, scale::AbstractArray{T,2}, kp::AbstractArray{T,2}) where {T<:Real}
-    (m, _, _) = size(y)
+    (m, n, N) = size(y)
 
     if m <= 1
         return
     end
 
-    dm = sum(zfp ./ y, dims=3)[:, :, 1]
+    dm = zeros(T, m, n)
+
+    for k = 1:N, i = 1:n, j = 1:m
+        @inbounds dm[j, i] += zfp[j, i, k] / y[j, i, k]
+    end
+
     sum_zfp = sum(zfp, dims=3)[:, :, 1]
 
     dm[dm.<=0] .= 1
@@ -105,17 +110,28 @@ function update_location(myAmica::MultiModelAmica, shape, zfp, y, location, scal
 end
 
 #Updates the Gaussian mixture scale parameter
-@views function update_scale!(scale::AbstractArray{T,2}, zfp::AbstractArray{T,3}, y::AbstractArray{T,3}, z::AbstractArray{T,3}, shape::AbstractArray{T,2}) where {T<:Real}
-    a = shape .<= 2
-    b = .!a
+@views function update_scale!(scale::AbstractArray{T,2}, zfp::AbstractArray{T,3}, y::AbstractArray{T,3}, z::AbstractArray{T,3}, shape::AbstractArray{T,2}, y_rho::AbstractArray{T,3}) where {T<:Real}
+    (m, n, N) = size(y)
 
-    db_a = sum(zfp[a, :] .* y[a, :], dims=2)[:, 1]
-    db_b = (shape[b] .* sum(z[b, :] .* abs.(y[b, :]) .^ shape[b], dims=2)[:, 1]) .^ (.-2 ./ shape[b])
+    db = zeros(T, m, n)
 
-    db_a[db_a.<=0] .= 1
+    @inbounds for k = 1:N, i = 1:n, j = 1:m
+        if shape[j, i] <= 2
+            db[j, i] += zfp[j, i, k] * y[j, i, k]
+        else
+            db[j, i] += z[j, i, k] * y_rho[j, i, k]
+        end
+    end
 
-    scale[a] ./= db_a
-    scale[b] .*= db_b
+    @inbounds for i = 1:n, j = 1:m
+        if shape[j, i] <= 2
+            if db[j, i] >= 0
+                scale[j, i] /= db[j, i]
+            end
+        else
+            db[j, i] *= shape[j, i] * db[j, i]^(-2 / shape[j, i])
+        end
+    end
 end
 
 #Sets the initial value for the shape parameter of the GeneralizedGaussians for each Model
@@ -191,13 +207,29 @@ end
 
     ffun!(myAmica.fp, myAmica.y, gg.shape)
     myAmica.zfp .= myAmica.z .* myAmica.fp
-    myAmica.g .= sum(gg.proportions .* sqrt.(gg.scale) .* myAmica.zfp, dims=1)[1, :, :]
-    kp = gg.scale .* sum(myAmica.zfp .* myAmica.fp, dims=3)[:, :, 1]
-    myAmica.lambda .+= sum(gg.proportions .* (sum(myAmica.z .* (myAmica.fp .* myAmica.y .- 1) .^ 2, dims=3)[:, :, 1] .+ gg.location .^ 2 .* kp), dims=1)[1, :]
+
+    # calculate g
+    myAmica.g .= zero(T)
+    for k = 1:N, i = 1:n, j = 1:m
+        @inbounds myAmica.g[i, k] += gg.proportions[j, i] * sqrt(gg.scale[j, i]) * myAmica.zfp[j, i, k]
+    end
+
+    # calculate kp
+    kp = zeros(size(gg.scale))
+    for k = 1:N, i = 1:n, j = 1:m
+        @inbounds kp[j, i] += myAmica.zfp[j, i, k] * myAmica.fp[j, i, k]
+    end
+    kp .*= gg.scale
+
+    # calculate lambda
+    for k = 1:N, i = 1:n, j = 1:m
+        @inbounds myAmica.lambda[i] += gg.proportions[j, i] * ((myAmica.z[j, i, k] * (myAmica.fp[j, i, k] * myAmica.y[j, i, k])^2) + (gg.location[j, i] .^ 2 .* kp[j, i]) / N)
+    end
+
     kappa = sum(gg.proportions .* kp, dims=1)[1, :]
 
     update_location!(gg.location, gg.shape, myAmica.zfp, myAmica.y, gg.scale, kp)
-    update_scale!(gg.scale, myAmica.zfp, myAmica.y, myAmica.z, gg.shape)
+    update_scale!(gg.scale, myAmica.zfp, myAmica.y, myAmica.z, gg.shape, myAmica.y_rho)
 
 
     if upd_shape
@@ -270,9 +302,15 @@ end
 
 #Updates the Gaussian mixture shape parameter
 @views function update_shape!(shape::AbstractArray{T,2}, z::AbstractArray{T,3}, y_rho::AbstractArray{T,3}, shapelrate::LearningRate) where {T<:Real}
-    (m, n, _) = size(z)
+    (m, n, N) = size(z)
 
-    dr = sum(z .* optimized_log(y_rho) .* y_rho, dims=3)
+    dr = zeros(T, m, n)
+    log_y_rho = optimized_log(y_rho)
+
+    for k = 1:N, i = 1:n, j = 1:m
+        @inbounds dr[j, i] = z[j, i, k] * log_y_rho[j, i, k] * y_rho[j, i, k]
+    end
+
 
     for i in 1:n
         for j in 1:m

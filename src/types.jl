@@ -31,6 +31,8 @@ mutable struct SingleModelAmica{T,ncomps,nmix} <: AbstractAmica
     zfp::Array{T,3}
     g::Array{T,2}
     Q::Array{T,3}
+
+    u_intermed::Array{T,4}
 end
 
 
@@ -106,7 +108,7 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, l
     zfp = zeros(T, m, n, N)
     Q = zeros(T, m, n, N)
     g = zeros(T, n, N)
-
+    u_intermed = zeros(T, m, n, N, m)
 
     return SingleModelAmica{T,ncomps,nmix}(
         source_signals,
@@ -126,8 +128,8 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, l
         fp,
         zfp,
         g,
-        Q
-    )
+        Q,
+        u_intermed)
 end
 
 #Data type for AMICA with multiple ICA models
