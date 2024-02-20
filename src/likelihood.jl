@@ -27,7 +27,7 @@ end
 function loopiloop!(myAmica::SingleModelAmica{T}) where {T}
     gg = myAmica.learnedParameters
     calculate_Q!(myAmica.Q, gg.proportions, gg.scale, gg.shape, myAmica.y_rho)
-    calculate_u!(myAmica.z, myAmica.Q)
+    calculate_u!(myAmica.z, myAmica.Q, myAmica.u_intermed)
     calculate_Lt!(myAmica.Lt, myAmica.Q)
 
 end
@@ -54,7 +54,7 @@ function calculate_Q!(Q::AbstractArray{T,3}, proportions::AbstractArray{T,2}, sc
 end
 
 #calculates u but saves it into z. MultiModel also uses the SingleModel version
-@views function calculate_u!(z::AbstractArray{T,3}, Q::AbstractArray{T,3}) where {T<:Real}
+@views function calculate_u!(z::AbstractArray{T,3}, Q::AbstractArray{T,3}, u_intermed::AbstractArray{T,4}) where {T<:Real}
     (m, n, N) = size(z)
 
     if (m <= 1)
@@ -62,16 +62,13 @@ end
         return
     end
 
-    tmp = Array{T}(undef, n, N, m)
-
-
-    for j in 1:m
-        permutedims!(tmp, Q, (2, 3, 1))
-        tmp .-= Q[j, :, :]
-        optimized_exp!(tmp)
-
-        sum!(z[j, :, :], tmp)
+    for k = 1:N, i = 1:n, j = 1:m, j1 = 1:m
+        @inbounds u_intermed[j, i, k, j1] = Q[j1, i, k] - Q[j, i, k]
     end
+
+    optimized_exp!(u_intermed)
+
+    sum!(z, u_intermed)
 
     z .= 1 ./ z
 end
