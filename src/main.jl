@@ -24,7 +24,7 @@ function amica!(myAmica::AbstractAmica,
     newt_start_iter::Int=25,
     iterwin::Int=10,
     update_shape::Bool=true,
-    mindll::T=1e-8, kwargs...) where {T<:Real}
+    mindll::T=T(1e-8), kwargs...) where {T<:Real}
 
     initialize_shape_parameter!(myAmica, shapelrate)
 
