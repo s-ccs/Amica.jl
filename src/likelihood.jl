@@ -68,7 +68,9 @@ end
 
     optimized_exp!(u_intermed)
 
-    sum!(z, u_intermed)
+    for k = 1:N, i = 1:n, j = 1:m, j1 = 1:m
+        @inbounds z[j, i, k] += u_intermed[j, i, k, j1]
+    end
 
     z .= 1 ./ z
 end
