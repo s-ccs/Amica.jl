@@ -13,7 +13,7 @@ function fit!(amica::AbstractAmica, data; kwargs...)
 end
 
 function amica!(myAmica::AbstractAmica,
-    data::AbstractMatrix{T};
+    data_in::AbstractMatrix{T};
     lrate::LearningRate{T}=LearningRate{T}(),
     shapelrate::LearningRate{T}=LearningRate{T}(; lrate=0.1, minimum=0.5, maximum=5, init=1.5),
     remove_mean::Bool=true,
@@ -27,7 +27,7 @@ function amica!(myAmica::AbstractAmica,
     mindll::T=T(1e-8), kwargs...) where {T<:Real}
 
     initialize_shape_parameter!(myAmica, shapelrate)
-
+    data = deepcopy(data_in)
     (n, N) = size(data)
     m = myAmica.m
 
@@ -38,11 +38,12 @@ function amica!(myAmica::AbstractAmica,
         removed_mean = removeMean!(data)
     end
     if do_sphering
-        S = sphering!(data)
+        S = sphering_manual!(data)
         myAmica.S = S
+
         LLdetS = logabsdet(S)[1]
     else
-        myAmica.S = I
+        myAmica.S = collect(T.(I(size(data, 1))))
         LLdetS = 0
     end
 

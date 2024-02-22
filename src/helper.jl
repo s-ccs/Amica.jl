@@ -9,17 +9,20 @@ function removeMean!(input)
 end
 
 #Returns sphered data x. todo:replace with function from lib
-function sphering!(x)
+function sphering_manual!(x)
     (_, N) = size(x)
     Us, Ss = svd(x * x' / N)
+
     S = Us * diagm(vec(1 ./ sqrt.(Ss))) * Us'
     x .= S * x
+    # @show x
     return S
 end
 
-function bene_sphering(data)
-    d_memory_whiten = whitening(data) # Todo: make the dimensionality reduction optional
-    return d_memory_whiten.iF * data
+function sphering!(data)
+    d_memory_whiten = whitening(data; simple=true)
+    data .= d_memory_whiten.iF * data
+    return d_memory_whiten.iF
 end
 
 #Adds means back to model centers
