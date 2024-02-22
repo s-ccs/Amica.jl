@@ -346,12 +346,13 @@ function calculate_ldet!(myAmica::MultiModelAmica)
 end
 
 #Updates source singal estimations by unmixing the data
-function update_sources!(myAmica::SingleModelAmica, data)
+function update_sources!(myAmica::SingleModelAmica{T}, data::AbstractMatrix{T}) where {T<:Real}
     #myAmica.source_signals .= myAmica.A \ data#
     #myAmica.source_signals .= myAmica.A \ data#
     #ldiv!(myAmica.source_signals,myAmica.A,data)
     #lu!(myAmica.A)
-    LinearAlgebra.ldiv!(myAmica.source_signals, LinearAlgebra.qr(Matrix(myAmica.A)), data)
+
+    LinearAlgebra.ldiv!(myAmica.source_signals, LinearAlgebra.qr(myAmica.A), data)
     #myAmica.source_signals = pinv(myAmica.A) * data
 end
 

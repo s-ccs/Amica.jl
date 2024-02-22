@@ -12,7 +12,7 @@ mutable struct SingleModelAmica{T,ncomps,nmix} <: AbstractAmica
     source_signals::Array{T,2}
     learnedParameters::GGParameters{T,ncomps,nmix}
     m::Int    #Number of gaussians
-    A::SMatrix{ncomps,ncomps,T} # unmixing matrices for each model
+    A::Array{T,2} # unmixing matrices for each model
     S::Array{T,2} # sphering matrix
     z::Array{T,3}
     y::Array{T,3}
