@@ -4,3 +4,5 @@
 /Manifest.toml
 /docs/build/
 /.CondaPkg/
+.DS_Store
+*.mem
