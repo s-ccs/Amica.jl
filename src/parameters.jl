@@ -215,7 +215,7 @@ end
     end
 
     # calculate kp
-    kp = zeros(size(gg.scale))
+    kp = zeros(T, size(gg.scale))
     for k = 1:N, i = 1:n, j = 1:m
         @inbounds kp[j, i] += myAmica.zfp[j, i, k] * myAmica.fp[j, i, k]
     end
