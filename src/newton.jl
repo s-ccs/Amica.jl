@@ -1,5 +1,5 @@
 #Updates the mixing matrix with the newton method
-function newton_method!(myAmica::SingleModelAmica{T}, iter::Int, g, kappa, do_newton::Bool, newt_start_iter::Int, lrate::LearningRate, lambda::AbstractArray{T,1}) where {T<:Real}
+function newton_method!(myAmica::Union{<:CuSingleModelAmica{T},<:SingleModelAmica{T}}, iter::Int, g, kappa, do_newton::Bool, newt_start_iter::Int, lrate::LearningRate, lambda::AbstractArray{T,1}) where {T<:Real}
 
     lnatrate = lrate.natural_rate
     lrate = lrate.lrate
@@ -7,9 +7,9 @@ function newton_method!(myAmica::SingleModelAmica{T}, iter::Int, g, kappa, do_ne
 
     sigma2 = sum(myAmica.source_signals .^ 2, dims=2) / N #is probably called sigma2 cause always squared
 
-    dA = Matrix{Float64}(I, n, n) - g * myAmica.source_signals'
+    dA = I - g * myAmica.source_signals'
     bflag = false
-    B = zeros(n, n)
+    B = zeros(T, n, n)
 
     for i in 1:n
         for k = 1:n

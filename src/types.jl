@@ -173,13 +173,13 @@ end
 
 
 # import Base.getproperty
-#  Base.getproperty(x::AbstractAmica, s::Symbol) = Base.getproperty(x, Val(s))
-#  Base.getproperty(x::AbstractAmica, ::Val{s}) where s = getfield(x, s)
+#  Base.getproperty(x<:AbstractAmica, s::Symbol) = Base.getproperty(x, Val(s))
+#  Base.getproperty(x<:AbstractAmica, ::Val{s}) where s = getfield(x, s)
 
-#  Base.getproperty(m::AbstractAmica, ::Val{:N}) = size(m.Lt,1)
-#  Base.getproperty(m::AbstractAmica, ::Val{:n}) = size(m.A,1)
+#  Base.getproperty(m<:AbstractAmica, ::Val{:N}) = size(m.Lt,1)
+#  Base.getproperty(m<:AbstractAmica, ::Val{:n}) = size(m.A,1)
 #  Base.getproperty(m::MultiModelAmica, ::Val{:M}) = length(m.models)
-#  Base.getproperty(m::SingleModelAmica, ::Val{:M}) = 1
+#  Base.getproperty(m<:AbstractAmica, ::Val{:M}) = 1
 
 
 # function Base.getproperty(multiModel::MultiModelAmica, prop::Symbol)

@@ -13,9 +13,14 @@ using StaticArrays
 #using ComponentArrays
 using Diagonalizations
 using LogExpFunctions
+using CUDA
+import CUDA: CuArray
+using Tullio
+
 #using MultivariateStats
 #using StatsAPI
 include("types.jl")
+include("types_gpu.jl")
 include("helper.jl")
 include("likelihood.jl")
 include("parameters.jl")
@@ -24,12 +29,12 @@ include("main.jl")
 
 export amica!
 export fit, fit!
-export AbstractAmica, MultiModelAmica, SingleModelAmica
+export AbstractAmica, MultiModelAmica, SingleModelAmica, CuSingleModelAmica
 
 
 import Base.show
 
-function Base.show(io::Core.IO, m::SingleModelAmica)
+function Base.show(io::Core.IO, m::Union{CuSingleModelAmica,SingleModelAmica})
     try
         ix = findlast(.!isnan.(m.LL))
         @show ix

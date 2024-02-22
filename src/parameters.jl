@@ -1,8 +1,11 @@
 #Normalizes source density location parameter (mu), scale parameter (beta) and model centers
-function reparameterize!(myAmica::SingleModelAmica, data)
+function reparameterize!(myAmica, data)
 
     tau = norm.(eachcol(myAmica.A))
-    @debug size(tau) tau
+    if myAmica.A isa CuArray
+        tau = CuVector(tau)
+    end
+    @debug typeof(tau), size(tau), typeof(tau')
     myAmica.A = myAmica.A ./ tau'
     myAmica.learnedParameters.location = myAmica.learnedParameters.location .* tau'
     myAmica.learnedParameters.scale = myAmica.learnedParameters.scale ./ tau' .^ 2
@@ -77,7 +80,8 @@ function update_location!(location::AbstractArray{T,2}, shape::AbstractArray{T,2
         return
     end
 
-    dm = zeros(T, m, n)
+    dm = zeros(T, m, n) |> typeof(location)
+
 
     for k = 1:N, i = 1:n, j = 1:m
         @inbounds dm[j, i] += zfp[j, i, k] / y[j, i, k]
@@ -89,7 +93,7 @@ function update_location!(location::AbstractArray{T,2}, shape::AbstractArray{T,2
 
     a = shape .<= 2
     b = .!a .&& kp .> 0
-
+    @debug typeof(scale) typeof(a) typeof(sum_zfp) typeof(dm)
     location[a] .+= (1 ./ sqrt.(scale[a])) .* sum_zfp[a] ./ dm[a]
     location[b] .+= sqrt.(scale[b]) .* sum_zfp[b] ./ kp[b]
 end
@@ -135,7 +139,7 @@ end
 end
 
 #Sets the initial value for the shape parameter of the GeneralizedGaussians for each Model
-function initialize_shape_parameter!(myAmica::SingleModelAmica, shapelrate::LearningRate)
+function initialize_shape_parameter!(myAmica, shapelrate::LearningRate)
     myAmica.learnedParameters.shape = shapelrate.init .* myAmica.learnedParameters.shape
 end
 
@@ -144,7 +148,7 @@ function initialize_shape_parameter!(myAmica::MultiModelAmica, shapelrate::Learn
 end
 
 #Updates Gaussian mixture Parameters and mixing matrix. todo: rename since its not a loop for single model
-function update_loop!(myAmica::SingleModelAmica{T}, shapelrate::LearningRate{T}, update_shape::Bool, iter::Int, do_newton::Bool, newt_start_iter::Int, lrate::LearningRate{T}) where {T<:Real}
+function update_loop!(myAmica::AbstractAmica, shapelrate::LearningRate, update_shape::Bool, iter::Int, do_newton::Bool, newt_start_iter::Int, lrate::LearningRate)
     #Update parameters
     g, kappa = update_parameters!(myAmica, shapelrate, update_shape)
     #Checks for NaN in parameters before updating the mixing matrix
@@ -189,7 +193,7 @@ end
 
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
 #Todo: Save g, kappa, lambda in structure, remove return
-@views function update_parameters!(myAmica::SingleModelAmica{T,ncomps,nmix}, shapelrate::LearningRate, upd_shape::Bool) where {T,ncomps,nmix}
+@views function update_parameters!(myAmica::Union{SingleModelAmica{T,ncomps,nmix},CuSingleModelAmica{T,ncomps,nmix}}, shapelrate::LearningRate, upd_shape::Bool) where {T,ncomps,nmix}
     (m, n, N) = size(myAmica.y)
 
     gg = myAmica.learnedParameters
@@ -215,7 +219,8 @@ end
     end
 
     # calculate kp
-    kp = zeros(T, size(gg.scale))
+    #kp = zeros(T, size(gg.scale))
+    kp = similar(gg.scale)
     for k = 1:N, i = 1:n, j = 1:m
         @inbounds kp[j, i] += myAmica.zfp[j, i, k] * myAmica.fp[j, i, k]
     end
@@ -333,7 +338,7 @@ end
 end
 
 #Calculates determinant of mixing Matrix A (with log). first log-likelihood part of L = |A| * p(sources)
-function calculate_ldet!(myAmica::SingleModelAmica)
+function calculate_ldet!(myAmica)
     #myAmica.ldet = -log(abs(det(myAmica.A)))
     myAmica.ldet = -logabsdet(myAmica.A)[1]
     @debug :ldet myAmica.ldet
@@ -345,8 +350,12 @@ function calculate_ldet!(myAmica::MultiModelAmica)
     end
 end
 
+
+function update_sources!(myAmica::CuSingleModelAmica, data)
+    myAmica.source_signals .= pinv(myAmica.A) * data
+end
 #Updates source singal estimations by unmixing the data
-function update_sources!(myAmica::SingleModelAmica{T}, data::AbstractMatrix{T}) where {T<:Real}
+function update_sources!(myAmica, data)
     #myAmica.source_signals .= myAmica.A \ data#
     #myAmica.source_signals .= myAmica.A \ data#
     #ldiv!(myAmica.source_signals,myAmica.A,data)

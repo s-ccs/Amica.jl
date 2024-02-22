@@ -1,5 +1,5 @@
 #Calculates log-likelihood for whole model. todo: make the calculate LLs one function
-function calculate_LL!(myAmica::SingleModelAmica)
+function calculate_LL!(myAmica::AbstractAmica)
     (n, N) = size(myAmica.source_signals)
     push!(myAmica.LL, sum(myAmica.Lt) / (n * N))
 end
@@ -24,7 +24,7 @@ function calculate_LL!(myAmica::MultiModelAmica)
 end
 
 #Update loop for Lt and u (which is saved in z). Todo: Rename
-function loopiloop!(myAmica::SingleModelAmica{T}) where {T}
+function loopiloop!(myAmica)
     gg = myAmica.learnedParameters
     calculate_Q!(myAmica.Q, gg.proportions, gg.scale, gg.shape, myAmica.y_rho)
     calculate_u!(myAmica.z, myAmica.Q, myAmica.u_intermed)
@@ -62,12 +62,14 @@ end
         return
     end
 
+    #@tullio u_intermed[j, i, k, j1] := Q[j1, i, k] - Q[j, i, k]
     for k = 1:N, i = 1:n, j = 1:m, j1 = 1:m
         @inbounds u_intermed[j, i, k, j1] = Q[j1, i, k] - Q[j, i, k]
     end
 
     optimized_exp!(u_intermed)
 
+    #@tullio z[j, i, k] := u_intermed[j, i, k, j1]
     for k = 1:N, i = 1:n, j = 1:m, j1 = 1:m
         @inbounds z[j, i, k] += u_intermed[j, i, k, j1]
     end
@@ -76,7 +78,7 @@ end
 end
 
 #Applies location and scale parameter to source signals (per generalized Gaussian)
-@views function calculate_y!(myAmica::SingleModelAmica)
+@views function calculate_y!(myAmica::AbstractAmica)
     for j in 1:myAmica.m
         myAmica.y[j, :, :] .= sqrt.(myAmica.learnedParameters.scale[j, :]) .* (myAmica.source_signals .- myAmica.learnedParameters.location[j, :])
     end
@@ -87,7 +89,7 @@ function calculate_y!(myAmica::MultiModelAmica)
 end
 
 #Calculates Likelihood for each time sample and for each ICA model
-function calculate_Lt!(Lt::Array{T,1}, Q::Array{T,3}) where {T<:Real}
+function calculate_Lt!(Lt::AbstractArray{T,1}, Q::AbstractArray{T,3}) where {T<:Real}
     (m, _, _) = size(Q)
 
     if m > 1
@@ -98,7 +100,7 @@ function calculate_Lt!(Lt::Array{T,1}, Q::Array{T,3}) where {T<:Real}
 end
 
 #Initializes the likelihoods for each time sample with the determinant of the mixing matrix
-function initialize_Lt!(myAmica::SingleModelAmica)
+function initialize_Lt!(myAmica)
     myAmica.Lt .= myAmica.ldet
 end
 

@@ -1,3 +1,4 @@
+using MATLAB: mxSINGLE_CLASS
 ENV["MATLAB_ROOT"] = "/opt/common/apps/matlab/r2021a/"
 using Revise
 
@@ -39,10 +40,11 @@ fit!(am, x; do_sphering=true)
 
 #---
 fLL = reinterpret(Float64, (read("amicaout/LL")))
-scatter(vec(@mget(mLL)))
-scatter!(am32.LL)
-scatter!(fLL)
-ylims!(-1, 0)
+scatter(vec(@mget(mLL)), label="matlab")
+scatter!(am.LL, label="julia")
+scatter!(fLL, label="fortran")
+ylims!(-2, 0)
+axislegend()
 current_figure()
 
 #---
@@ -52,7 +54,7 @@ fS = reshape(reinterpret(Float64, (read("amicaout/S"))), n_chan, n_chan)
 
 f2 = Figure()#size=(800, 800))
 #series(f2[1, 1], (inv(a.A) * x), axis=(; title="unmixed julia64"))
-series(f2[end+1, 1], inv(am32.A) * am.S * x[:, 1:100], axis=(; title="unmixed julia32"))
+series(f2[end+1, 1], inv(am.A) * am.S * x[:, 1:100], axis=(; title="unmixed julia32"))
 #series(f2[end+1, 1], inv(mA) * x, axis=(; title="unmixed matlab"))
 #series(f2[end+1, 1], inv(mAopt) * x, axis=(; title="unmixed matlab_optimizd"))
 series(f2[end+1, 1], (inv(fA)*fS*x)[:, 1:100], axis=(; title="unmixed fortran"))
@@ -60,3 +62,23 @@ series(f2[end+1, 1], s[:, 1:100], axis=(; title="original source"))
 series(f2[end+1, 1], x[:, 1:100], axis=(; title="original mixed"))
 hidedecorations!.(f2.content)
 f2
+
+#---
+xc = Amica.CuArray(Float32.(x))
+amc = Amica.fit(CuSingleModelAmica, xc; maxiter=3)
+
+
+#---
+import IntelVectorMath as IVM
+function A(myAmica)
+    IVM.abs!(myAmica.y_rho, myAmica.y)
+    for i in 1:size(myAmica.y_rho, 2)
+        for j in 1:size(myAmica.y_rho, 1)
+            @views _y_rho = myAmica.y_rho[j, i, :]
+            Amica.optimized_pow!(_y_rho, _y_rho, myAmica.learnedParameters.shape[j, i])
+        end
+    end
+
+end
+
+CUDA.@profile A(amc)

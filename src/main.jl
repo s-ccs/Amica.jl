@@ -53,24 +53,26 @@ function amica!(myAmica::AbstractAmica,
 
     for iter in 1:maxiter
         gg = myAmica.learnedParameters
-        @debug :scale, gg.scale[2], :location, gg.location[2], :proportions, gg.proportions[2], :shape, gg.shape[2]
-        @debug println("")
+        #@debug :scale, gg.scale[2], :location, gg.location[2], :proportions, gg.proportions[2], :shape, gg.shape[2]
+        #@debug println("")
         #E-step
         #@show typeof(myAmica.A),typeof(data)
-        @debug :A myAmica.A[1:2, 1:2]
+        #@debug :A myAmica.A[1:2, 1:2]
 
-        @debug :source_signals myAmica.source_signals[1], myAmica.source_signals[end]
+        #@debug :source_signals myAmica.source_signals[1], myAmica.source_signals[end]
         update_sources!(myAmica, data)
-        @debug :source_signals myAmica.source_signals[1], myAmica.source_signals[end]
+        #@debug :source_signals myAmica.source_signals[1], myAmica.source_signals[end]
         calculate_ldet!(myAmica)
         initialize_Lt!(myAmica)
         myAmica.Lt .+= LLdetS
 
         calculate_y!(myAmica)
 
-        @debug :y, myAmica.y[1, 1:3, 1]
+        #@debug :y, myAmica.y[1, 1:3, 1]
         # pre-calculate abs(y)^rho
-        IVM.abs!(myAmica.y_rho, myAmica.y)
+
+        optimized_abs!(myAmica)
+
         for i in 1:n
             for j in 1:m
                 @views _y_rho = myAmica.y_rho[j, i, :]
@@ -86,7 +88,7 @@ function amica!(myAmica::AbstractAmica,
         calculate_LL!(myAmica)
 
 
-        @debug (:LL, myAmica.LL)
+        #@debug (:LL, myAmica.LL)
         #Calculate difference in loglikelihood between iterations
         if iter > 1
             dLL[iter] = myAmica.LL[iter] - myAmica.LL[iter-1]
@@ -115,11 +117,11 @@ function amica!(myAmica::AbstractAmica,
                 rethrow()
             end
         end
-        @debug iter, :A myAmica.A[1:2, 1:2]
+        #@debug iter, :A myAmica.A[1:2, 1:2]
 
         reparameterize!(myAmica, data)
 
-        @debug iter, :A myAmica.A[1:2, 1:2]
+        #@debug iter, :A myAmica.A[1:2, 1:2]
         #Shows current progress
         show_progress && ProgressMeter.next!(prog; showvalues=[(:LL, myAmica.LL[iter])])
 
