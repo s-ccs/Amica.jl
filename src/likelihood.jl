@@ -24,96 +24,67 @@ function calculate_LL!(myAmica::MultiModelAmica)
 end
 
 #Update loop for Lt and u (which is saved in z). Todo: Rename
-function loopiloop(myAmica::SingleModelAmica)
-	(n,N) = size(myAmica.source_signals)
-	m = myAmica.m
-	Q = zeros(m,N)
-	@debug (:prop,myAmica.learnedParameters.proportions[1,1],:shape,myAmica.learnedParameters.shape[1],:y,myAmica.y[1])
+function loopiloop!(myAmica::SingleModelAmica, y_rho)
+	(n,_) = size(myAmica.source_signals)
+	
 	for i in 1:n
-		Q = calculate_Q(myAmica,Q,i) # myAmica.Q
+		Q = calculate_Q(myAmica,i, y_rho) # myAmica.Q
 		calculate_u!(myAmica,Q,i) # myAmica.z
-		@debug (:z,myAmica.z[1,1:5,1])
 		calculate_Lt!(myAmica,Q) # myAmica.Q
 	end
-	@debug (:Q,Q[1,1])
 end
 
-function loopiloop(myAmica::MultiModelAmica)
+function loopiloop!(myAmica::MultiModelAmica, y_rho)
 	M = size(myAmica.models,1)
-	(n,N) = size(myAmica.models[1].source_signals)
-	m = myAmica.m
-	Q = zeros(m,N)
+	(n,_) = size(myAmica.models[1].source_signals)
 
 	for h in 1:M #run along models
 		Threads.@threads for i in 1:n #run along components
-			#uses SingleModel versions of functions
-			Q = calculate_Q(myAmica.models[h],Q,i)
-			calculate_u!(myAmica.models[h],Q,i)
-			calculate_Lt!(myAmica.models[h],Q)
+			Q = calculate_Q(myAmica.models[h], i, y_rho)
+			calculate_u!(myAmica.models[h], @view(Q[:, n, :]),i)
+			calculate_Lt!(myAmica.models[h], @view(Q[:, n, :]))
+		end
+	end
+end
+
+@views function calculate_Q(myAmica::SingleModelAmica, i, y_rho)
+	(n,N) = size(myAmica.source_signals)
+	m = myAmica.m
+	Q = zeros(m,N)
+	
+	for j in 1:m
+		Q[j,:] .= log(myAmica.learnedParameters.proportions[j,i]) + 0.5 * log(myAmica.learnedParameters.scale[j,i]) .+ logpfun(myAmica.learnedParameters.shape[j,i], y_rho[i, :, j])
+	end
+
+	return Q
+end
+
+#calculates u but saves it into z. MultiModel also uses the SingleModel version
+@views function calculate_u!(myAmica::SingleModelAmica, Q, i)
+	m = size(myAmica.learnedParameters.scale,1)
+	if m > 1
+		for j in 1:m
+            myAmica.z[i, :, j] .= (1 ./ sum(optimized_exp(Q .- Q[j, :]'), dims=1))[:]
 		end
 	end
 end
 
 #Applies location and scale parameter to source signals (per generalized Gaussian)
-function calculate_y!(myAmica::SingleModelAmica)
-	n = size(myAmica.A,1)
-	Threads.@threads for i in 1:n
-		for j in 1:myAmica.m
-			myAmica.y[i,:,j] = sqrt(myAmica.learnedParameters.scale[j,i]) * (myAmica.source_signals[i,:] .- myAmica.learnedParameters.location[j,i])
-		end
-	end
-end
-
-function calculate_y!(myAmica::MultiModelAmica)
-	n = size(myAmica.models[1].A,1)
-	for h in 1:size(myAmica.models,1)
-		#=Threads.@threads=# for i in 1:n
-			for j in 1:myAmica.m
-				myAmica.models[h].y[i,:,j] = sqrt(myAmica.models[h].learnedParameters.scale[j,i]) * (myAmica.models[h].source_signals[i,:] .- myAmica.models[h].learnedParameters.location[j,i])
+@views function calculate_y!(myAmica::SingleModelAmica)
+	#for j in 1:myAmica.m
+	#	myAmica.y[:,:,j] .= sqrt.(myAmica.learnedParameters.scale[j,:]) .* (myAmica.source_signals .- myAmica.learnedParameters.location[j,:])
+	#end
+	for j in 1:myAmica.m
+		for k = 1: size(myAmica.m,1)
+			for i = 1:size(myAmica.m,2)
+				myAmica.y[k,i,j] = sqrt(myAmica.learnedParameters.scale[j,k]) * (myAmica.source_signals[k,i] - myAmica.learnedParameters.location[j,k])
 			end
 		end
 	end
 end
 
-#calculates u but saves it into z. MultiModel also uses the SingleModel version
-function calculate_u!(myAmica::SingleModelAmica, Q, i)
-	m = size(myAmica.learnedParameters.scale,1)
-	if m > 1
-		for j in 1:m
-			Qj = ones(m,1) .* Q[j,:]'
-			myAmica.z[i,:,j] = 1 ./ sum(exp.(Q-Qj),dims = 1)
-		end
-	end
-end
-
-#no longer in use, multimodel also uses the singlemodel version (see loopiloop)
-function calculate_u!(myAmica::MultiModelAmica,Q,i,h)
-	m = myAmica.m
-	
-	if m > 1 
-		for j in 1:m
-			Qj = ones(m,1) .* Q[j,:]'
-			myAmica.models[h].z[i,:,j] = 1 ./ sum(exp.(Q-Qj),dims = 1)
-		end
-	end
-end
-
-#Calculates densities for each generalized Gaussian j. Currently used my MultiModelAmica too
-function calculate_Q(myAmica::SingleModelAmica, Q, i)
-	m = size(myAmica.learnedParameters.scale, 1) #m = number of GGs, can't use myAmica.m in case this gets used my MultiModelAmica
-
-	for j in 1:m
-		Q[j,:] = log(myAmica.learnedParameters.proportions[j,i]) + 0.5*log(myAmica.learnedParameters.scale[j,i]) .+ logpfun(myAmica.y[i,:,j],myAmica.learnedParameters.shape[j,i])
-	end
-	return Q
-end
-
-#no longer in use, Q is no longer saved in Amica object but instead in loopiloop
-function calculate_Q!(myAmica::MultiModelAmica, i, h)
-	m = myAmica.m
-	for j in 1:m
-		myAmica.Q[j,:] = log(myAmica.models[h].learnedParameters.proportions[j,i]) + 0.5*log(myAmica.models[h].learnedParameters.scale[j,i]) .+ logpfun(myAmica.models[h].y[i,:,j],myAmica.models[h].learnedParameters.shape[j,i])
-	end
+function calculate_y!(myAmica::MultiModelAmica)
+		calculate_y!.(myAmica.models[h])
 end
 
 #Calculates Likelihood for each time sample and for each ICA model

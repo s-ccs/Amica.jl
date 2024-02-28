@@ -3,8 +3,12 @@ module Amica
     using LinearAlgebra
 	using GaussianMixtures
 	using Distributions
+    using IntelVectorMath
 	using SpecialFunctions
     using ProgressMeter
+    using LoopVectorization
+    using AppleAccelerate
+
     #using ComponentArrays
     using Diagonalizations
     using LogExpFunctions
