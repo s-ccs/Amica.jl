@@ -53,18 +53,18 @@ function amica!(myAmica::AbstractAmica,
 
     for iter in 1:maxiter
 
-        # myAmica.source_signals = myAmica.A ^ -1 * data
         # [OK]
         update_sources!(myAmica, data)
 
-        # myAmica.ldet = -logabsdet(myAmica.A)[1]
         # [OK]
         calculate_ldet!(myAmica)
-        # myAmica.Lt .= myAmica.ldet
+
+        # [OK]
         initialize_Lt!(myAmica)
 
+        # [OK]
         myAmica.Lt .+= LLdetS
-        # for j in m: myAmica.y[j, :, :] .= sqrt.(myAmica.learnedParameters.scale[j, :]) .* (myAmica.source_signals .- myAmica.learnedParameters.location[j, :])
+
         # [OK]
         calculate_y!(myAmica)
 
@@ -81,15 +81,12 @@ function amica!(myAmica::AbstractAmica,
             end
         end
 
-
-
+        # [OK]
         loopiloop!(myAmica) #Updates y and Lt. Todo: Rename
 
-
+        # [OK]
         calculate_LL!(myAmica)
 
-
-        @debug (:LL, myAmica.LL)
         #Calculate difference in loglikelihood between iterations
         if iter > 1
             dLL[iter] = myAmica.LL[iter] - myAmica.LL[iter-1]

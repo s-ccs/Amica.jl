@@ -27,7 +27,7 @@ end
 function loopiloop!(myAmica::SingleModelAmica{T}) where {T}
     gg = myAmica.learnedParameters
     calculate_Q!(myAmica.Q, gg.proportions, gg.scale, gg.shape, myAmica.y_rho)
-    calculate_u!(myAmica.z, myAmica.Q, myAmica.u_intermed)
+    calculate_u!(myAmica.z, myAmica.Q)
     calculate_Lt!(myAmica.Lt, myAmica.Q)
 
 end
@@ -49,12 +49,12 @@ function calculate_Q!(Q::AbstractArray{T,3}, proportions::AbstractArray{T,2}, sc
     Q .= y_rho
     logpfun!(Q, y_rho, shape)
     # idk why but this is faster when stored in a variable?!
-    add = (log.(proportions) .+ 0.5 .* log.(scale))
+    add = (log.(proportions) .+ log.(scale))
     Q .+= add
 end
 
 #calculates u but saves it into z. MultiModel also uses the SingleModel version
-@views function calculate_u!(z::AbstractArray{T,3}, Q::AbstractArray{T,3}, u_intermed::AbstractArray{T,4}) where {T<:Real}
+@views function calculate_u!(z::AbstractArray{T,3}, Q::AbstractArray{T,3}) where {T<:Real}
     (m, n, N) = size(z)
 
     if (m <= 1)
@@ -62,23 +62,40 @@ end
         return
     end
 
-    for k = 1:N, i = 1:n, j = 1:m, j1 = 1:m
-        @inbounds u_intermed[j, i, k, j1] = Q[j1, i, k] - Q[j, i, k]
+    # Compute logsumexp for each (i, k) pair and store in temporary variable
+    # This corresponds to tmpvec = Pmax + log(sum(exp(z0 - Pmax))) in Fortran
+    for k = 1:N, i = 1:n
+        # Find max for numerical stability
+        Qmax = Q[1, i, k]
+        for j = 2:m
+            @inbounds Qmax = max(Qmax, Q[j, i, k])
+        end
+
+        # Compute sum(exp(Q - Qmax))
+        sum_exp = zero(T)
+        for j = 1:m
+            @inbounds sum_exp += exp(Q[j, i, k] - Qmax)
+        end
+
+        logsumexp_Q = Qmax + log(sum_exp)
+
+        # Compute z[j,i,k] = 1 / exp(logsumexp_Q - Q[j,i,k]) + epsilon
+        for j = 1:m
+            @inbounds z[j, i, k] = one(T) / exp(logsumexp_Q - Q[j, i, k]) + T(1e-15)
+        end
+
+        # Normalize z so that sum(z[:,i,k]) = 1
+        z_sum = sum(z[:, i, k])
+        for j = 1:m
+            @inbounds z[j, i, k] /= z_sum
+        end
     end
-
-    optimized_exp!(u_intermed)
-
-    for k = 1:N, i = 1:n, j = 1:m, j1 = 1:m
-        @inbounds z[j, i, k] += u_intermed[j, i, k, j1]
-    end
-
-    z .= 1 ./ z
 end
 
-#Applies location and scale parameter to source signals (per generalized Gaussian)
+"Applies location and scale parameter to source signals (per generalized Gaussian)"
 @views function calculate_y!(myAmica::SingleModelAmica)
     for j in 1:myAmica.m
-        myAmica.y[j, :, :] .= sqrt.(myAmica.learnedParameters.scale[j, :]) .* (myAmica.source_signals .- myAmica.learnedParameters.location[j, :])
+        myAmica.y[j, :, :] .= myAmica.learnedParameters.scale[j, :] .* (myAmica.source_signals .- myAmica.learnedParameters.location[j, :])
     end
 end
 

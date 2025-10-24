@@ -157,7 +157,7 @@ end
 
 #Updates Gaussian mixture Parameters and mixing matrix.
 function update_loop!(myAmica::MultiModelAmica, fp, lambda, y_rho, shapelrate, update_shape, iter, do_newton, newt_start_iter, lrate)
-    (n, N) = size(myAmica.models[1].source_signals)
+    (_, N) = size(myAmica.models[1].source_signals)
     M = size(myAmica.models, 1)
 
     myAmica.ica_weights_per_sample = ones(M, N)
@@ -196,10 +196,6 @@ end
 
 
     sumz = calculate_sumz(myAmica.z)
-
-    if m > 0
-        myAmica.z ./= sumz
-    end
 
     if m > 1
         myAmica.learnedParameters.proportions = sumz ./ N

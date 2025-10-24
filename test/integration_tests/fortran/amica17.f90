@@ -23,6 +23,9 @@ include 'mkl_vml.f90'
 #endif
 
 
+integer :: n
+integer, allocatable :: seedv(:)
+
 !-------------- INITIALIZE MPI ----------------
 
 !--- init mpi and get myrank
@@ -219,7 +222,12 @@ call MPI_BCAST(rholratefact,1,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)
 
 !--- set up the random number generator for this node
 call system_clock(c1)
-call random_seed(PUT = c1 * (myrank+1) * (seed+myrank+1))
+
+call random_seed(size=n)
+allocate(seedv(n))
+
+seedv = 12345    ! any fixed value
+call random_seed(put=seedv)
 !call DRANDINITIALIZE(1,1,(myrank+1)*(c1/tot_procs + 1),lseed,state,lstate,info)
 
 
@@ -257,6 +265,8 @@ call MPI_ALLREDUCE(quittmp,quit,1,MPI_INTEGER,MPI_MAX,seg_comm,ierr)
 if (quit == 1) then
    stop
 end if
+
+call write_data('raw_')
 
 !---------------------------- get the mean --------------------------------
 nx = data_dim
@@ -330,7 +340,7 @@ do seg = 1,numsegs
    end if
 end do
 
-
+call write_data('mean_')
 
 !------------------------ sphere the data -------------------------------
 allocate(S(nx,nx)); S = dble(0.0)
@@ -572,6 +582,10 @@ end if
 
 call flush(6)
 call MPI_BARRIER(seg_comm,ierr)   
+
+call write_data('sphere_')
+
+
 
 !-------------------- ALLOCATE VARIABLES ---------------------
 
@@ -884,10 +898,10 @@ call MPI_BCAST(wc,nw*num_models,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)
 call MPI_BCAST(comp_list,nw*num_models,MPI_INTEGER,0,seg_comm,ierr)
 call MPI_BCAST(gm,num_models,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)
 call MPI_BCAST(alpha,num_mix*num_comps,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)
-call MPI_BCAST(mu,num_mix*num_comps,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)      
-call MPI_BCAST(sbeta,num_mix*num_comps,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)      
-call MPI_BCAST(rho,num_mix*num_comps,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)      
-call MPI_BCAST(num_mix,num_comps,MPI_INTEGER,0,seg_comm,ierr)      
+call MPI_BCAST(mu,num_mix*num_comps,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)
+call MPI_BCAST(sbeta,num_mix*num_comps,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)
+call MPI_BCAST(rho,num_mix*num_comps,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)
+call MPI_BCAST(num_mix,num_comps,MPI_INTEGER,0,seg_comm,ierr)
 
 
 if (load_rej) then
@@ -941,7 +955,7 @@ do seg = 1,numsegs
    blk_size(seg) = min(dataseg(seg)%lastdim,block_size)
 end do
 call flush(6)
-call MPI_BARRIER(seg_comm,ierr)   
+call MPI_BARRIER(seg_comm,ierr)
 
 
 v = dble(1.0)/dble(num_models)
@@ -949,7 +963,6 @@ v = dble(1.0)/dble(num_models)
 leave = .false.
 
 print *, myrank+1, ': entering the main loop ...'; call flush(6)
-
 
 !XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX main loop XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 iter = 1
@@ -967,7 +980,7 @@ do
       do h = 1,num_models
          call DCOPY(nw*nw,W(:,:,h),1,Wtmp,1)
          lwork = 5*nx*nx
- 
+
          call DGEQRF(nw,nw,Wtmp,nw,wr,work,lwork,info)
          if (info < 0) then
             print *, 'error getting QR!!!'
@@ -987,6 +1000,20 @@ do
          print *, 'Dsum = ', Dsum; call flush(6)
       end if
    end if
+
+   call write_matrix("W", W(:, :, 1))
+   call write_matrix("A", A(:, :))
+
+   call write_matrix("sbeta", sbeta)
+   call write_matrix("rho", rho)
+   call write_matrix("mu", mu)
+
+   print *, "shape of sbeta", shape(sbeta)
+   print *, "shape of mu", shape(mu)
+   print *, "shape of rho", shape(rho)
+
+   call write_scalar("Dsum", Dsum(1))
+   
    call MPI_BCAST(Dsum,num_models,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)
 
    !----- get updates: gm, alpha, mu, sbeta, rho, W
@@ -999,6 +1026,7 @@ do
    !print *, myrank+1, ': c = ', c(1:min(5,nw)); call flush(6)
    !print *, myrank+1, ': W = ', W(1:min(5,nw)); call flush(6)
    !print *, myrank+1, ': getting likelihood ....'; call flush(6)
+
    call get_updates_and_likelihood
    call accum_updates_and_likelihood
 
@@ -1024,7 +1052,7 @@ do
 
    !----- check whether likelihood is increasing
    if (seg_rank == 0) then
-      ! if we get a NaN early, try to reinitialize and startover a few times 
+      ! if we get a NaN early, try to reinitialize and startover a few times
       if ((iter .le. restartiter) .and. isNaN(LL(iter))) then
          if (numrestarts > maxrestarts) then
             leave = .true.
@@ -1048,7 +1076,7 @@ do
                   end do
                end if
             end do
-            call get_unmixing_matrices        
+            call get_unmixing_matrices
             startover = .true.
             print *, 'Reinitializaing and starting over ...'; call flush(6)
             numrestarts = numrestarts + 1
@@ -1092,7 +1120,7 @@ do
                 end if
              else
                 numincs = 0
-             end if 
+             end if
          end if
          if (use_grad_norm) then
              if (ndtmpsum .le. min_nd) then
@@ -1100,13 +1128,13 @@ do
                  print *, 'Exiting because norm of weight gradient less than ', min_nd, ' ...'
                  write(20,"(a,e13.5,a)") 'Exiting because norm of weight gradient less than ', min_nd, ' ...'
              end if
-         end if 
+         end if
       end if
       if (do_newton .and. (iter == newt_start)) then
          print *, 'Starting Newton ... setting numdecs to 0'; call flush(6)
          numdecs = 0
       end if
-  
+
       call flush(20)
    end if
 
@@ -1126,7 +1154,7 @@ do
       !----- do updates: gm, alpha, mu, sbeta, rho, W
       !print *, myrank+1, ': calling do_updates ....'; call flush(6)
       call update_params
-      
+
       if ((writestep .ge. 0) .and. mod(iter,writestep) == 0) then
          !print *, myrank+1, ': calling write_output ...'; call flush(6)
          call write_output
@@ -1137,16 +1165,30 @@ do
          !print *, myrank+1, ': calling write_output ...'; call flush(6)
          call write_history
       end if
-      
+
       !----- reject data
       if ((do_reject .and. (maxrej > 0)) .and. ((iter==rejstart) .or. ((mod(max(1,iter-rejstart),rejint) == 0) .and. (numrej < maxrej)))) then
          !print *, myrank+1, ': calling reject data ....'; call flush(6)
          call reject_data
          numrej = numrej + 1
       end if
-      
+
       iter = iter + 1
    end if
+
+   call write_matrix("b", b(:, :, 1))
+
+   print *, "shape of z", shape(z)
+   print *, "shape of y", shape(y)
+   print *, "shape of Ptmp", shape(Ptmp)
+
+   call write3dmatrix("y", y(:, :, :, 1))
+   call write3dmatrix("z", z(:, :, :, 1))
+   call write_matrix("Ptmp", Ptmp)
+   call write_vector("LL", LL)
+
+   stop 0
+
 end do !iter
 
 call write_output
@@ -1169,6 +1211,86 @@ end if
 !----------------------------------------------------------------------
 contains
 !----------------------------------------------------------------------
+
+subroutine write_data(prefix)
+
+   character(len=*), intent(in) :: prefix
+   integer :: seg, u, ldim
+   character(len=256) :: fname
+
+   ! Ensure the datadumps directory exists
+   call system('mkdir -p datadumps')
+
+   do seg = 1, numsegs
+      ldim = dataseg(seg)%lastdim
+      write(fname,'("datadumps/",A,"data_seg_",I0,".bin")') trim(prefix), seg
+      open(newunit=u, file=fname, access='stream', form='unformatted', status='replace', action='write')
+      write(u) dataseg(seg)%data(:, 1:ldim)
+      close(u)
+   end do
+
+end subroutine write_data
+
+
+subroutine write_matrix(name, variable)
+   character(len=*), intent(in) :: name
+   real(8), intent(in), dimension(:,:) :: variable
+   integer :: u
+   character(len=256) :: fname
+
+   ! Ensure the datadumps directory exists
+   call system('mkdir -p datadumps')
+
+   write(fname,'("datadumps/",A,".bin")') trim(name)
+   open(newunit=u, file=fname, access='stream', form='unformatted', status='replace', action='write')
+   write(u) variable
+   close(u)
+end subroutine write_matrix
+
+subroutine write3dmatrix(name, variable)
+   character(len=*), intent(in) :: name
+   real(8), intent(in), dimension(:,:,:) :: variable
+   integer :: u
+   character(len=256) :: fname
+
+   ! Ensure the datadumps directory exists
+   call system('mkdir -p datadumps')
+
+   write(fname,'("datadumps/",A,".bin")') trim(name)
+   open(newunit=u, file=fname, access='stream', form='unformatted', status='replace', action='write')
+   write(u) variable
+   close(u)
+end subroutine write3dmatrix
+
+subroutine write_vector(name, vector)
+   character(len=*), intent(in) :: name
+   real(8), intent(in), dimension(:) :: vector
+   integer :: u
+   character(len=256) :: fname
+
+   ! Ensure the datadumps directory exists
+   call system('mkdir -p datadumps')
+
+   write(fname,'("datadumps/",A,".bin")') trim(name)
+   open(newunit=u, file=fname, access='stream', form='unformatted', status='replace', action='write')
+   write(u) vector
+   close(u)
+end subroutine write_vector
+
+subroutine write_scalar(name, value)
+   character(len=*), intent(in) :: name
+   real(8), intent(in) :: value
+   integer :: u
+   character(len=256) :: fname
+
+   ! Ensure the datadumps directory exists
+   call system('mkdir -p datadumps')
+
+   write(fname,'("datadumps/",A,".bin")') trim(name)
+   open(newunit=u, file=fname, access='stream', form='unformatted', status='replace', action='write')
+   write(u) value
+   close(u)
+end subroutine write_scalar
 
 
 subroutine get_updates_and_likelihood
@@ -1193,7 +1315,7 @@ subroutine get_updates_and_likelihood
      drho_numer_tmp = dble(0.0)
      drho_denom_tmp = dble(0.0)
   end if
-  
+
   if (update_A .and. do_newton) then
      dbaralpha_numer_tmp = dble(0.0)
      dbaralpha_denom_tmp = dble(0.0)
@@ -1212,21 +1334,21 @@ subroutine get_updates_and_likelihood
   dWtmp = dble(0.0)
   LLtmp = dble(0.0)
 
-  !--------- loop over the segments ----------  
+  !--------- loop over the segments ----------
   !print *, 'Looping over the segments ...'; call flush(6)
   do seg = 1,numsegs
      ldim = dataseg(seg)%lastdim
-     ngood = dataseg(seg)%numgood          
+     ngood = dataseg(seg)%numgood
      if (do_reject) then
         num_blocks = ngood / (num_thrds*block_size)
      else
         num_blocks = ldim / (num_thrds*block_size)
      end if
-     
+
      !--------- loop over the blocks ----------
      !print *, 'Looping over the blocks in segment ', seg; call flush(6)
      do blk = 1,num_blocks
-        !print *, 'Doing block ', blk; call flush(6)        
+        !print *, 'Doing block ', blk; call flush(6)
         x0strt = (blk-1)*num_thrds*block_size + 1
         if (blk < num_blocks) then
            x0stp = blk*num_thrds*block_size
@@ -1239,22 +1361,22 @@ subroutine get_updates_and_likelihood
         end if
 
         !print *, myrank+1, ': Setting bsize ... '; call flush(6)
-        
+
         bsize = x0stp - x0strt + 1
         if (bsize .le. 0) then
            exit
         end if
 
         dWtmp_t = dble(0.0)
-        
+
 !$OMP PARALLEL DEFAULT(SHARED) &
 !$OMP & PRIVATE (thrdnum,tblksize,t,h,i,j,k,xstrt,xstp,bstrt,bstp,LLinc,tmpsum,usum,vsum)
-        
+
         thrdnum = omp_get_thread_num()
         tblksize = bsize / num_thrds
 
         !print *, myrank+1, thrdnum+1, ': Inside openmp code ... '; call flush(6)
-        
+
         xstrt = x0strt + thrdnum*tblksize
         bstrt = thrdnum*tblksize + 1
         if (thrdnum+1 < num_thrds) then
@@ -1264,9 +1386,9 @@ subroutine get_updates_and_likelihood
            xstp = x0stp
            bstp = bsize
         end if
-        
+
         tblksize = bstp - bstrt + 1
-        
+
         do h = 1,num_models
 
            !print *, myrank+1,':', thrdnum+1,': initializing Ptmp ... D = ', Dsum(h), ' lgm = ', log(gm(h)), ' sldet = ', sldet; call flush(6)
@@ -1295,7 +1417,7 @@ subroutine get_updates_and_likelihood
               print *, myrank+1, ': b ', h, ' = '; call flush(6)
               call matout(b(1:6,1:2,h),6,2)
            end if
-           
+
            !--- get y z
            !print *, myrank+1,':', thrdnum+1,': getting y ...'; call flush(6)
            do i = 1,nw
@@ -1320,17 +1442,20 @@ subroutine get_updates_and_likelihood
                  else
 #ifdef MKL
                     call vdLn(tblksize,abs(y(bstrt:bstp,i,j,h)),tmpvec(bstrt:bstp))
-                    call vdExp(tblksize,rho(j,comp_list(i,h))*tmpvec(bstrt:bstp),tmpvec2(bstrt:bstp))                       
+                    call vdExp(tblksize,rho(j,comp_list(i,h))*tmpvec(bstrt:bstp),tmpvec2(bstrt:bstp))
 #else
-                    call vrda_log(tblksize,abs(y(bstrt:bstp,i,j,h)),tmpvec(bstrt:bstp))
-                    call vrda_exp(tblksize,rho(j,comp_list(i,h))*tmpvec(bstrt:bstp),tmpvec2(bstrt:bstp))
+                    ! call vrda_log(tblksize,abs(y(bstrt:bstp,i,j,h)),tmpvec(bstrt:bstp))
+                    tmpvec(bstrt:bstp) = log(abs(y(bstrt:bstp,i,j,h)))
+                    ! call vrda_exp(tblksize,rho(j,comp_list(i,h))*tmpvec(bstrt:bstp),tmpvec2(bstrt:bstp))
+                    tmpvec2(bstrt:bstp) = exp(rho(j,comp_list(i,h))*tmpvec(bstrt:bstp))
+                    
 #endif
                     !call vrda_exp(tblksize,-tmpvec2(bstrt:bstp),tmpvec(bstrt:bstp))
                     z0(bstrt:bstp,j) = log(alpha(j,comp_list(i,h))) + log(sbeta(j,comp_list(i,h))) - tmpvec2(bstrt:bstp) &
                          - gamln(dble(1.0)+dble(1.0)/rho(j,comp_list(i,h))) - log(dble(2.0))
                  end if
               end do
-             
+
               !do j = 1,num_mix
               !   if (any(isnan(z0(bstrt:bstp,j)))) then
               !      print *, myrank+1,':', thrdnum+1,': NaN in z0! ', &
@@ -1352,10 +1477,10 @@ subroutine get_updates_and_likelihood
               do j = 1,num_mix
                  z(bstrt:bstp,i,j,h) = dble(1.0) / exp(tmpvec(bstrt:bstp) - z0(bstrt:bstp,j)) + dble(1.0e-15)
               end do
-              tmpvec(bstrt:bstp) = sum(z(bstrt:bstp,i,:,h),2)             
+              tmpvec(bstrt:bstp) = sum(z(bstrt:bstp,i,:,h),2)
               do j = 1,num_mix
-                 z(bstrt:bstp,i,j,h) = z(bstrt:bstp,i,j,h) / tmpvec(bstrt:bstp) 
-              end do              
+                 z(bstrt:bstp,i,j,h) = z(bstrt:bstp,i,j,h) / tmpvec(bstrt:bstp)
+              end do
            end do
         end do
 
@@ -1376,7 +1501,7 @@ subroutine get_updates_and_likelihood
         !!$OMP END CRITICAL
         LLtmp_t(thrdnum+1) = sum( P(bstrt:bstp) )
 
-        do h = 1,num_models        
+        do h = 1,num_models
            if (do_reject) then
               dataseg(seg)%modloglik(h,dataseg(seg)%goodinds(xstrt:xstp)) = Ptmp(bstrt:bstp,h)
               dataseg(seg)%loglik(dataseg(seg)%goodinds(xstrt:xstp)) = P(bstrt:bstp)
@@ -1399,14 +1524,14 @@ subroutine get_updates_and_likelihood
            vsum = sum( v(bstrt:bstp,h) )
 
         !!$OMP CRITICAL
-        !          dgm_numer_tmp(h) = dgm_numer_tmp(h) + vsum 
+        !          dgm_numer_tmp(h) = dgm_numer_tmp(h) + vsum
         !!$OMP END CRITICAL
-           dgm_numer_tmp_t(h,thrdnum+1) = vsum 
-        
+           dgm_numer_tmp_t(h,thrdnum+1) = vsum
+
            if (update_A) then
               call DSCAL(nw*tblksize,dble(0.0),g(bstrt:bstp,:),1)
            end if
-           
+
            do i = 1,nw
 
               if (update_A .and. do_newton) then
@@ -1461,8 +1586,10 @@ subroutine get_updates_and_likelihood
                     call vdLn(tblksize,abs(y(bstrt:bstp,i,j,h)),tmpvec(bstrt:bstp))
                     call vdExp(tblksize,(rho(j,comp_list(i,h))-dble(1.0))*tmpvec(bstrt:bstp),tmpvec2(bstrt:bstp))
 #else
-                    call vrda_log(tblksize,abs(y(bstrt:bstp,i,j,h)),tmpvec(bstrt:bstp))
-                    call vrda_exp(tblksize,(rho(j,comp_list(i,h))-dble(0.0))*tmpvec(bstrt:bstp),tmpvec2(bstrt:bstp))
+               !call vrda_log(tblksize,abs(y(bstrt:bstp,i,j,h)),tmpvec(bstrt:bstp))
+               !call vrda_exp(tblksize,(rho(j,comp_list(i,h))-dble(0.0))*tmpvec(bstrt:bstp),tmpvec2(bstrt:bstp))
+               tmpvec(bstrt:bstp) = log(abs(y(bstrt:bstp,i,j,h)))
+               tmpvec2(bstrt:bstp) = exp((rho(j,comp_list(i,h))-dble(0.0))*tmpvec(bstrt:bstp))
 #endif
                     fp(bstrt:bstp) = rho(j,comp_list(i,h)) * sign(dble(1.0),y(bstrt:bstp,i,j,h)) * tmpvec2(bstrt:bstp)
 
@@ -1487,7 +1614,7 @@ subroutine get_updates_and_likelihood
                  !if (.not.(any(.not.(fp(bstrt:bstp)==dble(0.0))))) then
                  !   print *, 'All fp == 0.0! i = ', i, ' j = ', j; call flush(6)
                  !end if
-              
+
                  !--- get g
                  if (update_A) then
                     g(bstrt:bstp,i) = g(bstrt:bstp,i) + sbeta(j,comp_list(i,h)) * ufp(bstrt:bstp)
@@ -1497,7 +1624,7 @@ subroutine get_updates_and_likelihood
                        !       dkappa_numer_tmp(j,i,h) = dkappa_numer_tmp(j,i,h) + tmpsum
                        !       dkappa_denom_tmp(j,i,h) = dkappa_denom_tmp(j,i,h) + usum
                        !!$OMP END CRITICAL
-                       dkappa_numer_tmp_t(j,i,h,thrdnum+1) = sum( ufp(bstrt:bstp) * fp(bstrt:bstp) ) * sbeta(j,comp_list(i,h))**2 
+                       dkappa_numer_tmp_t(j,i,h,thrdnum+1) = sum( ufp(bstrt:bstp) * fp(bstrt:bstp) ) * sbeta(j,comp_list(i,h))**2
                        dkappa_denom_tmp_t(j,i,h,thrdnum+1) = usum
                        !tmpvec(bstrt:bstp) = fp(bstrt:bstp) * y(bstrt:bstp,i,j,h) - dble(1.0)
                        !tmpsum = sum( u(bstrt:bstp) * tmpvec(bstrt:bstp) * tmpvec(bstrt:bstp) )
@@ -1515,7 +1642,7 @@ subroutine get_updates_and_likelihood
                     end if
                  end if
                  !print *, myrank+1, ': g(',bstrt,':',bstrt+4,',',h,') = '; call flush(6)
-                 !call matout(g(1:2,bstrt:bstrt+4,h),2,5)               
+                 !call matout(g(1:2,bstrt:bstrt+4,h),2,5)
                  if (update_alpha) then
                      !!$OMP CRITICAL
                      !            dalpha_numer_tmp(j,comp_list(i,h)) = dalpha_numer_tmp(j,comp_list(i,h)) + usum
@@ -1529,7 +1656,7 @@ subroutine get_updates_and_likelihood
                     !!$OMP CRITICAL
                     !         dmu_numer_tmp(j,comp_list(i,h)) = dmu_numer_tmp(j,comp_list(i,h)) + tmpsum
                     !!$OMP END CRITICAL
-                    dmu_numer_tmp_t(j,comp_list(i,h),thrdnum+1) = sum( ufp(bstrt:bstp) ) 
+                    dmu_numer_tmp_t(j,comp_list(i,h),thrdnum+1) = sum( ufp(bstrt:bstp) )
                     if (rho(j,comp_list(i,h)) .le. dble(2.0)) then
                        !if (any((ufp(bstrt:bstp)==dble(0.0)).and.(y(bstrt:bstp,i,j,h)==dble(0.0)))) then
                        !   print *, myrank+1, thrdnum+1, 'y and ufp == 0!'; call flush(6)
@@ -1539,9 +1666,9 @@ subroutine get_updates_and_likelihood
                        tmpsum = sbeta(j,comp_list(i,h)) * sum( ufp(bstrt:bstp) * fp(bstrt:bstp) )
                     end if
                     !!$OMP CRITICAL
-                    !          dmu_denom_tmp(j,comp_list(i,h)) = dmu_denom_tmp(j,comp_list(i,h)) + tmpsum 
+                    !          dmu_denom_tmp(j,comp_list(i,h)) = dmu_denom_tmp(j,comp_list(i,h)) + tmpsum
                     !!$OMP END CRITICAL
-                    dmu_denom_tmp_t(j,comp_list(i,h),thrdnum+1) = tmpsum 
+                    dmu_denom_tmp_t(j,comp_list(i,h),thrdnum+1) = tmpsum
                  end if
                  if (update_beta) then
                     !!$OMP CRITICAL
@@ -1553,7 +1680,7 @@ subroutine get_updates_and_likelihood
                        !!$OMP CRITICAL
                        !         dbeta_denom_tmp(j,comp_list(i,h)) =  dbeta_denom_tmp(j,comp_list(i,h)) + tmpsum
                        !!$OMP END CRITICAL
-                       dbeta_denom_tmp_t(j,comp_list(i,h),thrdnum+1) = sum( ufp(bstrt:bstp) * y(bstrt:bstp,i,j,h) ) 
+                       dbeta_denom_tmp_t(j,comp_list(i,h),thrdnum+1) = sum( ufp(bstrt:bstp) * y(bstrt:bstp,i,j,h) )
                     end if
                  end if
                  if (dorho) then
@@ -1563,9 +1690,12 @@ subroutine get_updates_and_likelihood
                     call vdExp(tblksize,rho(j,comp_list(i,h))*logab(bstrt:bstp),tmpy(bstrt:bstp))
                     call vdLn(tblksize,tmpy(bstrt:bstp),logab(bstrt:bstp))
 #else
-                    call vrda_log(tblksize,tmpy(bstrt:bstp),logab(bstrt:bstp))
-                    call vrda_exp(tblksize,rho(j,comp_list(i,h))*logab(bstrt:bstp),tmpy(bstrt:bstp))
-                    call vrda_log(tblksize,tmpy(bstrt:bstp),logab(bstrt:bstp))
+               !call vrda_log(tblksize,tmpy(bstrt:bstp),logab(bstrt:bstp))
+               !call vrda_exp(tblksize,rho(j,comp_list(i,h))*logab(bstrt:bstp),tmpy(bstrt:bstp))
+               !call vrda_log(tblksize,tmpy(bstrt:bstp),logab(bstrt:bstp))
+               logab(bstrt:bstp) = log(tmpy(bstrt:bstp))
+               tmpy(bstrt:bstp) = exp(rho(j,comp_list(i,h)) * logab(bstrt:bstp))
+               logab(bstrt:bstp) = log(tmpy(bstrt:bstp))
 #endif
                     where (tmpy(bstrt:bstp) < epsdble)
                        logab(bstrt:bstp) = dble(0.0)
@@ -1575,7 +1705,7 @@ subroutine get_updates_and_likelihood
                     !     drho_numer_tmp(j,comp_list(i,h)) =  drho_numer_tmp(j,comp_list(i,h)) + tmpsum
                     !     drho_denom_tmp(j,comp_list(i,h)) =  drho_denom_tmp(j,comp_list(i,h)) + usum
                     !!$OMP END CRITICAL
-                    drho_numer_tmp_t(j,comp_list(i,h),thrdnum+1) = sum( u(bstrt:bstp) * tmpy(bstrt:bstp) * logab(bstrt:bstp) ) 
+                    drho_numer_tmp_t(j,comp_list(i,h),thrdnum+1) = sum( u(bstrt:bstp) * tmpy(bstrt:bstp) * logab(bstrt:bstp) )
                     drho_denom_tmp_t(j,comp_list(i,h),thrdnum+1) = usum
                  end if
 
@@ -1586,11 +1716,11 @@ subroutine get_updates_and_likelihood
               print *, 'g ', h, ' = '; call flush(6)
               call matout(g(1:6,1:2),6,2)
            end if
-           
-           if (update_A) then              
-              call DSCAL(nw*nw,dble(0.0),Wtmp2(:,:,thrdnum+1),1)              
+
+           if (update_A) then
+              call DSCAL(nw*nw,dble(0.0),Wtmp2(:,:,thrdnum+1),1)
               call DGEMM('T','N',nw,nw,tblksize,dble(1.0),g(bstrt:bstp,:),tblksize,b(bstrt:bstp,:,h),tblksize, &
-                   dble(1.0),Wtmp2(:,:,thrdnum+1),nw)              
+                   dble(1.0),Wtmp2(:,:,thrdnum+1),nw)
               !!$OMP CRITICAL
               !       call DAXPY(nw*nw,dble(1.0),Wtmp2(:,:,thrdnum+1),1,dWtmp(:,:,h),1)
               !!$OMP END CRITICAL
@@ -1694,11 +1824,11 @@ subroutine accum_updates_and_likelihood
   if (update_c) then
      call MPI_REDUCE(dc_numer_tmp,dc_numer,nw*num_models,MPI_DOUBLE_PRECISION,MPI_SUM,0,seg_comm,ierr)
      call MPI_REDUCE(dc_denom_tmp,dc_denom,nw*num_models,MPI_DOUBLE_PRECISION,MPI_SUM,0,seg_comm,ierr)
-  end if  
- 
- 
+  end if
+
+
      if (.false.) then
-        if (myrank == 0) then 
+        if (myrank == 0) then
            do j = 1,num_mix
               if (any(isnan(dmu_numer(j,:)))) then
                  print *, 'NaN in dmu_numer!'; call flush(6)
@@ -1739,11 +1869,11 @@ subroutine accum_updates_and_likelihood
            end do
         end if
      end if
- 
- 
+
+
   if (update_A) then
      call MPI_REDUCE(dWtmp,dA,nw*nw*num_models,MPI_DOUBLE_PRECISION,MPI_SUM,0,seg_comm,ierr)
-     
+
      if (do_newton .and. (iter .ge. newt_start)) then
         call MPI_REDUCE(dbaralpha_numer_tmp,dbaralpha_numer,num_mix*nw*num_models,MPI_DOUBLE_PRECISION,MPI_SUM,0,seg_comm,ierr)
         call MPI_REDUCE(dbaralpha_denom_tmp,dbaralpha_denom,num_mix*nw*num_models,MPI_DOUBLE_PRECISION,MPI_SUM,0,seg_comm,ierr)
@@ -1795,13 +1925,13 @@ subroutine accum_updates_and_likelihood
               print *, 'dA ', h, ' = '; call flush(6)
               call matout(dA(1:2,1:2,h),2,2)
            end if
-           
+
            if (do_reject) then
               call DSCAL(nw*nw,dble(-1.0)/dgm_numer(h),dA(:,:,h),1)
            else
               call DSCAL(nw*nw,dble(-1.0)/dgm_numer(h),dA(:,:,h),1)
            end if
-           
+
            do i = 1,nw
               dA(i,i,h) = dA(i,i,h) + dble(1.0)
            end do
@@ -1811,9 +1941,9 @@ subroutine accum_updates_and_likelihood
               call matout(dA(1:2,1:2,h),2,2)
            end if
 
-           posdef = .true.                      
+           posdef = .true.
            if (do_newton .and. (iter .ge. newt_start)) then
-                            
+
               do i = 1,nw
                  do k = 1,nw
                     if (i == k) then
@@ -1835,10 +1965,10 @@ subroutine accum_updates_and_likelihood
            if ((.not. do_newton) .or. (.not. posdef) .or. (iter < newt_start)) then
               Wtmp = dA(:,:,h)
            end if
-           
+
            call DSCAL(nw*nw,dble(0.0),dA(:,:,h),1)
-           call DGEMM('N','N',nw,nw,nw,dble(1.0),A(:,comp_list(:,h)),nw,Wtmp,nw,dble(1.0),dA(:,:,h),nw)         
-           
+           call DGEMM('N','N',nw,nw,nw,dble(1.0),A(:,comp_list(:,h)),nw,Wtmp,nw,dble(1.0),dA(:,:,h),nw)
+
         end do
 
 
@@ -1859,7 +1989,7 @@ subroutine accum_updates_and_likelihood
      end if
   end if
 
-  
+
   call MPI_REDUCE(LLtmp,LLtmp2,1,MPI_DOUBLE_PRECISION,MPI_SUM,0,seg_comm,ierr)
   if (seg_rank == 0) then
      if (do_reject) then
@@ -1878,7 +2008,7 @@ end subroutine accum_updates_and_likelihood
 subroutine update_params
 
   if (seg_rank == 0) then
-     
+
      if (update_gm) then
         if (do_reject) then
            gm = dgm_numer / dble(numgoodsum)
@@ -1886,7 +2016,7 @@ subroutine update_params
            gm = dgm_numer / dble(all_blks)
         end if
      end if
-    
+
      if (update_alpha) then
         alpha = dalpha_numer / dalpha_denom
         !do j = 1,num_mix
@@ -1917,8 +2047,8 @@ subroutine update_params
         end if
      end if
 
-     
-        if (.false.) then 
+
+        if (.false.) then
            do j = 1,num_mix
               if (any(isnan(dmu_numer(j,:)))) then
                  print *, 'NaN in dmu_numer 2!'; call flush(6)
@@ -1969,7 +2099,7 @@ subroutine update_params
         !   end do
         !   where(isnan(dmu_numer(j,:)/dmu_denom(j,:)))
         !      dmu_numer(j,:) = dble(0.0);
-        !      dmu_denom(j,:) = dble(1.0); 
+        !      dmu_denom(j,:) = dble(1.0);
         !   end where
            !if (any(isnan(mu(j,:)))) then
            !   print *, 'NaN in mu!'; call flush(6)
@@ -1977,7 +2107,7 @@ subroutine update_params
         !end do
         mu = mu + dmu_numer / dmu_denom
      end if
-     
+
      if (update_beta) then
         !do j = 1,num_mix
         !   do k = 1,num_comps
@@ -1987,9 +2117,9 @@ subroutine update_params
         !   end do
         !   where(isnan(dbeta_numer(j,:)/dbeta_denom(j,:)))
         !      dbeta_numer(j,:) = dble(1.0);
-        !      dbeta_denom(j,:) = dble(1.0); 
+        !      dbeta_denom(j,:) = dble(1.0);
         !   end where
-        !end do 
+        !end do
         sbeta = sbeta * sqrt( dbeta_numer / dbeta_denom )
         sbetatmp = min(invsigmax,sbeta)
         sbeta = max(invsigmin,sbetatmp)
@@ -2000,14 +2130,14 @@ subroutine update_params
         end do
      end if
 
-     
+
      if (dorho) then
         !do j = 1,num_mix
         !   where(isnan(drho_numer(j,:)/drho_denom(j,:)))
         !      drho_numer(j,:) = dble(1.0);
-        !      dbeta_denom(j,:) = dble(1.0); 
+        !      dbeta_denom(j,:) = dble(1.0);
         !   end where
-        !end do 
+        !end do
         do k = 1,num_comps
            do j = 1,num_mix
               rho(j,k) = rho(j,k) + rholrate * ( dble(1.0) - &
@@ -2041,14 +2171,14 @@ subroutine update_params
         free_pass = .false.
      end if
 
-     call get_unmixing_matrices        
+     call get_unmixing_matrices
 
      if (print_debug) then
         print *, 'gm = ', gm; call flush(6)
-        
+
         print *, 'alpha = '; call flush(6)
         call matout(alpha(1:2,1:min(6,num_comps)),2,min(6,num_comps))
-        
+
         print *, 'mu = '; call flush(6)
         call matout(mu(1:2,1:min(6,num_comps)),2,min(6,num_comps))
 
@@ -2075,9 +2205,9 @@ subroutine update_params
 
   call MPI_BCAST(gm,num_models,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)
   call MPI_BCAST(alpha,num_mix*num_comps,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)
-  call MPI_BCAST(mu,num_mix*num_comps,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)      
-  call MPI_BCAST(sbeta,num_mix*num_comps,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)      
-  call MPI_BCAST(rho,num_mix*num_comps,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)      
+  call MPI_BCAST(mu,num_mix*num_comps,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)
+  call MPI_BCAST(sbeta,num_mix*num_comps,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)
+  call MPI_BCAST(rho,num_mix*num_comps,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)
   call MPI_BCAST(W,nw*nw*num_models,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)
   call MPI_BCAST(wc,nw*num_models,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)
 
@@ -2088,7 +2218,7 @@ end subroutine update_params
 
 subroutine get_pmi
 
-    
+
 end subroutine get_pmi
 
 !----------------------------------------------------------------------
@@ -2185,7 +2315,7 @@ end subroutine get_unmixing_matrices
 !----------------------------------------------------------------------
 !----------------------------------------------------------------------
 
-subroutine allocate_blocks 
+subroutine allocate_blocks
 
 N1 = 2*block_size*num_thrds
 
@@ -2216,12 +2346,12 @@ allocate( Pmax (N1),stat=ierr); call tststat(ierr); Pmax = dble(0.0)
 allocate( tmpvec(N1),stat=ierr); call tststat(ierr); tmpvec = dble(0.0)
 allocate( tmpvec2(N1),stat=ierr); call tststat(ierr); tmpvec2 = dble(0.0)
 
-end subroutine allocate_blocks 
+end subroutine allocate_blocks
 
 !----------------------------------------------------------------------
 !----------------------------------------------------------------------
 
-subroutine deallocate_blocks 
+subroutine deallocate_blocks
 
 
 deallocate( b  )
@@ -2246,12 +2376,12 @@ deallocate( Ptmp )
 !deallocate( Ptmp2 )
 
 deallocate( P )
-deallocate( Pmax ) 
+deallocate( Pmax )
 
 deallocate( tmpvec )
 deallocate( tmpvec2 )
 
-end subroutine deallocate_blocks 
+end subroutine deallocate_blocks
 
 !----------------------------------------------------------------------
 !----------------------------------------------------------------------
@@ -2304,11 +2434,11 @@ subroutine determine_block_size2
      do seg = 1,numsegs
         ldim = dataseg(seg)%lastdim
         num_blocks = ldim / (num_thrds*block_size)
-     
+
         !--------- loop over the blocks ----------
 
         do blk = 1,num_blocks
-           !print *, 'Doing block ', blk; call flush(6)        
+           !print *, 'Doing block ', blk; call flush(6)
            x0strt = (blk-1)*num_thrds*block_size + 1
            if (blk < num_blocks) then
               x0stp = blk*num_thrds*block_size
@@ -2316,17 +2446,17 @@ subroutine determine_block_size2
               x0stp = ldim
            end if
 
-           !print *, myrank+1, ': Setting bsize ... '; call flush(6)        
+           !print *, myrank+1, ': Setting bsize ... '; call flush(6)
            bsize = x0stp - x0strt + 1
-        
+
 !$OMP PARALLEL DEFAULT(SHARED) &
 !$OMP & PRIVATE (thrdnum,tblksize,t,i,xstrt,xstp,bstrt,bstp)
-        
+
            thrdnum = omp_get_thread_num()
            tblksize = bsize / num_thrds
-           
+
            !print *, myrank+1, thrdnum+1, ': Inside openmp code ... '; call flush(6)
-           
+
            xstrt = x0strt + thrdnum*tblksize
            bstrt = thrdnum*tblksize + 1
            if (thrdnum+1 < num_thrds) then
@@ -2336,9 +2466,9 @@ subroutine determine_block_size2
               xstp = x0stp
               bstp = bsize
            end if
-           
+
            tblksize = bstp - bstrt + 1
-        
+
            call DGEMM('T','T',tblksize,nw,nw,dble(1.0),dataseg(seg)%data(:,xstrt:xstp),nx,Wtmp,nw,dble(1.0),xtmp(bstrt:bstp,:),tblksize)
 
            do i = 1,nw
@@ -2346,8 +2476,10 @@ subroutine determine_block_size2
               call vdLn(tblksize,abs(xtmp(bstrt:bstp,i)),tmpvec(bstrt:bstp))
               call vdExp(tblksize,dble(2.0)*tmpvec(bstrt:bstp),tmpvec2(bstrt:bstp))
 #else
-              call vrda_log(tblksize,abs(xtmp(bstrt:bstp,i)),tmpvec(bstrt:bstp))
-              call vrda_exp(tblksize,dble(2.0)*tmpvec(bstrt:bstp),tmpvec2(bstrt:bstp))
+           !call vrda_log(tblksize,abs(xtmp(bstrt:bstp,i)),tmpvec(bstrt:bstp))
+           !call vrda_exp(tblksize,dble(2.0)*tmpvec(bstrt:bstp),tmpvec2(bstrt:bstp))
+           tmpvec(bstrt:bstp) = log(abs(xtmp(bstrt:bstp,i)))
+           tmpvec2(bstrt:bstp) = exp(dble(2.0)*tmpvec(bstrt:bstp))
 #endif
               tmpvec(bstrt:bstp) = tmpvec2(bstrt:bstp)- gamln(dble(1.0)+dble(1.0)/dble(1.5)) - log(dble(2.0))
            end do
@@ -2371,7 +2503,7 @@ subroutine determine_block_size2
   deallocate(xtmp)
   deallocate(Wtmp)
   deallocate(tmpvec)
-  deallocate(tmpvec2)  
+  deallocate(tmpvec2)
 
 end subroutine determine_block_size2
 
@@ -2467,7 +2599,7 @@ end subroutine reject_data
 
 subroutine write_history
   if (myrank == 0) then
-    !print *, 'Writing history at iter ', iter, ' to ', trim(outdirparam)//'/history'; call flush(6) 
+    !print *, 'Writing history at iter ', iter, ' to ', trim(outdirparam)//'/history'; call flush(6)
     if (iter == histstep) then !it seems this isn't getting triggered
         !call system('mkdir '//trim(outdirparam)//'/history')
         call system('mkdir '//trim(outdirparam)//'/history'//' &>/dev/null')
@@ -2515,7 +2647,7 @@ subroutine write_output
               else
                  open(unit=19,file=trim(outdirparam)//'/'//outfile_LLt,access='direct',recl=2*nbyte)
               end if
-              
+
               do i = 1,dataseg(seg)%lastdim
                  do jj = 1,num_models
                     write(19,rec=(k+i-1)*(num_models+1)+jj) dataseg(seg)%modloglik(jj,i)
@@ -2578,7 +2710,7 @@ subroutine write_output
         write(17,rec=1) LL; call flush(17); close(17)
         if (write_nd) then
            open(unit=18,file=outdir//date(5:8)//'_'//time(1:6)//'/'//outfile_nd,access='direct',status='replace',recl=2*nbyte*max(1,max_iter)*num_comps)
-           write(18,rec=1) nd; call flush(18); close(18)            
+           write(18,rec=1) nd; call flush(18); close(18)
         end if
         open(unit=21,file=outdir//date(5:8)//'_'//time(1:6)//'/'//outfile_A,access='direct',status='replace',recl=2*nbyte*nw*num_comps)
         write(21,rec=1) A; call flush(21); close(21)
@@ -2604,10 +2736,10 @@ subroutine write_output
         open(unit=16,file=trim(outdirparam)//'/'//outfile_sphere,access='direct',status='replace',recl=2*nbyte*nx*nx)
         write(16,rec=1) S; call flush(16); close(16)
         open(unit=17,file=trim(outdirparam)//'/'//outfile_LL,access='direct',status='replace',recl=2*nbyte*max(1,max_iter))
-        write(17,rec=1) LL; call flush(17); close(17)            
+        write(17,rec=1) LL; call flush(17); close(17)
         if (write_nd) then
            open(unit=18,file=trim(outdirparam)//'/'//outfile_nd,access='direct',status='replace',recl=2*nbyte*max(1,max_iter)*num_comps)
-           write(18,rec=1) nd; call flush(18); close(18)    
+           write(18,rec=1) nd; call flush(18); close(18)
         end if
         open(unit=21,file=trim(outdirparam)//'/'//outfile_A,access='direct',status='replace',recl=2*nbyte*nw*num_comps)
         write(21,rec=1) A; call flush(21); close(21)
@@ -2710,7 +2842,7 @@ subroutine get_seg_list
                      seg_list(j,2,1) = k
                      seg_list(j,2,2) = i
                      seg_list(j,2,3) = bcnt - cnt0
-                     
+
                      seg_list(j+1,1,1) = k
                      seg_list(j+1,1,2) = i
                      seg_list(j+1,1,3) = bcnt - cnt0 + 1
@@ -2729,7 +2861,7 @@ subroutine get_seg_list
    seg_list(seg_nodes,2,1) = num_files
    seg_list(seg_nodes,2,2) = num_samples(num_files)
    seg_list(seg_nodes,2,3) = field_dim(num_files)
- 
+
    do j = 1,seg_nodes
       print *, 'node ', j, ' start: file ', seg_list(j,1,1), ' sample ', seg_list(j,1,2), ' index ', seg_list(j,1,3)
       print *, 'node ', j, ' stop : file ', seg_list(j,2,1), ' sample ', seg_list(j,2,2), ' index ', seg_list(j,2,3)
@@ -2745,7 +2877,7 @@ subroutine get_data
   sampstart = seg_list(seg_rank+1,1,2)
   filestop = seg_list(seg_rank+1,2,1)
   sampstop = seg_list(seg_rank+1,2,2)
-  
+
   if (filestart == filestop) then
      numsegs = sampstop - sampstart + 1
   else
@@ -2754,12 +2886,12 @@ subroutine get_data
         numsegs = numsegs + num_samples(k)
      end do
   end if
-  
+
   !print *, myrank+1, ': filestart = ', filestart, ' filestop = ', filestop, ': sampstart = ', sampstart, ' sampstop = ', sampstop
   !CALL flush(6)
-  
+
   allocate(dataseg(numsegs))
-  
+
   ! get the first segment
   if (filestart == filestop .and. sampstop == sampstart) then
 
@@ -2768,7 +2900,7 @@ subroutine get_data
      datsize = data_dim
 
      ! load the data in this segment
-     dataseg(1)%filenum = filestart     
+     dataseg(1)%filenum = filestart
      dataseg(1)%lastdim = seg_list(seg_rank+1,2,3) - seg_list(seg_rank+1,1,3) + 1
      if (.not. dble_data) then
         !print *, myrank+1, 'lastdim = ', dataseg(1)%lastdim, ': datsize = ', datsize; call flush(6)
@@ -2793,7 +2925,7 @@ subroutine get_data
             dataseg(1)%data(:,i) = dble_array
         end do
         deallocate(dble_array)
-     end if 
+     end if
      close(8)
      allocate(dataseg(1)%loglik(dataseg(1)%lastdim),stat=ierr); call tststat(ierr)
      dataseg(1)%loglik = dble(0.0)
@@ -2816,7 +2948,7 @@ subroutine get_data
      lastd = field_dim(filestart)
      sampsize = data_dim * field_dim(filestart)
      datsize = data_dim
-     
+
      !print *, 'data 2 ...'; call flush(6)
      ! load the remaining data in the first sample
      dataseg(1)%filenum = filestart
@@ -2843,7 +2975,7 @@ subroutine get_data
         end do
         close(8)
         deallocate(dble_array)
-     end if 
+     end if
      allocate(dataseg(1)%loglik(dataseg(1)%lastdim),stat=ierr); call tststat(ierr)
      dataseg(1)%loglik = dble(0.0)
      allocate(dataseg(1)%modloglik(num_models,dataseg(1)%lastdim),stat=ierr); call tststat(ierr)
@@ -2909,7 +3041,7 @@ subroutine get_data
             dataseg(i+1)%filenum = filestart
             dataseg(i+1)%lastdim = lastd
 
-            
+
             allocate(dataseg(i+1)%loglik(dataseg(i+1)%lastdim),stat=ierr); call tststat(ierr)
             dataseg(i+1)%loglik = dble(0.0)
             allocate(dataseg(i+1)%modloglik(num_models,dataseg(i+1)%lastdim),stat=ierr); call tststat(ierr)
@@ -2923,7 +3055,7 @@ subroutine get_data
                 do j = 1,dataseg(i+1)%numgood
                     dataseg(i+1)%goodinds(j) = j
                 end do
-            end if 
+            end if
          end do
          close(8)
          deallocate(real_array)
@@ -2936,7 +3068,7 @@ subroutine get_data
             dataseg(i+1)%data = reshape(dble_array,(/datsize,lastd/))
             dataseg(i+1)%filenum = filestart
             dataseg(i+1)%lastdim = lastd
-            
+
             allocate(dataseg(i+1)%loglik(dataseg(i+1)%lastdim),stat=ierr); call tststat(ierr)
             dataseg(i+1)%loglik = dble(0.0)
             allocate(dataseg(i+1)%modloglik(num_models,dataseg(i+1)%lastdim),stat=ierr); call tststat(ierr)
@@ -2950,19 +3082,19 @@ subroutine get_data
                 do j = 1,dataseg(i+1)%numgood
                     dataseg(i+1)%goodinds(j) = j
                 end do
-            end if 
+            end if
          end do
          close(8)
          deallocate(dble_array)
-     end if     
+     end if
   else
      ! there is more than one file
-     
+
      ! get the first segment
      lastd = field_dim(filestart)
      sampsize = data_dim * field_dim(filestart)
      datsize = data_dim
-     
+
      dataseg(1)%filenum = filestart
      dataseg(1)%lastdim = lastd - seg_list(seg_rank+1,1,3) + 1
 
@@ -2970,7 +3102,7 @@ subroutine get_data
         allocate(real_array(datsize))
         allocate(dataseg(1)%data(datsize,dataseg(1)%lastdim))
         open(unit=8,file=infile(filestart),access="direct",recl=nbyte*datsize)
-        do i = 1,dataseg(1)%lastdim 
+        do i = 1,dataseg(1)%lastdim
             read(8,rec=(sampstart-1)*lastd + i + seg_list(seg_rank+1,1,3) - 1) real_array
             dataseg(1)%data(:,i) = dble(real_array)
         end do
@@ -2980,7 +3112,7 @@ subroutine get_data
         allocate(dble_array(datsize))
         allocate(dataseg(1)%data(datsize,dataseg(1)%lastdim))
         open(unit=8,file=infile(filestart),access="direct",recl=2*nbyte*datsize)
-        do i = 1,dataseg(1)%lastdim 
+        do i = 1,dataseg(1)%lastdim
             read(8,rec=(sampstart-1)*lastd + i + seg_list(seg_rank+1,1,3) - 1) dble_array
             dataseg(1)%data(:,i) = dble_array
         end do
@@ -3030,7 +3162,7 @@ subroutine get_data
             end if
         end do
         close(8)
-        deallocate(real_array)     
+        deallocate(real_array)
      else
         allocate(dble_array(sampsize))
         open(unit=8,file=infile(filestart),access="direct",recl=2*nbyte*sampsize)
@@ -3058,9 +3190,9 @@ subroutine get_data
             end if
         end do
         close(8)
-        deallocate(dble_array)     
+        deallocate(dble_array)
      end if
-     
+
      ! get the last segment
      lastd = field_dim(filestop)
      sampsize = data_dim * field_dim(filestop)
@@ -3103,7 +3235,7 @@ subroutine get_data
            dataseg(numsegs)%goodinds(j) = j
         end do
      end if
-     
+
      ! get the remaining segments in stop file
      if (.not. dble_data) then
         allocate(real_array(sampsize))
@@ -3162,7 +3294,7 @@ subroutine get_data
         close(8)
         deallocate(dble_array)
      end if
-     
+
      ! get segments from  middle files
      do k = filestart+1,filestop-1
         lastd = field_dim(k)
@@ -3227,7 +3359,7 @@ subroutine get_data
             deallocate(dble_array)
         end if
      end do
-     
+
   end if
 
 end subroutine get_data
@@ -3236,7 +3368,7 @@ end subroutine get_data
 
 subroutine get_cmd_args
   integer :: i, j, k
-  
+
   !numargs = iargc() - 4
   !numargs = iargc()
   !print *, 'numargs = ', numargs; call flush(6)
@@ -3249,7 +3381,7 @@ subroutine get_cmd_args
   do i = 1,numargs
      call getarg(i,arglist(i))
   end do
-  
+
   read(arglist(1),'(a)') infilename
   !print *, 'infilename = ', infilename(1:len(infilename))
   open(unit=28,file=infilename)
@@ -3258,7 +3390,7 @@ subroutine get_cmd_args
      print *, 'Error: must have either 1 arg (paramfile) or 3 (paramfile num_model_nodes num_segment_nodes)'
      stop
   end if
-  
+
   do
      read(28,'(a)',iostat=ierr) tmpstring
      !print *, 'tmpstring 1 is <begin>', tmpstring, '<end>'
@@ -3297,7 +3429,7 @@ subroutine get_cmd_args
               call system('ls -F1 '//tmparg(1:i-1)//' > tmpflist')
               open(unit=29,file='tmpflist')
               !open(unit=29,file='tmpflist',status='scratch')
-              do   
+              do
                  read(29,'(a)',iostat=ierr) tmpdirarg
                  if (ierr < 0) then
                     exit
@@ -3309,7 +3441,7 @@ subroutine get_cmd_args
               call system('dir /B '//tmparg(1:i-1)//' > tmpflist')
               open(unit=29,file='tmpflist')
               !open(unit=29,file='tmpflist',status='scratch')
-              do   
+              do
                  read(29,'(a)',iostat=ierr) tmpdirarg
                  if (ierr < 0) then
                     exit
@@ -3404,7 +3536,7 @@ subroutine get_cmd_args
            read(tmparg(1:i-1),'(i12)') tmp_read
            num_samples(j) = tmp_read
            do ii = 1,num_dir_files(k)-1
-              num_samples(j+ii) = num_samples(j)                 
+              num_samples(j+ii) = num_samples(j)
            end do
            j = j + num_dir_files(k)
            tmparg = adjustl(tmparg(i:))
@@ -3434,7 +3566,7 @@ subroutine get_cmd_args
            field_dim(j) = tmp_read
            tmparg = adjustl(tmparg(i:))
            !print *, 'tmparg = ', tmparg; call flush(6)
-       
+
            do kk = 1,num_dir_files(k)-1
               field_dim(j+kk) = field_dim(j)
            end do
@@ -3448,13 +3580,13 @@ subroutine get_cmd_args
         read(tmparg,'(i12)') block_size
         print *, 'initial matrix block_size = ', block_size; call flush(6)
      case('blk_min')
-        read(tmparg,'(i12)') blk_min 
+        read(tmparg,'(i12)') blk_min
         print *, 'blk_min = ', blk_min; call flush(6)
      case('blk_max')
-        read(tmparg,'(i12)') blk_max 
+        read(tmparg,'(i12)') blk_max
         print *, 'blk_max = ', blk_max; call flush(6)
      case('blk_step')
-        read(tmparg,'(i12)') blk_step 
+        read(tmparg,'(i12)') blk_step
         print *, 'blk_step = ', blk_step; call flush(6)
      case('dft_length')
         read(tmparg,'(i12)') dft_length
@@ -3900,4 +4032,3 @@ end subroutine
 !----------------------------------------------------------------------
 end program main
 !----------------------------------------------------------------------
-
