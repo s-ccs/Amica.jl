@@ -15,7 +15,7 @@ end
 function amica!(myAmica::AbstractAmica,
     data::AbstractMatrix{T};
     lrate::LearningRate{T}=LearningRate{T}(),
-    shapelrate::LearningRate{T}=LearningRate{T}(; lrate=0.1, minimum=0.5, maximum=5, init=1.5),
+    shapelrate::LearningRate{T}=LearningRate{T}(; lrate=0.1, minimum=1, maximum=2, init=1.5),
     remove_mean::Bool=true,
     do_sphering::Bool=true,
     show_progress::Bool=true,
@@ -37,6 +37,7 @@ function amica!(myAmica::AbstractAmica,
     if remove_mean
         removed_mean = removeMean!(data)
     end
+
     if do_sphering
         S = sphering!(data)
         myAmica.S = S
@@ -51,25 +52,28 @@ function amica!(myAmica::AbstractAmica,
     prog = ProgressUnknown("Minimizing"; showspeed=true)
 
     for iter in 1:maxiter
-        gg = myAmica.learnedParameters
-        @debug :scale, gg.scale[2], :location, gg.location[2], :proportions, gg.proportions[2], :shape, gg.shape[2]
-        @debug println("")
-        #E-step
-        #@show typeof(myAmica.A),typeof(data)
-        @debug :A myAmica.A[1:2, 1:2]
 
-        @debug :source_signals myAmica.source_signals[1], myAmica.source_signals[end]
+        # myAmica.source_signals = myAmica.A ^ -1 * data
+        # [OK]
         update_sources!(myAmica, data)
-        @debug :source_signals myAmica.source_signals[1], myAmica.source_signals[end]
-        calculate_ldet!(myAmica)
-        initialize_Lt!(myAmica)
-        myAmica.Lt .+= LLdetS
 
+        # myAmica.ldet = -logabsdet(myAmica.A)[1]
+        # [OK]
+        calculate_ldet!(myAmica)
+        # myAmica.Lt .= myAmica.ldet
+        initialize_Lt!(myAmica)
+
+        myAmica.Lt .+= LLdetS
+        # for j in m: myAmica.y[j, :, :] .= sqrt.(myAmica.learnedParameters.scale[j, :]) .* (myAmica.source_signals .- myAmica.learnedParameters.location[j, :])
+        # [OK]
         calculate_y!(myAmica)
 
-        @debug :y, myAmica.y[1, 1:3, 1]
         # pre-calculate abs(y)^rho
-        IVM.abs!(myAmica.y_rho, myAmica.y)
+        if !hasproperty(MKL_jll, :libmkl_rt)
+            myAmica.y_rho .= abs.(myAmica.y)
+        else
+            IVM.abs!(myAmica.y_rho, myAmica.y)
+        end
         for i in 1:n
             for j in 1:m
                 @views _y_rho = myAmica.y_rho[j, i, :]

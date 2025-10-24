@@ -9,10 +9,12 @@ end
 abstract type AbstractAmica end
 
 mutable struct SingleModelAmica{T,ncomps,nmix} <: AbstractAmica
+    "unmixed source signals (A^-1 * x)"
     source_signals::Array{T,2}
+
     learnedParameters::GGParameters{T,ncomps,nmix}
     m::Int    #Number of gaussians
-    A::Array{T,2} # unmixing matrices for each model
+    A::Array{T,2} # unmixing matrix
     S::Array{T,2} # sphering matrix
     z::Array{T,3}
     y::Array{T,3}

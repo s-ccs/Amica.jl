@@ -332,7 +332,7 @@ end
     clamp!(shape, shapelrate.minimum, shapelrate.maximum)
 end
 
-#Calculates determinant of mixing Matrix A (with log). first log-likelihood part of L = |A| * p(sources)
+"Calculates determinant of mixing Matrix A (with log). first log-likelihood part of L = |A| * p(sources)"
 function calculate_ldet!(myAmica::SingleModelAmica)
     #myAmica.ldet = -log(abs(det(myAmica.A)))
     myAmica.ldet = -logabsdet(myAmica.A)[1]
@@ -345,7 +345,7 @@ function calculate_ldet!(myAmica::MultiModelAmica)
     end
 end
 
-#Updates source singal estimations by unmixing the data
+"updates the unmixed source_signals: myAmica.source_signals = myAmica.A ^ -1 * data"
 function update_sources!(myAmica::SingleModelAmica{T}, data::AbstractMatrix{T}) where {T<:Real}
     #myAmica.source_signals .= myAmica.A \ data#
     #myAmica.source_signals .= myAmica.A \ data#

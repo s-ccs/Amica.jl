@@ -35,13 +35,17 @@ end
 #taken from amica_a.m
 #L = det(A) * mult p(s|θ)
 function logpfun!(out::AbstractArray{T,3}, y_rho::AbstractArray{T,3}, shape::AbstractArray{T,2}) where {T<:Real}
-    out .= 1 .+ 1 ./ shape
-    IVM.lgamma!(out)
-    out .= .-y_rho .- log(2) .- out
+    if !hasproperty(MKL_jll, :libmkl_rt)
+        out .= .-y_rho .- log(2) .- loggamma.(1 .+ 1 ./ shape)
+    else
+        out .= 1 .+ 1 ./ shape
+        IVM.lgamma!(out)
+        out .= .-y_rho .- log(2) .- out
+    end
 end
 
 function ffun!(fp::AbstractArray{T,3}, y::AbstractArray{T,3}, rho::AbstractArray{T,2}) where {T<:Real}
-    (m, n, N) = size(y)
+    (m, n, _) = size(y)
 
     fp .= abs.(y)
 

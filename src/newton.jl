@@ -36,8 +36,7 @@ end
 
     lnatrate = lrate.natural_rate
     lrate = lrate.lrate
-    M = size(myAmica.models)
-    (n, N) = size(myAmica.models[1].source_signals)
+    (n, _) = size(myAmica.models[1].source_signals)
 
     sigma2 = myAmica.models[h].source_signals .^ 2 * myAmica.ica_weights_per_sample[h, :] / myAmica.ica_weights[h]
 
