@@ -77,6 +77,7 @@ end
             @inbounds sum_exp += exp(Q[j, i, k] - Qmax)
         end
 
+        # TODO use logsumexp
         logsumexp_Q = Qmax + log(sum_exp)
 
         # Compute z[j,i,k] = 1 / exp(logsumexp_Q - Q[j,i,k]) + epsilon

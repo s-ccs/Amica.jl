@@ -68,25 +68,31 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, l
     #initialize parameters
 
     centers = zeros(T, n)
-    eye = Matrix(I, n, n)
     if isnothing(A)
-        A = zeros(T, n, n)
-        A[:, :] = eye[n] .+ 0.1 * rand(n, n)
+        # Initialize A to match Fortran: small random ±0.005, diagonal = 1.0, then normalize
+        Wtmp = rand(T, n, n)
+        A = T(0.01) .* (T(0.5) .- Wtmp)  # Random values in range [-0.005, 0.005]
         for i in 1:n
-            A[:, i] = A[:, i] / norm(A[:, i])
+            A[i, i] = T(1.0)  # Set diagonal to 1.0
+            A[:, i] = A[:, i] / norm(A[:, i])  # Normalize each column
         end
     end
 
     proportions = (1 / m) * ones(T, m, n)
     if isnothing(location)
-        if m > 1
-            location = 0.1 * randn(T, m, n)
-        else
-            location = zeros(T, m, n)
+        # Initialize location to match Fortran: mu(j,k) = j - 1 - (m-1)/2
+        # This creates centered values around 0 (e.g., -1, 0, 1 for m=3)
+        location = zeros(T, m, n)
+        for j in 1:m
+            location[j, :] .= T(j - 1 - (m - 1) / 2)
         end
+        # Add small random perturbation: ±0.05
+        location .+= T(0.05) .* (T(1.0) .- T(2.0) .* rand(T, m, n))
     end
     if isnothing(scale)
-        scale = ones(T, m, n) + 0.1 * randn(T, m, n)
+        # Initialize scale to match Fortran: 1.0 + 0.1*(0.5 - random[0,1])
+        # This gives values in range [0.95, 1.05]
+        scale = ones(T, m, n) .+ T(0.1) .* (T(0.5) .- rand(T, m, n))
     end
     shape = ones(T, m, n)
 
@@ -144,27 +150,36 @@ function MultiModelAmica(data::Array; m=3, M=2, maxiter=500, A=nothing, location
     LL = Float64[]
 
     #This part only exists to allow for initial values to be set by the user. They are still required to have the old format (something x something x M)
-    eye = Matrix(I, n, n)
     if isnothing(A)
-        A = zeros(m, n, N)
+        A = zeros(n, n, M)
         for h in 1:M
-            A[:, :, h] = eye[n] .+ 0.1 * rand(n, n)
+            # Initialize A to match Fortran: small random ±0.005, diagonal = 1.0, then normalize
+            Wtmp = rand(n, n)
+            A[:, :, h] = 0.01 .* (0.5 .- Wtmp)  # Random values in range [-0.005, 0.005]
             for i in 1:n
-                A[:, i, h] = A[:, i, h] / norm(A[:, i, h])
+                A[i, i, h] = 1.0  # Set diagonal to 1.0
+                A[:, i, h] = A[:, i, h] / norm(A[:, i, h])  # Normalize each column
             end
         end
     end
 
     if isnothing(location)
-        if m > 1
-            location = 0.1 * randn(m, n, M)
-        else
-            location = zeros(m, n, M)
+        # Initialize location to match Fortran: mu(j,k) = j - 1 - (m-1)/2
+        # This creates centered values around 0 (e.g., -1, 0, 1 for m=3)
+        location = zeros(m, n, M)
+        for h in 1:M
+            for j in 1:m
+                location[j, :, h] .= j - 1 - (m - 1) / 2
+            end
+            # Add small random perturbation: ±0.05
+            location[:, :, h] .+= 0.05 .* (1.0 .- 2.0 .* rand(m, n))
         end
     end
 
     if isnothing(scale)
-        scale = ones(m, n, M) + 0.1 * randn(m, n, M)
+        # Initialize scale to match Fortran: 1.0 + 0.1*(0.5 - random[0,1])
+        # This gives values in range [0.95, 1.05]
+        scale = ones(m, n, M) .+ 0.1 .* (0.5 .- rand(m, n, M))
     end
 
     for h in 1:M

@@ -37,3 +37,4 @@
 | fix_init       | 1 (randomize init?)                                         |          |     |     |
 | ldet           | determinant?                                                | DSum     |     |     |
 |                | weighted centers                                            | wc       |     |     |
+| fp             |                                                             | fp       |     |     |

@@ -839,6 +839,9 @@ if (seg_rank == 0) then
                A(:,(h-1)*nw+i) = A(:,(h-1)*nw+i) / Anrmk
                comp_list(i,h) = (h-1) * nw + i
             end do
+
+            call write_matrix("A_init", A(:, :))
+
          end if
       end do
    end if
@@ -1008,10 +1011,6 @@ do
    call write_matrix("rho", rho)
    call write_matrix("mu", mu)
 
-   print *, "shape of sbeta", shape(sbeta)
-   print *, "shape of mu", shape(mu)
-   print *, "shape of rho", shape(rho)
-
    call write_scalar("Dsum", Dsum(1))
    
    call MPI_BCAST(Dsum,num_models,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)
@@ -1178,14 +1177,25 @@ do
 
    call write_matrix("b", b(:, :, 1))
 
-   print *, "shape of z", shape(z)
-   print *, "shape of y", shape(y)
-   print *, "shape of Ptmp", shape(Ptmp)
-
    call write3dmatrix("y", y(:, :, :, 1))
    call write3dmatrix("z", z(:, :, :, 1))
    call write_matrix("Ptmp", Ptmp)
    call write_vector("LL", LL)
+
+   call write_matrix("sbeta_1", sbeta)
+   call write_matrix("rho_1", rho)
+   call write_matrix("mu_1", mu)
+   call write_vector("fp", fp)
+
+
+   call write_matrix("lambda", lambda)
+
+
+   call write_matrix("g_after_iter1", g(:, :))
+   call write_matrix("kappa_after_iter1", kappa(:, :))
+   call write_matrix("sigma2_after_iter1", sigma2(:, :))
+   call write_matrix("a_after_iter1", A(:, :))
+
 
    stop 0
 
@@ -2154,6 +2164,9 @@ subroutine update_params
      if (doscaling) then
         do k = 1,num_comps
            Anrmk = sqrt(sum(A(:,k)*A(:,k)))
+
+            ! print *, "Anrmk", Anrmk
+
            if (Anrmk > dble(0.0)) then
               A(:,k) = A(:,k) / Anrmk
               mu(:,k) = mu(:,k) * Anrmk

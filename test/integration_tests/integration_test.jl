@@ -1,6 +1,7 @@
 using Test
 using Statistics
 using Amica
+using LinearAlgebra
 
 include("util.jl")
 
@@ -27,7 +28,9 @@ include("util.jl")
     @test sphered ≈ data
 
     A = read_fdt("datadumps/A.bin"; ncols=71, T=Float64)
+    A_init = read_fdt("datadumps/A_init.bin"; ncols=71, T=Float64)
     W = read_fdt("datadumps/W.bin"; ncols=71, T=Float64)
+
 
     sbeta = read_fdt("datadumps/sbeta.bin"; ncols=3, T=Float64)
     rho = read_fdt("datadumps/rho.bin"; ncols=3, T=Float64)
@@ -38,7 +41,6 @@ include("util.jl")
     myAmica = SingleModelAmica(data; maxiter=30, do_sphering=true, remove_mean=true, m=3, A=A, scale=sbeta, location=mu)
 
     @test A ≈ inv(W)
-
 
     lrate = Amica.LearningRate{Float64}()
     # run amica for one iteration
@@ -58,8 +60,6 @@ include("util.jl")
 
     @test y ≈ myAmica.y
 
-    @info size(myAmica.z)
-
     # test calculate_u!
     z = read_3d_fdt("datadumps/z.bin"; ncols=639000, nslabs=3, T=Float64)
     z = permutedims(z, (3, 2, 1))[:, :, 1:319500]
@@ -69,13 +69,40 @@ include("util.jl")
     Ptmp = read_fdt("datadumps/Ptmp.bin"; ncols=639000, T=Float64)[1:319500, 1]
     @test Ptmp ≈ myAmica.Lt
 
-
     # test calculate_LL!
     LL = read_fdt("datadumps/LL.bin"; ncols=1, T=Float64)[1, :]
 
     @test LL[1] ≈ myAmica.LL[1]
 
-    @info lrate
-    @info lrate.lrate
+    # test fp
+    fp = read_fdt("datadumps/fp.bin"; ncols=639000, T=Float64)[1:319500, :]
+
+    @test fp ≈ myAmica.fp[3, 71, :]
+
+    # test g 
+    g = read_fdt("datadumps/g_after_iter1.bin"; ncols=639000, T=Float64)[1:319500, :]'
+
+    @test g ≈ myAmica.g
+
+    # test lambda
+
+    # location after one iteration
+    mu_1 = read_fdt("datadumps/mu_1.bin"; ncols=3, T=Float64)
+    @test myAmica.learnedParameters.location ≈ mu_1
+
+
+    # scale after one iteration
+    sbeta_1 = read_fdt("datadumps/sbeta_1.bin"; ncols=3, T=Float64)
+    @test myAmica.learnedParameters.scale ≈ sbeta_1
+
+
+    # shape
+    rho_1 = read_fdt("datadumps/rho_1.bin"; ncols=3, T=Float64)
+    @test myAmica.learnedParameters.shape ≈ rho_1
+
+    # A
+    A_1 = read_fdt("datadumps/a_after_iter1.bin"; ncols=71, T=Float64)
+    @test myAmica.A ≈ A_1
+
 
 end

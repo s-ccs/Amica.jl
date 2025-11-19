@@ -52,7 +52,8 @@ function ffun!(fp::AbstractArray{T,3}, y::AbstractArray{T,3}, rho::AbstractArray
     for i in 1:n
         for j in 1:m
             @views _fp = fp[j, i, :]
-            @views optimized_pow!(_fp, _fp, rho[j, i] - 1)
+            # matlab uses ^(rho-1) while fortran does ^rho
+            @views optimized_pow!(_fp, _fp, rho[j, i])
         end
     end
 

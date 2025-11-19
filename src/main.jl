@@ -15,13 +15,13 @@ end
 function amica!(myAmica::AbstractAmica,
     data::AbstractMatrix{T};
     lrate::LearningRate{T}=LearningRate{T}(),
-    shapelrate::LearningRate{T}=LearningRate{T}(; lrate=0.1, minimum=1, maximum=2, init=1.5),
+    shapelrate::LearningRate{T}=LearningRate{T}(; lrate=0.05, minimum=1.0, maximum=2.0, init=1.5),
     remove_mean::Bool=true,
     do_sphering::Bool=true,
     show_progress::Bool=true,
     maxiter::Int=myAmica.maxiter,
     do_newton::Bool=true,
-    newt_start_iter::Int=25,
+    newt_start_iter::Int=50,
     iterwin::Int=10,
     update_shape::Bool=true,
     mindll::T=T(1e-8), kwargs...) where {T<:Real}
@@ -105,6 +105,7 @@ function amica!(myAmica::AbstractAmica,
         #M-step
         try
             #Updates parameters and mixing matrix
+            # [OK]
             update_loop!(myAmica, shapelrate, update_shape, iter, do_newton, newt_start_iter, lrate)
         catch e
             #Terminates if NaNs are detected in parameters
