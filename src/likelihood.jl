@@ -9,10 +9,7 @@ end
 
 
 function calculate_u_and_Lt!(myAmica::MultiModelAmica)
-    M = size(myAmica.models, 1)
-    for h in 1:M #run along models
-        @timeit to "calculate_u_and_Lt" calculate_u_and_Lt!(myAmica.models[h])
-    end
+    calculate_u_and_Lt!.(myAmica.models)
 end
 
 @kernel function calculate_u_kernel!(
@@ -23,7 +20,7 @@ end
 ) where {T<:Real}
     k, i = @index(Global, NTuple)
 
-    N, n, m = size(z)
+    _, _, m = size(z)
 
     # compute Q
 
