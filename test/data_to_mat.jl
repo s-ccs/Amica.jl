@@ -12,18 +12,18 @@ m = 3 #Gaussians
 M = 2 #ICA models
 n = 5 #Data channels
 
-t = range(0,20*π,length=1000)
-s =rand(PinkGaussian(length(t)),n)'
-s[3,:] = sin.(t)
-s[4,:] = sin.(2 .* t)
-s[5,:] = sin.(10 .* t)
+t = range(0, 20 * π, length=1000)
+s = rand(PinkGaussian(length(t)), n)'
+s[3, :] = sin.(t)
+s[4, :] = sin.(2 .* t)
+s[5, :] = sin.(10 .* t)
 #s = s .* [1,2,3,4]
-A = rand(size(s,1),size(s,1))
+A = rand(size(s, 1), size(s, 1))
 #A = [1 1 0 0; 0 1 1 0; 0 0 1 1; 1 0 1 0]
-Id =1* Matrix(I, 5, 5) 
+Id = 1 * Matrix(I, 5, 5)
 
-s = Id*s #for some reason s doesnt get saved as a matrix otherwise...
-x = A*s
+s = Id * s #for some reason s doesnt get saved as a matrix otherwise...
+x = A * s
 #_____________________________________________
 #_____________________________________________
 #get eeg data
@@ -38,20 +38,20 @@ x = A*s
 #_____________________________________________
 
 #initialise random parameters (A, beta, mu) before saving them
-beta = ones(m, n, M) + 0.1 * randn(m, n, M)
+beta = ones(n, m, M) + 0.1 * randn(n, m, M)
 
 if m > 1
-    mu = 0.1 * randn(m, n, M)
+    mu = 0.1 * randn(n, m, M)
 else
-    mu = zeros(m, n, M)
+    mu = zeros(n, m, M)
 end
 
 eye = Matrix{Float64}(I, n, n)
-A_init = zeros(n,n,M)
+A_init = zeros(n, n, M)
 for h in 1:M
-    A_init[:,:,h] = eye[n] .+ 0.1*rand(n,n)
+    A_init[:, :, h] = eye[n] .+ 0.1 * rand(n, n)
     for i in 1:n
-        A_init[:,i,h] = A_init[:,i,h] / norm(A_init[:,i,h])
+        A_init[:, i, h] = A_init[:, i, h] / norm(A_init[:, i, h])
     end
 end
 

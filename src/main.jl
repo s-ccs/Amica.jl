@@ -3,7 +3,8 @@ Main AMICA algorithm
 """
 
 function fit(amicaType::Type{T}, data; m=3, maxiter=500, location=nothing, scale=nothing, A=nothing, kwargs...) where {T<:AbstractAmica}
-    amica = T(data; m=m, location=location, scale=scale, A=A)
+    (N, n) = size(data)
+    amica = T(m=m, ncomps=n, nsamples=N, location=location, scale=scale, A=A)
     fit!(amica, data; maxiter=maxiter, kwargs...)
     return amica
 end
@@ -26,6 +27,11 @@ function amica!(myAmica::AbstractAmica,
     mindll::T=T(1e-8), kwargs...) where {T<:Real}
 
     initialize_shape_parameter!(myAmica, shapelrate)
+
+    # Check that data dimensions match the model
+    if size(data) != size(myAmica.source_signals)
+        error("Data dimension mismatch: data has size $(size(data)) but model expects $(size(myAmica.source_signals))")
+    end
 
     #Prepares data by removing means and/or sphering
     if remove_mean
@@ -52,18 +58,17 @@ function amica!(myAmica::AbstractAmica,
 
         @timeit to "update_y_rho" update_y_rho!(myAmica)
 
-        @timeit to "loopiloop" loopiloop!(myAmica) #Updates y and Lt. Todo: Rename
+        @timeit to "calculate_u_and_Lt" calculate_u_and_Lt!(myAmica)
 
         @timeit to "calculate_DLL" calculate_DLL!(dLL, myAmica, iter)
 
         if iter > iterwin + 1
+            # Calculates average likelihood change over multiple itertions
             @timeit to "calculate_lrate" calculate_lrate!(dLL, lrate, iter, newt_start_iter, do_newton, iterwin)
-            #Calculates average likelihood change over multiple itertions
 
-            #Checks termination criterion
-            @timeit to "calculate_sdLL" sdll = calculate_sdLL(dLL, iter, iterwin)
+            # Checks termination criterion
+            sdll = sum(dLL[iter-iterwin+1:iter]) / iterwin
             if (sdll > 0) && (sdll < mindll)
-                println("LL increase to low. Stop at iteration ", iter)
                 break
             end
         end
@@ -71,8 +76,8 @@ function amica!(myAmica::AbstractAmica,
         #M-step
         try
             #Updates parameters and mixing matrix
-            # [OK]
-            @timeit to "update_loop" update_loop!(myAmica, shapelrate, update_shape, iter, do_newton, newt_start_iter, lrate)
+            @timeit to "update_parameters" update_parameters!(myAmica, shapelrate, update_shape)
+            @timeit to "newton_method" newton_method!(myAmica, iter, do_newton, newt_start_iter, lrate)
         catch e
             #Terminates if NaNs are detected in parameters
             if isa(e, AmicaNaNException)

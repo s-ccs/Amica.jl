@@ -1,83 +1,70 @@
 #Updates the mixing matrix with the newton method
 function newton_method!(myAmica::SingleModelAmica{T}, iter::Int, do_newton::Bool, newt_start_iter::Int, lrate::LearningRate) where {T<:Real}
+    N, n, m = size(myAmica.y)
 
-    (m, n, N) = size(myAmica.z)
+    # Calculate dA = I - g' * source_signals / N
+    dA = I(n) - (myAmica.g' * myAmica.source_signals) / N
 
-    # Match Fortran: divide by N (dgm_numer which equals all_blks)
-    dA = Matrix{Float64}(I, n, n) - (myAmica.g * myAmica.source_signals') / N
+    if do_newton && (iter >= newt_start_iter)
+        # Calculate sigma2 = sum(source_signals^2) / N
+        sigma2 = vec(sum(myAmica.source_signals .^ 2, dims=2) / N)
 
+        # Calculate baralpha (proportions), same as proportions in single model case
+        baralpha = myAmica.proportions  # (n, m)
 
-    if (do_newton == 1) && (iter > newt_start_iter)
-        lrate = lrate.lrate
-        sigma2 = sum(myAmica.source_signals .^ 2, dims=2) / N #is probably called sigma2 cause always squared
-        B = zeros(n, n)
-        bflag = false
+        # Initialize kappa and lambda
+        kappa = zeros(T, n)
+        lambda = zeros(T, n)
 
-        for k in 1:N, i in 1:n
-            lambda = zero(T)
-            kappa = zero(T)
-
+        # Calculate kappa and lambda by summing over mixture components
+        for i in 1:n
             for j in 1:m
-                # TODO use .zfp here??
-                lambda += myAmica.proportions[j, i] * ((myAmica.z[j, i, k] * (myAmica.fp[j, i, k] * myAmica.y[j, i, k])^2) + (myAmica.location[j, i] .^ 2 .* myAmica.kp[j, i]) / N)
-                kappa += myAmica.proportions[j, i] * myAmica.kp[j, i]
-            end
+                # dkap represents E[fp * fp] per mixture component
+                dkap = myAmica.kp[i, j]
+                kappa[i] += baralpha[i, j] * dkap
 
-            if isnan(lambda) || isnan(kappa)
-                throw(AmicaNaNException())
-            end
+                # lambda includes both the variance term and location shift
+                # dlambda = sum(z * (fp*y - 1)^2) / sum(z)
+                # Note: sum(z[:,i,j]) = baralpha[i,j] * N, so we divide by (baralpha*N) not just N
+                sum_z = baralpha[i, j] * N
+                dlambda = sum(myAmica.z[:, i, j] .* (myAmica.fp[:, i, j] .* myAmica.y[:, i, j] .- 1.0) .^ 2) / sum_z
 
-            if i == k
-                B[i, i] = dA[i, i] / lambda
-            else
-                denom = kappa[i] * kappa[k] * sigma2[i] * sigma2[k] - 1
-                if denom > 0
-                    B[i, k] = (-kappa[k] * sigma2[i] * dA[i, k] + dA[k, i]) / denom
+                lambda[i] += baralpha[i, j] * (dlambda + dkap * myAmica.location[i, j]^2)
+            end
+        end
+
+        # Build the Newton update matrix B
+        B = zeros(T, n, n)
+        posdef = true
+
+        for i in 1:n
+            for k in 1:n
+                if i == k
+                    # Diagonal elements
+                    B[i, i] = dA[i, i] / lambda[i]
                 else
-                    bflag = true
+                    # Off-diagonal elements
+                    sk1 = sigma2[i] * kappa[k]
+                    sk2 = sigma2[k] * kappa[i]
+
+                    if sk1 * sk2 > 1.0
+                        B[i, k] = (sk1 * dA[i, k] - dA[k, i]) / (sk1 * sk2 - 1.0)
+                    else
+                        posdef = false
+                    end
                 end
             end
         end
 
-        if (bflag == false)
-            myAmica.A -= lrate * myAmica.A * B
+        # Apply update if Hessian is positive definite
+        if posdef
+            myAmica.A -= lrate.lrate * myAmica.A * B
+        else
+            # Fall back to natural gradient if not positive definite
+            myAmica.A -= lrate.natural_rate * myAmica.A * dA
         end
     else
-        lnatrate = lrate.natural_rate
-        myAmica.A -= lnatrate * myAmica.A * dA
+        # Use natural gradient
+        myAmica.A -= lrate.natural_rate * myAmica.A * dA
     end
 end
-
-# @views function newton_method!(myAmica::MultiModelAmica, h, iter, g, kappa, do_newton, newt_start_iter, lrate::LearningRate)
-
-#     lnatrate = lrate.natural_rate
-#     lrate = lrate.lrate
-#     (n, N) = size(myAmica.models[1].source_signals)
-
-#     sigma2 = myAmica.models[h].source_signals .^ 2 * myAmica.ica_weights_per_sample[h, :] / myAmica.ica_weights[h]
-
-#     # Match Fortran: divide by N (dgm_numer which equals all_blks)
-#     dA = Matrix{Float64}(I, n, n) - (g * myAmica.models[h].source_signals') / N
-#     bflag = 0
-#     B = zeros(n, n)
-
-#     for i in 1:n
-#         for k in 1:N
-#             if i == k
-#                 B[i, i] = dA[i, i] / (lambda[i])
-#             else
-#                 denom = kappa[i] * kappa[k] * sigma2[i] * sigma2[k] - 1
-#                 if denom > 0
-#                     B[i, k] = (-kappa[k] * sigma2[i] * dA[i, k] + dA[k, i]) / denom
-#                 else
-#                     bflag = 1
-#                 end
-#             end
-#         end
-#     end
-#     if (bflag == 0) && (do_newton == 1) && (iter > newt_start_iter)
-#         myAmica.models[h].A = myAmica.models[h].A + lrate * myAmica.models[h].A * B
-#     else
-#         myAmica.models[h].A = myAmica.models[h].A - lnatrate * myAmica.models[h].A * dA
-#     end
-# end

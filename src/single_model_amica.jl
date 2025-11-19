@@ -1,4 +1,4 @@
-@with_kw_noshow mutable struct SingleModelAmica{
+mutable struct SingleModelAmica{
     T,
     Array1<:DenseArray{T,1},
     Array2<:DenseArray{T,2},
@@ -24,28 +24,26 @@
     y_rho::Array3                                               # abs(y)^rho
     fp::Array3
 
-    zfp::Array3                                                 # z * fp
     g::Array2
 
     kp::Array2
 
-    drho_numer::Array2
-    drho_denom::Array2
 end
 
 "Data type for AMICA with just one ICA model."
-function SingleModelAmica(
-    data::DenseArray{T,2};
+function SingleModelAmica(T::Type{<:Real}=Float64;
+    nsamples::Int,
+    ncomps::Int,
     m=3,
     A=nothing,
     location=nothing,
     scale=nothing,
     ArrayType::Type{<:DenseArray}=Array
-) where {T<:Real}
-    (n, N) = size(data)
+)
+    N = nsamples
+    n = ncomps
 
     #initialize parameters
-
     if isnothing(A)
         # Initialize A to match Fortran: small random ±0.005, diagonal = 1.0, then normalize
         Wtmp = rand(T, n, n)
@@ -56,21 +54,21 @@ function SingleModelAmica(
         end
     end
 
-    proportions = (1 / m) * ones(T, m, n)
+    proportions = (1 / m) * ones(T, n, m)
     if isnothing(location)
         # Initialize location to match Fortran: mu(j,k) = j - 1 - (m-1)/2
         # This creates centered values around 0 (e.g., -1, 0, 1 for m=3)
-        location = zeros(T, m, n)
+        location = zeros(T, n, m)
         for j in 1:m
-            location[j, :] .= T(j - 1 - (m - 1) / 2)
+            location[:, j] .= T(j - 1 - (m - 1) / 2)
         end
         # Add small random perturbation: ±0.05
-        location .+= T(0.05) .* (T(1.0) .- T(2.0) .* rand(T, m, n))
+        location .+= T(0.05) .* (T(1.0) .- T(2.0) .* rand(T, n, m))
     end
     if isnothing(scale)
         # Initialize scale to match Fortran: 1.0 + 0.1*(0.5 - random[0,1])
         # This gives values in range [0.95, 1.05]
-        scale = ones(T, m, n) .+ T(0.1) .* (T(0.5) .- rand(T, m, n))
+        scale = ones(T, n, m) .+ T(0.1) .* (T(0.5) .- rand(T, n, m))
     end
 
     # Extract array type parameters
@@ -79,24 +77,21 @@ function SingleModelAmica(
     Array3 = ArrayType{T,3}
 
     return SingleModelAmica{T,Array1,Array2,Array3}(
-        source_signals=zeros(T, n, N) |> Array2,
-        proportions=proportions |> Array2,
-        scale=scale |> Array2,
-        location=location |> Array2,
-        shape=ones(T, m, n) |> Array2,
-        A=A |> Array2,
-        S=Matrix{T}(I(size(A, 1))) |> Array2,
-        LLdetS=zero(T),
-        z=(ones(T, m, n, N) / N) |> Array3,
-        y=zeros(T, m, n, N) |> Array3,
-        Lt=zeros(T, N) |> Array1,
-        LL=T[] |> Array1,
-        y_rho=zeros(T, m, n, N) |> Array3,
-        fp=zeros(T, m, n, N) |> Array3,
-        zfp=zeros(T, m, n, N) |> Array3,
-        g=zeros(T, n, N) |> Array2,
-        kp=zeros(T, m, n) |> Array2,
-        drho_numer=zeros(T, m, n) |> Array2,
-        drho_denom=zeros(T, m, n) |> Array2,
+        zeros(T, N, n) |> Array2,
+        proportions |> Array2,
+        scale |> Array2,
+        location |> Array2,
+        ones(T, n, m) |> Array2,
+        A |> Array2,
+        Matrix{T}(I(size(A, 1))) |> Array2,
+        zero(T),
+        (ones(T, N, n, m) / N) |> Array3,
+        zeros(T, N, n, m) |> Array3,
+        zeros(T, N) |> Array1,
+        T[] |> Array1,
+        zeros(T, N, n, m) |> Array3,
+        zeros(T, N, n, m) |> Array3,
+        zeros(T, N, n) |> Array2,
+        zeros(T, n, m) |> Array2,
     )
 end

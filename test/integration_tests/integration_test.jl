@@ -7,21 +7,21 @@ include("util.jl")
 
 @testset "compare against fortran" begin
 
-    # build_fortran()
-    # run_fortran("amicadefs.params")
+    build_fortran()
+    run_fortran("amicadefs.params")
 
     # verify the raw data is identical
-    data = Float64.(read_fdt("input/Memorize.fdt"; ncols=71, T=Float32))
-    raw = read_fdt("datadumps/raw_data_seg_1.bin"; ncols=71, T=Float64)
+    data = Float64.(read_fdt("input/Memorize.fdt"; ncols=71, T=Float32))'
+    raw = read_fdt("datadumps/raw_data_seg_1.bin"; ncols=71, T=Float64)'
     @test raw ≈ data
 
     Amica.removeMean!(data)
 
-    without_mean = read_fdt("datadumps/mean_data_seg_1.bin"; ncols=71, T=Float64)
+    without_mean = read_fdt("datadumps/mean_data_seg_1.bin"; ncols=71, T=Float64)'
 
     @test without_mean ≈ data
 
-    sphered = read_fdt("datadumps/sphere_data_seg_1.bin"; ncols=71, T=Float64)
+    sphered = read_fdt("datadumps/sphere_data_seg_1.bin"; ncols=71, T=Float64)'
 
     Amica.sphering!(data)
 
@@ -32,33 +32,34 @@ include("util.jl")
     W = read_fdt("datadumps/W.bin"; ncols=71, T=Float64)
 
 
-    sbeta = read_fdt("datadumps/sbeta.bin"; ncols=3, T=Float64)
-    rho = read_fdt("datadumps/rho.bin"; ncols=3, T=Float64)
-    mu = read_fdt("datadumps/mu.bin"; ncols=3, T=Float64)
+    sbeta = read_fdt("datadumps/sbeta.bin"; ncols=3, T=Float64)'
+    rho = read_fdt("datadumps/rho.bin"; ncols=3, T=Float64)'
+    mu = read_fdt("datadumps/mu.bin"; ncols=3, T=Float64)'
 
-    data = Float64.(read_fdt("input/Memorize.fdt"; ncols=71, T=Float32))
+    data = Float64.(read_fdt("input/Memorize.fdt"; ncols=71, T=Float32))'
 
-    myAmica = SingleModelAmica(data; m=3, A=A, scale=sbeta, location=mu)
+    (N, n) = size(data)
+
+
+    myAmica = SingleModelAmica(Float64, ncomps=n, nsamples=N, m=3, A=A, scale=sbeta, location=mu)
 
     @test A ≈ inv(W)
 
     lrate = Amica.LearningRate{Float64}()
     # run amica for one iteration
-    Amica.amica!(myAmica, data, maxiter=1, lrate=lrate)
+    Amica.amica!(myAmica, data, maxiter=1, lrate=lrate, newt_start_iter=0)
 
     # test update_sources!
-    b = read_fdt("datadumps/b.bin"; ncols=639000, T=Float64)'[:, 1:319500]
+    b = read_fdt("datadumps/b.bin"; ncols=639000, T=Float64)'[:, 1:319500]'
     @test b ≈ myAmica.source_signals
 
     # test calculate_y!
-    y = read_3d_fdt("datadumps/y.bin"; ncols=639000, nslabs=3, T=Float64)
-    y = permutedims(y, (3, 2, 1))[:, :, 1:319500]
+    y = read_3d_fdt("datadumps/y.bin"; ncols=639000, nslabs=3, T=Float64)[1:319500, :, :]
 
     @test y ≈ myAmica.y
 
     # test calculate_u!
-    z = read_3d_fdt("datadumps/z.bin"; ncols=639000, nslabs=3, T=Float64)
-    z = permutedims(z, (3, 2, 1))[:, :, 1:319500]
+    z = read_3d_fdt("datadumps/z.bin"; ncols=639000, nslabs=3, T=Float64)[1:319500, :, :]
     @test z ≈ myAmica.z
 
     # test calculate_Lt!
@@ -66,30 +67,30 @@ include("util.jl")
     @test Ptmp ≈ myAmica.Lt
 
     # test calculate_LL!
-    LL = read_fdt("datadumps/LL.bin"; ncols=1, T=Float64)[1, :]
+    LL = read_fdt("datadumps/LL.bin"; ncols=1, T=Float64)[1, :]'
 
     @test LL[1] ≈ myAmica.LL[1]
 
     # test fp
-    fp = read_fdt("datadumps/fp.bin"; ncols=639000, T=Float64)[1:319500, :]
+    fp = read_fdt("datadumps/fp.bin"; ncols=639000, T=Float64)[1:319500, :]'
 
-    @test fp ≈ myAmica.fp[3, 71, :]
+    @test fp[1, :] ≈ myAmica.fp[:, 71, 3]
 
     # test g 
-    g = read_fdt("datadumps/g_after_iter1.bin"; ncols=639000, T=Float64)[1:319500, :]'
+    g = read_fdt("datadumps/g_after_iter1.bin"; ncols=639000, T=Float64)[1:319500, :]
 
     @test g ≈ myAmica.g
 
     # location after one iteration
-    mu_1 = read_fdt("datadumps/mu_1.bin"; ncols=3, T=Float64)
+    mu_1 = read_fdt("datadumps/mu_1.bin"; ncols=3, T=Float64)'
     @test myAmica.location ≈ mu_1
 
     # scale after one iteration
-    sbeta_1 = read_fdt("datadumps/sbeta_1.bin"; ncols=3, T=Float64)
+    sbeta_1 = read_fdt("datadumps/sbeta_1.bin"; ncols=3, T=Float64)'
     @test myAmica.scale ≈ sbeta_1
 
     # shape
-    rho_1 = read_fdt("datadumps/rho_1.bin"; ncols=3, T=Float64)
+    rho_1 = read_fdt("datadumps/rho_1.bin"; ncols=3, T=Float64)'
     @test myAmica.shape ≈ rho_1
 
     # A

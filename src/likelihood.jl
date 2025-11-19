@@ -1,8 +1,4 @@
-"Calculates log-likelihood for whole model. todo: make the calculate LLs one function"
-function calculate_LL!(myAmica::SingleModelAmica)
-    (n, N) = size(myAmica.source_signals)
-    push!(myAmica.LL, sum(myAmica.Lt) / (n * N))
-end
+
 
 "Calculate difference in loglikelihood between iterations"
 function calculate_DLL!(dLL, myAmica::SingleModelAmica, iter)
@@ -11,42 +7,12 @@ function calculate_DLL!(dLL, myAmica::SingleModelAmica, iter)
     end
 end
 
-#Calculates LL for whole ICA mixture model. Uses LL for dominant model for each time sample.
-function calculate_LL!(myAmica::MultiModelAmica)
+
+function calculate_u_and_Lt!(myAmica::MultiModelAmica)
     M = size(myAmica.models, 1)
-    (n, N) = size(myAmica.models[1].source_signals)
-    Ltmax = ones(size(myAmica.models[1].Lt, 1)) #Ltmax = (M x N)
-    Lt_i = zeros(M)
-    P = zeros(N)
-    for i in 1:N
-        for h in 1:M
-            Lt_i[h] = myAmica.models[h].Lt[i]
-        end
-        Ltmax[i] = maximum(Lt_i) #Look for the maximum ith entry among all models
-        for h in 1:M
-            P[i] = P[i] + exp(myAmica.models[h].Lt[i] - Ltmax[i])
-        end
-    end
-    push!(myAmica.LL, sum(Ltmax .+ log.(P)) / (n * N))
-end
-
-#Update loop for Lt and u (which is saved in z). Todo: Rename
-function loopiloop!(myAmica::SingleModelAmica)
-    @timeit to "calculate_u_and_Lt" calculate_u_and_Lt!(myAmica)
-    @timeit to "calculate_LL" calculate_LL!(myAmica)
-end
-
-function loopiloop!(myAmica::MultiModelAmica)
-    M = size(myAmica.models, 1)
-    (n, _) = size(myAmica.models[1].source_signals)
-
     for h in 1:M #run along models
-        model = myAmica.models[h]
-
-        @timeit to "calculate_u_and_Lt" calculate_u_and_Lt!(model)
-
+        @timeit to "calculate_u_and_Lt" calculate_u_and_Lt!(myAmica.models[h])
     end
-    @timeit to "calculate_LL" calculate_LL!(myAmica)
 end
 
 "Calculates u (saved in z) and Lt contribution in a single pass to avoid duplicate logsumexp computation"
@@ -59,20 +25,24 @@ end
     shape = myAmica.shape
     y_rho = myAmica.y_rho
 
-    (m, n, N) = size(z)
+    (N, n, m) = size(z)
 
     # Initialize Lt with base values
     ldet = -logabsdet(myAmica.A)[1]
-    @info size(ldet)
 
     Lt .= ldet .+ LLdetS
 
     Q = zeros(T, m)
 
-    @inbounds for k in 1:N, i in 1:n
+    LL = zero(T)
+
+
+    QConst = @. -log(T(2)) - loggamma(T(1) + T(1) / shape) + log(proportions) + log(scale)
+
+    @inbounds for i in 1:n, k in 1:N
         # compute Q
         for j in 1:m
-            Q[j] = -log(T(2)) - loggamma(T(1) + T(1) / shape[j, i]) + log(proportions[j, i]) + log(scale[j, i]) - y_rho[j, i, k]
+            Q[j] = QConst[i, j] - y_rho[k, i, j]
         end
 
         if m > 1
@@ -80,35 +50,40 @@ end
             Qmax = maximum(Q)
 
             # Compute sum(exp(Q - Qmax))
-            sum_exp = zero(T)
-            for j in 1:m
-                sum_exp += exp(Q[j] - Qmax)
-            end
+            sum_exp = sum(x::T -> exp(x - Qmax), Q)
 
             logsumexp_Q = Qmax + log(sum_exp)
 
             # Compute z = exp(Q - logsumexp) + e
-            @. z[:, i, k] = exp(Q[:] - logsumexp_Q) + T(1e-15)
+            @. z[k, i, :] = exp(Q[:] - logsumexp_Q) + T(1e-15)
 
             # Normalize z so that sum(z[:,i,k]) = 1
-            z_sum = sum(z[:, i, k])
-            z[:, i, k] ./= z_sum
+            z_sum = sum(z[k, i, :])
+            z[k, i, :] ./= z_sum
 
         else
             z .= 1 ./ z
         end
 
-        Lt[k] += logsumexp_Q  # Accumulate for Lt
+        # Accumulate Lt & LL
+        Lt[k] += logsumexp_Q
+        LL += logsumexp_Q
     end
+
+    push!(myAmica.LL, (ldet + LLdetS) / n + LL / (n * N))
 end
 
+"add a unit dimension in front to be able to e.g. broadcast a (1000, 12, 3) with a (12, 3) array, transforms a from (12, 3) to (1, 12, 3)"
+function push_dimension(a::AbstractArray)
+    reshape(a, 1, size(a)...)
+end
 
 "Applies location and scale parameter to source signals (per generalized Gaussian)"
 @views function calculate_y!(myAmica::SingleModelAmica)
-    (m, _, _) = size(myAmica.z)
+    (_, _, m) = size(myAmica.z)
 
     for j in 1:m
-        myAmica.y[j, :, :] .= myAmica.scale[j, :] .* (myAmica.source_signals .- myAmica.location[j, :])
+        myAmica.y[:, :, j] .= myAmica.scale[:, j]' .* (myAmica.source_signals .- myAmica.location[:, j]')
     end
 end
 

@@ -34,8 +34,8 @@ end
 function MultiModelAmica(data::Array; m=3, M=2, maxiter=500, A=nothing, location=nothing, scale=nothing, kwargs...)
     models = Array{SingleModelAmica}(undef, M) #Array of SingleModelAmica opjects
     normalized_ica_weights = (1 / M) * ones(M, 1)
-    (n, N) = size(data)
-    ica_weights_per_sample = ones(M, N)
+    (N, _, n) = size(data)
+    ica_weights_per_sample = ones(n, m)
     ica_weights = zeros(M)
     LL = Float64[]
 
@@ -56,20 +56,20 @@ function MultiModelAmica(data::Array; m=3, M=2, maxiter=500, A=nothing, location
     if isnothing(location)
         # Initialize location to match Fortran: mu(j,k) = j - 1 - (m-1)/2
         # This creates centered values around 0 (e.g., -1, 0, 1 for m=3)
-        location = zeros(m, n, M)
+        location = zeros(n, m, M)
         for h in 1:M
             for j in 1:m
                 location[j, :, h] .= j - 1 - (m - 1) / 2
             end
             # Add small random perturbation: ±0.05
-            location[:, :, h] .+= 0.05 .* (1.0 .- 2.0 .* rand(m, n))
+            location[:, :, h] .+= 0.05 .* (1.0 .- 2.0 .* rand(n, m))
         end
     end
 
     if isnothing(scale)
         # Initialize scale to match Fortran: 1.0 + 0.1*(0.5 - random[0,1])
         # This gives values in range [0.95, 1.05]
-        scale = ones(m, n, M) .+ 0.1 .* (0.5 .- rand(m, n, M))
+        scale = ones(n, m, M) .+ 0.1 .* (0.5 .- rand(n, m, M))
     end
 
     for h in 1:M
