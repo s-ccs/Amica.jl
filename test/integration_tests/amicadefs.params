@@ -9,7 +9,7 @@ do_opt_block 0
 blk_min 256
 blk_max 1024
 blk_step 256
-max_iter 2000
+max_iter 1
 writestep 50
 mineig 1e-15
 dble_data 0

@@ -22,12 +22,13 @@ mutable struct SingleModelAmica{
     # --- intermediary values
 
     y_rho::Array3                                               # abs(y)^rho
-    fp::Array3
-
     g::Array2
 
-    kp::Array2
 
+    # Pre-computed values for Newton method (using scale before update)
+    newton_kappa::Array1
+    newton_lambda::Array1
+    newton_sigma2::Array1
 end
 
 "Data type for AMICA with just one ICA model."
@@ -90,8 +91,9 @@ function SingleModelAmica(T::Type{<:Real}=Float64;
         zeros(T, N) |> Array1,
         T[] |> Array1,
         zeros(T, N, n, m) |> Array3,
-        zeros(T, N, n, m) |> Array3,
         zeros(T, N, n) |> Array2,
-        zeros(T, n, m) |> Array2,
+        zeros(T, n) |> Array1,
+        zeros(T, n) |> Array1,
+        zeros(T, n) |> Array1,
     )
 end

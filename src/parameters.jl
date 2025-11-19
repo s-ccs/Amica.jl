@@ -40,22 +40,25 @@ function reparameterize!(myAmica::MultiModelAmica, data)
 end
 
 # Sets the initial value for the shape parameter of the GeneralizedGaussians for each Model
-function initialize_shape_parameter!(myAmica::SingleModelAmica, shapelrate::LearningRate)
-    myAmica.shape = shapelrate.init .* myAmica.shape
+function initialize_shape_parameter!(myAmica::SingleModelAmica, lrate::LearningRate)
+    myAmica.shape = lrate.shape0 .* myAmica.shape
 end
 
-function initialize_shape_parameter!(myAmica::MultiModelAmica, shapelrate::LearningRate)
-    initialize_shape_parameter!.(myAmica.models)
+function initialize_shape_parameter!(myAmica::MultiModelAmica, lrate::LearningRate)
+    initialize_shape_parameter!.(myAmica.models, lrate)
 end
 
-function update_parameters!(myAmica::MultiModelAmica{T}, shapelrate::LearningRate, upd_shape::Bool) where {T<:Real}
-    update_parameters!.(myAmica.models, shapelrate, upd_shape)
+function update_parameters!(myAmica::MultiModelAmica{T}, lrate::LearningRate, upd_shape::Bool) where {T<:Real}
+    update_parameters!.(myAmica.models, lrate, upd_shape)
 end
 
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
-@views function update_parameters!(myAmica::SingleModelAmica{T}, shapelrate::LearningRate, upd_shape::Bool) where {T<:Real}
+@views function update_parameters!(myAmica::SingleModelAmica{T}, lrate::LearningRate, upd_shape::Bool) where {T<:Real}
     N, n, m = size(myAmica.y)
+
     myAmica.g .= zero(T)
+    myAmica.newton_kappa .= zero(T)
+    myAmica.newton_lambda .= zero(T)
 
     for j in 1:m, i in 1:n
         sum_zfp = zero(T)
@@ -63,15 +66,18 @@ end
         dm = zero(T)
         dbeta_denom = zero(T)
         drho_numer = zero(T)
+        kp = zero(T)
+        dlambda_numer = zero(T)
 
         for k in 1:N
-            myAmica.fp[k, i, j] = myAmica.y_rho[k, i, j] * sign(myAmica.y[k, i, j]) * myAmica.shape[i, j]
+            fp = myAmica.y_rho[k, i, j] * sign(myAmica.y[k, i, j]) * myAmica.shape[i, j]
 
-            zfp = myAmica.z[k, i, j] * myAmica.fp[k, i, j]
+            zfp = myAmica.z[k, i, j] * fp
             sum_zfp += zfp
             sum_z += myAmica.z[k, i, j]
 
-            myAmica.kp[i, j] += zfp * myAmica.fp[k, i, j] * myAmica.scale[i, j]
+            # kp = sum(z * fp * fp) for use in location update and Newton method
+            kp += zfp * fp
             dm += zfp / myAmica.y[k, i, j]
 
             myAmica.g[k, i] += myAmica.scale[i, j] * zfp
@@ -82,6 +88,7 @@ end
                 dbeta_denom += myAmica.z[k, i, j] * myAmica.y_rho[k, i, j]
             end
             drho_numer += myAmica.z[k, i, j] * log(myAmica.y_rho[k, i, j]) * myAmica.y_rho[k, i, j]
+            dlambda_numer += myAmica.z[k, i, j] * (fp * myAmica.y[k, i, j] - 1.0)^2
         end
 
         if dm <= 0
@@ -97,12 +104,21 @@ end
             end
         end
 
+        # TODO conditional only when newton runs
+
+        dkap = (kp / (myAmica.proportions[i, j] * N)) * myAmica.scale[i, j]^2
+        myAmica.newton_kappa[i] += myAmica.proportions[i, j] * dkap
+
+        myAmica.newton_lambda[i] += myAmica.proportions[i, j] * (dlambda_numer / sum_z + dkap * myAmica.location[i, j]^2)
+
         # update location
         if m > 1
             if myAmica.shape[i, j] <= 2
                 myAmica.location[i, j] += (1 / myAmica.scale[i, j]) * sum_zfp / dm
-            elseif myAmica.kp[i, j] > 0
-                myAmica.location[i, j] += (1 / myAmica.scale[i, j]) * sum_zfp / myAmica.kp[i, j]
+            elseif kp > 0
+                # Fortran: mu += dmu_numer / dmu_denom = sum(z*fp) / (scale * sum(z*fp*fp))
+                # Now kp = sum(z*fp*fp), so:
+                myAmica.location[i, j] += sum_zfp / (myAmica.scale[i, j] * kp)
             end
         end
 
@@ -115,8 +131,8 @@ end
         if upd_shape && sum_z > 0
             dr2 = 1 - (myAmica.shape[i, j] / digamma(1 + 1 / myAmica.shape[i, j])) * drho_numer / sum_z
             if !isnan(dr2)
-                myAmica.shape[i, j] += shapelrate.lrate * dr2
-                myAmica.shape[i, j] = clamp(myAmica.shape[i, j], shapelrate.minimum, shapelrate.maximum)
+                myAmica.shape[i, j] += lrate.shapelrate * dr2
+                myAmica.shape[i, j] = clamp(myAmica.shape[i, j], lrate.minrho, lrate.maxrho)
             end
         end
     end
@@ -144,21 +160,38 @@ function update_sources!(myAmica::MultiModelAmica, data)
 end
 
 #Adjusts learning rate depending on log-likelihood growth during past iterations. How many depends on iterwin. Uses LearningRate type from types.jl
-function calculate_lrate!(dLL, lrateType::LearningRate, iter, newt_start_iter, do_newton, iterwin)
-
-    lratefact, lnatrate, lratemax, = lrateType.decreaseFactor, lrateType.natural_rate, lrateType.maximum
-    lrate = lrateType.lrate
-    sdll = sum(dLL[iter-iterwin+1:iter]) / iterwin
-
-    if sdll < 0
+function calculate_lrate!(
+    myAmica::SingleModelAmica{T},
+    iter::Int,
+    newt_start_iter::Int,
+    do_newton::Bool,
+    lrate::LearningRate{T},
+) where {T<:Real}
+    # Check if likelihood is decreasing
+    if myAmica.LL[iter] < myAmica.LL[iter-1]
         println("Likelihood decreasing!")
-        lrate = lrate * lratefact
-    else
-        if (iter > newt_start_iter) && do_newton == 1
-            lrate = min(lratemax, lrate + min(0.1, lrate))
+
+        # missing condition: .or. (ndtmpsum .le. min_nd)
+        if lrate.lrate <= lrate.min
+            println("minimum change threshold met, exiting loop ...")
+            return true
         else
-            lrate = min(lnatrate, lrate + min(0.1, lrate))
+            # Decrease learning rates
+            lrate.lrate *= lrate.lratefact
+            lrate.shapelrate *= lrate.shapelratefact
+            lrate.numdecs += 1
+
+            if lrate.numdecs >= lrate.maxdecs
+                lrate.lrate0 *= lrate.lratefact
+                if iter > newt_start_iter
+                    lrate.shapelrate0 *= lrate.shapelratefact
+                end
+                if do_newton && (iter > newt_start_iter)
+                    println("Reducing maximum Newton lrate")
+                    lrate.newtrate *= lrate.lratefact
+                end
+                lrate.numdecs = 0
+            end
         end
     end
-    lrateType.lrate = lrate
 end

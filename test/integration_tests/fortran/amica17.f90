@@ -1196,9 +1196,7 @@ do
    call write_matrix("sigma2_after_iter1", sigma2(:, :))
    call write_matrix("a_after_iter1", A(:, :))
 
-
    stop 0
-
 end do !iter
 
 call write_output

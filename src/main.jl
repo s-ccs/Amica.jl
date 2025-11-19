@@ -15,7 +15,6 @@ end
 function amica!(myAmica::AbstractAmica,
     data::AbstractMatrix{T};
     lrate::LearningRate{T}=LearningRate{T}(),
-    shapelrate::LearningRate{T}=LearningRate{T}(; lrate=0.05, minimum=1.0, maximum=2.0, init=1.5),
     remove_mean::Bool=true,
     do_sphering::Bool=true,
     show_progress::Bool=true,
@@ -24,9 +23,9 @@ function amica!(myAmica::AbstractAmica,
     newt_start_iter::Int=50,
     iterwin::Int=10,
     update_shape::Bool=true,
-    mindll::T=T(1e-8), kwargs...) where {T<:Real}
+    mindll::T=T(1e-8)) where {T<:Real}
 
-    initialize_shape_parameter!(myAmica, shapelrate)
+    initialize_shape_parameter!(myAmica, lrate)
 
     # Check that data dimensions match the model
     if size(data) != size(myAmica.source_signals)
@@ -63,8 +62,15 @@ function amica!(myAmica::AbstractAmica,
         @timeit to "calculate_DLL" calculate_DLL!(dLL, myAmica, iter)
 
         if iter > iterwin + 1
-            # Calculates average likelihood change over multiple itertions
-            @timeit to "calculate_lrate" calculate_lrate!(dLL, lrate, iter, newt_start_iter, do_newton, iterwin)
+            # Check for NaN
+            if isnan(myAmica.LL[iter])
+                println("Got NaN! Exiting ...")
+                break
+            end
+
+            if calculate_lrate!(myAmica, iter, newt_start_iter, do_newton, lrate)
+                break
+            end
 
             # Checks termination criterion
             sdll = sum(dLL[iter-iterwin+1:iter]) / iterwin
@@ -76,7 +82,7 @@ function amica!(myAmica::AbstractAmica,
         #M-step
         try
             #Updates parameters and mixing matrix
-            @timeit to "update_parameters" update_parameters!(myAmica, shapelrate, update_shape)
+            @timeit to "update_parameters" update_parameters!(myAmica, lrate, update_shape)
             @timeit to "newton_method" newton_method!(myAmica, iter, do_newton, newt_start_iter, lrate)
         catch e
             #Terminates if NaNs are detected in parameters

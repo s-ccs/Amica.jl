@@ -1,3 +1,5 @@
+using Parameters
+
 mutable struct MultiModelAmica{T} <: AbstractAmica
     models::Array{SingleModelAmica{T}} #Array of SingleModelAmicas
     normalized_ica_weights #Model weights (normalized)
@@ -8,25 +10,58 @@ mutable struct MultiModelAmica{T} <: AbstractAmica
     LL::Array{T,1}#Log-Likelihood
 end
 
+
 #Structure for Learning Rate type with initial value, minumum, maximum etc. Used for learning rate and shape lrate
 mutable struct LearningRate{T}
     lrate::T
-    init::T
-    minimum::T
-    maximum::T
-    natural_rate::T
-    decreaseFactor::T
-
-    function LearningRate{T}(;
-        lrate::T=0.1,
-        init::T=0.1,
-        minimum::T=0.0,
-        maximum::T=1.0,
-        natural_rate::T=0.1,
-        decreaseFactor::T=0.5
+    lrate0::T
+    shapelrate::T
+    shapelrate0::T
+    shape0::T
+    lratefact::T
+    shapelratefact::T
+    min::T
+    maxdecs::T
+    max_incs::Int
+    use_min_dll::Bool
+    min_dll::T
+    min_nd::T
+    numdecs::Int
+    numincs::Int
+    newtrate::T
+    newt_ramp::Int
+    minrho::T
+    maxrho::T
+    function LearningRate{T}(lrate::T=0.1, shapelrate::T=0.05;
+        shape0::T=T(1.5),
+        lratefact::T=T(0.5),
+        shapelratefact::T=T(0.1),
+        min::T=T(1.0e-12),
+        maxdecs::T=T(3),
+        max_incs::Int=5,
+        use_min_dll::Bool=true,
+        min_dll::T=T(1e-9),
+        min_nd::T=T(1e-7),
+        numdecs::Int=0,
+        numincs::Int=0,
+        newtrate::T=T(0.5),
+        newt_ramp::Int=10,
+        minrho::T=T(1.0),
+        maxrho::T=T(2.0)
     ) where {T}
-        new(lrate, init, minimum, maximum, natural_rate, decreaseFactor)
+        new{T}(lrate, copy(lrate), shapelrate,
+            copy(shapelrate), shape0, lratefact,
+            shapelratefact, min, maxdecs, max_incs,
+            use_min_dll, min_dll, min_nd,
+            numdecs, numincs, newtrate, newt_ramp,
+            minrho, maxrho
+        )
     end
+end
+
+
+function LearningRate(lrate::T; kwargs...) where {T}
+    LearningRate{T}(lrate; kwargs...)
 end
 
 

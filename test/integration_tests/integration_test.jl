@@ -71,11 +71,6 @@ include("util.jl")
 
     @test LL[1] ≈ myAmica.LL[1]
 
-    # test fp
-    fp = read_fdt("datadumps/fp.bin"; ncols=639000, T=Float64)[1:319500, :]'
-
-    @test fp[1, :] ≈ myAmica.fp[:, 71, 3]
-
     # test g 
     g = read_fdt("datadumps/g_after_iter1.bin"; ncols=639000, T=Float64)[1:319500, :]
 
@@ -96,4 +91,11 @@ include("util.jl")
     # A
     A_1 = read_fdt("datadumps/a_after_iter1.bin"; ncols=71, T=Float64)
     @test myAmica.A ≈ A_1
+
+    # kappa
+    kappa = read_fdt("datadumps/kappa_after_iter1.bin"; ncols=71, T=Float64)
+    @test myAmica.newton_kappa ≈ kappa
+    # lambda
+    lambda = read_fdt("datadumps/lambda_after_iter1.bin"; ncols=71, T=Float64)
+    @test myAmica.newton_lambda ≈ lambda
 end
