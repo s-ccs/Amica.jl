@@ -2,7 +2,7 @@
 
 julia_version = "1.11.7"
 manifest_format = "2.0"
-project_hash = "aa37882135c6c93bf64aba39cffed9aefd0f9d06"
+project_hash = "29f819e69ab44c97eb7d605fd74d7ce6e560dd53"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "27cecae79e5cc9935255f90c53bb831cc3c870d7"
@@ -58,7 +58,7 @@ uuid = "66dad0bd-aa9a-41b7-9441-69ab47430ed8"
 version = "1.1.3"
 
 [[deps.Amica]]
-deps = ["KernelAbstractions", "LinearAlgebra", "Parameters", "SpecialFunctions", "Statistics", "TimerOutputs"]
+deps = ["Atomix", "KernelAbstractions", "LinearAlgebra", "Parameters", "SpecialFunctions", "Statistics", "TimerOutputs"]
 path = ".."
 uuid = "5c2eb853-6fc5-4f26-86bb-b4eb873bb098"
 version = "0.1.0"

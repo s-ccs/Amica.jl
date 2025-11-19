@@ -17,13 +17,12 @@ mutable struct SingleModelAmica{
     z::Array3
     y::Array3
     Lt::Array1                                                  # log likelihood of time point for each model ( M x N )
-    LL::Array1                                                  # log likelihood over iterations todo: change to tuple
+    LL::Array{T,1}                                              # log likelihood over iterations
 
     # --- intermediary values
 
     y_rho::Array3                                               # abs(y)^rho
     g::Array2
-
 
     # Pre-computed values for Newton method (using scale before update)
     newton_kappa::Array1

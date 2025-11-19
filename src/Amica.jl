@@ -7,6 +7,7 @@ using TimerOutputs
 using Statistics
 using Parameters
 using KernelAbstractions
+using Atomix
 
 const to = TimerOutput()
 

@@ -15,62 +15,77 @@ function calculate_u_and_Lt!(myAmica::MultiModelAmica)
     end
 end
 
-"Calculates u (saved in z) and Lt contribution in a single pass to avoid duplicate logsumexp computation"
-@views function calculate_u_and_Lt!(myAmica::SingleModelAmica{T}) where {T<:Real}
-    z = myAmica.z
-    Lt = myAmica.Lt
-    LLdetS = myAmica.LLdetS
-    proportions = myAmica.proportions
-    scale = myAmica.scale
-    shape = myAmica.shape
-    y_rho = myAmica.y_rho
+@kernel function calculate_u_kernel!(
+    z::DenseArray{T},
+    Lt::DenseArray{T},
+    @Const(y_rho::DenseArray{T}),
+    @Const(QConst::DenseArray{T})
+) where {T<:Real}
+    k, i = @index(Global, NTuple)
 
-    (N, n, m) = size(z)
+    N, n, m = size(z)
 
-    # Initialize Lt with base values
-    ldet = -logabsdet(myAmica.A)[1]
+    # compute Q
 
-    Lt .= ldet .+ LLdetS
-
-    Q = zeros(T, m)
-
-    LL = zero(T)
-
-
-    QConst = @. -log(T(2)) - loggamma(T(1) + T(1) / shape) + log(proportions) + log(scale)
-
-    @inbounds for i in 1:n, k in 1:N
-        # compute Q
-        for j in 1:m
-            Q[j] = QConst[i, j] - y_rho[k, i, j]
+    # # Find max for numerical stability
+    Qmax = QConst[i, 1] .- y_rho[k, i, 1]
+    for j in 2:m
+        Q = QConst[i, j] .- y_rho[k, i, j]
+        if Q > Qmax
+            Qmax = Q
         end
-
-        if m > 1
-            # Find max for numerical stability
-            Qmax = maximum(Q)
-
-            # Compute sum(exp(Q - Qmax))
-            sum_exp = sum(x::T -> exp(x - Qmax), Q)
-
-            logsumexp_Q = Qmax + log(sum_exp)
-
-            # Compute z = exp(Q - logsumexp) + e
-            @. z[k, i, :] = exp(Q[:] - logsumexp_Q) + T(1e-15)
-
-            # Normalize z so that sum(z[:,i,k]) = 1
-            z_sum = sum(z[k, i, :])
-            z[k, i, :] ./= z_sum
-
-        else
-            z .= 1 ./ z
-        end
-
-        # Accumulate Lt & LL
-        Lt[k] += logsumexp_Q
-        LL += logsumexp_Q
     end
 
-    push!(myAmica.LL, (ldet + LLdetS) / n + LL / (n * N))
+    # Compute sum(exp(Q - Qmax))
+    sum_exp = zero(T)
+    for j in 1:m
+        Q = QConst[i, j] .- y_rho[k, i, j]
+        sum_exp += exp(Q - Qmax)
+    end
+
+
+    logsumexp_Q = Qmax + log(sum_exp)
+
+    if m > 1
+        # Compute z = exp(Q - logsumexp) + e
+        z_sum = zero(T)
+        for j in 1:m
+            Q = QConst[i, j] .- y_rho[k, i, j]
+            z[k, i, j] = exp(Q - logsumexp_Q) + T(1e-15)
+            z_sum += z[k, i, j]
+        end
+
+        # Normalize z so that sum(z[:,i,k]) = 1s
+        for j in 1:m
+            z[k, i, j] /= z_sum
+        end
+
+    else
+        for j in 1:m
+            z[k, i, j] /= 1 / z[k, i, j]
+        end
+    end
+
+    # Accumulate Lt & LL
+    Atomix.@atomic Lt[k] += logsumexp_Q
+end
+
+"Calculates u (saved in z) and Lt contribution in a single pass to avoid duplicate logsumexp computation"
+@views function calculate_u_and_Lt!(myAmica::SingleModelAmica{T}) where {T<:Real}
+    N, n = size(myAmica.z)
+
+    # Initialize Lt with base values
+    ldet = -logabsdet(myAmica.A |> Array)[1]
+
+    myAmica.Lt .= ldet .+ myAmica.LLdetS
+
+    QConst = .-log(T(2)) .- loggamma.(T(1) .+ T(1) ./ (myAmica.shape |> Array)) .+ log.(myAmica.proportions |> Array) .+ log.(myAmica.scale |> Array) |> typeof(myAmica.source_signals)
+
+    backend = KernelAbstractions.get_backend(myAmica.source_signals)
+    kernel! = calculate_u_kernel!(backend)
+    kernel!(myAmica.z, myAmica.Lt, myAmica.y_rho, QConst, ndrange=(N, n))
+
+    push!(myAmica.LL, sum(myAmica.Lt) / (N * n))
 end
 
 "add a unit dimension in front to be able to e.g. broadcast a (1000, 12, 3) with a (12, 3) array, transforms a from (12, 3) to (1, 12, 3)"

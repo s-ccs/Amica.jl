@@ -25,12 +25,13 @@ function amica!(myAmica::AbstractAmica,
     update_shape::Bool=true,
     mindll::T=T(1e-8)) where {T<:Real}
 
-    initialize_shape_parameter!(myAmica, lrate)
 
     # Check that data dimensions match the model
     if size(data) != size(myAmica.source_signals)
         error("Data dimension mismatch: data has size $(size(data)) but model expects $(size(myAmica.source_signals))")
     end
+
+    initialize_shape_parameter!(myAmica, lrate)
 
     #Prepares data by removing means and/or sphering
     if remove_mean
@@ -40,7 +41,7 @@ function amica!(myAmica::AbstractAmica,
     if do_sphering
         S = sphering!(data)
         myAmica.S = S
-        myAmica.LLdetS = logabsdet(S)[1]
+        myAmica.LLdetS = logabsdet(S |> Array)[1]
     else
         myAmica.S = I
         myAmica.LLdetS = 0
@@ -82,7 +83,7 @@ function amica!(myAmica::AbstractAmica,
         #M-step
         try
             #Updates parameters and mixing matrix
-            @timeit to "update_parameters" update_parameters!(myAmica, lrate, update_shape)
+            @timeit to "update_parameters" update_parameters!(myAmica, lrate, update_shape, do_newton && iter >= newt_start_iter)
             @timeit to "newton_method" newton_method!(myAmica, iter, do_newton, newt_start_iter, lrate)
         catch e
             #Terminates if NaNs are detected in parameters

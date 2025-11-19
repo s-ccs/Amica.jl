@@ -53,7 +53,7 @@ function update_parameters!(myAmica::MultiModelAmica{T}, lrate::LearningRate, up
 end
 
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
-@views function update_parameters!(myAmica::SingleModelAmica{T}, lrate::LearningRate, upd_shape::Bool) where {T<:Real}
+@views function update_parameters!(myAmica::SingleModelAmica{T}, lrate::LearningRate, upd_shape::Bool, newton_active::Bool) where {T<:Real}
     N, n, m = size(myAmica.y)
 
     myAmica.g .= zero(T)
@@ -88,7 +88,10 @@ end
                 dbeta_denom += myAmica.z[k, i, j] * myAmica.y_rho[k, i, j]
             end
             drho_numer += myAmica.z[k, i, j] * log(myAmica.y_rho[k, i, j]) * myAmica.y_rho[k, i, j]
-            dlambda_numer += myAmica.z[k, i, j] * (fp * myAmica.y[k, i, j] - 1.0)^2
+
+            if newton_active
+                dlambda_numer += myAmica.z[k, i, j] * (fp * myAmica.y[k, i, j] - 1.0)^2
+            end
         end
 
         if dm <= 0
@@ -104,12 +107,14 @@ end
             end
         end
 
-        # TODO conditional only when newton runs
 
-        dkap = (kp / (myAmica.proportions[i, j] * N)) * myAmica.scale[i, j]^2
-        myAmica.newton_kappa[i] += myAmica.proportions[i, j] * dkap
 
-        myAmica.newton_lambda[i] += myAmica.proportions[i, j] * (dlambda_numer / sum_z + dkap * myAmica.location[i, j]^2)
+        # newton parameters
+        if newton_active
+            dkap = (kp / (myAmica.proportions[i, j] * N)) * myAmica.scale[i, j]^2
+            myAmica.newton_kappa[i] += myAmica.proportions[i, j] * dkap
+            myAmica.newton_lambda[i] += myAmica.proportions[i, j] * (dlambda_numer / sum_z + dkap * myAmica.location[i, j]^2)
+        end
 
         # update location
         if m > 1
@@ -146,7 +151,7 @@ end
 
 "updates the unmixed source_signals: myAmica.source_signals = myAmica.A ^ -1 * data"
 function update_sources!(myAmica::SingleModelAmica{T}, data::AbstractMatrix{T}) where {T<:Real}
-    myAmica.source_signals .= (myAmica.A \ data')'
+    myAmica.source_signals = ((myAmica.A |> Array) \ (data' |> Array))' |> typeof(myAmica.source_signals)
 end
 
 function update_sources!(myAmica::MultiModelAmica, data)
