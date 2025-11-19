@@ -10,7 +10,6 @@ using ProgressMeter
 using LoopVectorization
 using AppleAccelerate
 using StaticArrays
-#using ComponentArrays
 using Diagonalizations
 using LogExpFunctions
 #using MultivariateStats
@@ -42,7 +41,7 @@ function Base.show(io::Core.IO, m::SingleModelAmica)
         """
 $(typeof(m)) with:
     - signal-size: $(size(m.source_signals))
-    - likelihood: $(like) 
+    - likelihood: $(like)
 """
     )
 end
@@ -59,7 +58,7 @@ function Base.show(io::Core.IO, m::MultiModelAmica)
 Amica with:
     - models: $(length(m.models))
     - signal-size: $(size(m.models[1].source_signals))
-    - likelihood: $(like) 
+    - likelihood: $(like)
 """
     )
 end
