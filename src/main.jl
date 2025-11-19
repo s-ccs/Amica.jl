@@ -62,7 +62,7 @@ function amica!(myAmica::AbstractAmica,
 
         @timeit to "calculate_DLL" calculate_DLL!(dLL, myAmica, iter)
 
-        if iter > iterwin + 1
+        if iter > 1
             # Check for NaN
             if isnan(myAmica.LL[iter])
                 println("Got NaN! Exiting ...")
@@ -74,9 +74,11 @@ function amica!(myAmica::AbstractAmica,
             end
 
             # Checks termination criterion
-            sdll = sum(dLL[iter-iterwin+1:iter]) / iterwin
-            if (sdll > 0) && (sdll < mindll)
-                break
+            if iter > iterwin
+                sdll = sum(dLL[iter-iterwin+1:iter]) / iterwin
+                if (sdll > 0) && (sdll < mindll)
+                    break
+                end
             end
         end
 

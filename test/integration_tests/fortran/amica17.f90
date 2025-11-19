@@ -971,6 +971,13 @@ print *, myrank+1, ': entering the main loop ...'; call flush(6)
 iter = 1
 numrej = 0
 
+call write_matrix("W", W(:, :, 1))
+call write_matrix("A", A(:, :))
+
+call write_matrix("sbeta", sbeta)
+call write_matrix("rho", rho)
+call write_matrix("mu", mu)
+
 
 call system_clock(c1)
 do
@@ -1004,12 +1011,6 @@ do
       end if
    end if
 
-   call write_matrix("W", W(:, :, 1))
-   call write_matrix("A", A(:, :))
-
-   call write_matrix("sbeta", sbeta)
-   call write_matrix("rho", rho)
-   call write_matrix("mu", mu)
 
    call write_scalar("Dsum", Dsum(1))
    
@@ -1185,18 +1186,16 @@ do
    call write_matrix("sbeta_1", sbeta)
    call write_matrix("rho_1", rho)
    call write_matrix("mu_1", mu)
+   call write_matrix("alpha_1", alpha)
    call write_vector("fp", fp)
 
-
-   call write_matrix("lambda", lambda)
-
+   call write_matrix("lambda_after_iter1", lambda)
 
    call write_matrix("g_after_iter1", g(:, :))
    call write_matrix("kappa_after_iter1", kappa(:, :))
    call write_matrix("sigma2_after_iter1", sigma2(:, :))
    call write_matrix("a_after_iter1", A(:, :))
 
-   stop 0
 end do !iter
 
 call write_output

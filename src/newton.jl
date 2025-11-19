@@ -1,13 +1,17 @@
 #Updates the mixing matrix with the newton method
 function newton_method!(myAmica::SingleModelAmica{T}, iter::Int, do_newton::Bool, newt_start_iter::Int, lrate::LearningRate) where {T<:Real}
+
     N, n, m = size(myAmica.y)
 
-    myAmica.newton_sigma2 = vec(sum(myAmica.source_signals .^ 2, dims=1) / N)
-
-    # Calculate dA = I - g' * source_signals / N
-    dA = I(n) - (myAmica.g' * myAmica.source_signals) / N
+    @timeit to "a" begin
+        # Calculate dA = I - g' * source_signals / N
+        ArrayType = typeof(myAmica.shape)
+        dA = ArrayType(I(n)) - (myAmica.g' * myAmica.source_signals) / N
+    end
 
     if (do_newton && iter >= newt_start_iter)
+        myAmica.newton_sigma2 = vec(sum(myAmica.source_signals .^ 2, dims=1) / N)
+
         # Build the Newton update matrix B
         B = zeros(T, n, n)
         posdef = true
@@ -49,9 +53,12 @@ function newton_method!(myAmica::SingleModelAmica{T}, iter::Int, do_newton::Bool
             myAmica.A -= lrate.lrate * myAmica.A * dA
         end
     else
-        # Use natural gradient (Fortran line 2077)
-        # Still ramp up learning rate but cap at lrate0
-        lrate.lrate = min(lrate.lrate0, lrate.lrate + min(T(1.0) / T(lrate.newt_ramp), lrate.lrate))
-        myAmica.A -= lrate.lrate * myAmica.A * dA
+        @timeit to "b" begin
+
+            # Use natural gradient (Fortran line 2077)
+            # Still ramp up learning rate but cap at lrate0
+            lrate.lrate = min(lrate.lrate0, lrate.lrate + min(T(1.0) / T(lrate.newt_ramp), lrate.lrate))
+            myAmica.A -= lrate.lrate * myAmica.A * dA
+        end
     end
 end

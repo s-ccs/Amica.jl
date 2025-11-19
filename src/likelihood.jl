@@ -90,8 +90,10 @@ function push_dimension(a::AbstractArray)
     reshape(a, 1, size(a)...)
 end
 
+
+
 "Applies location and scale parameter to source signals (per generalized Gaussian)"
-@views function calculate_y!(myAmica::SingleModelAmica)
+@views function calculate_y!(myAmica::SingleModelAmica{T}) where T<:Real
     (_, _, m) = size(myAmica.z)
 
     for j in 1:m

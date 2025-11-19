@@ -1,10 +1,14 @@
 #Normalizes source density location parameter (mu), scale parameter (beta) and model centers
 function reparameterize!(myAmica::SingleModelAmica)
-    tau = norm.(eachcol(myAmica.A))
+    ArrayType = typeof(myAmica.Lt)
+    T = eltype(myAmica.A)
+    tau = ArrayType(norm.(eachcol(myAmica.A)))
 
-    myAmica.A ./= tau'
-    myAmica.location .*= tau
-    myAmica.scale ./= tau
+    # Only reparameterize columns where tau > 0 (matching Fortran behavior)
+    mask = tau .> zero(T)
+    myAmica.A .= ifelse.(push_dimension(mask), myAmica.A ./ tau', myAmica.A)
+    myAmica.location .= ifelse.(mask, myAmica.location .* tau, myAmica.location)
+    myAmica.scale .= ifelse.(mask, myAmica.scale ./ tau, myAmica.scale)
 end
 
 #Reparameterizes the parameters for the active models
@@ -41,7 +45,7 @@ end
 
 # Sets the initial value for the shape parameter of the GeneralizedGaussians for each Model
 function initialize_shape_parameter!(myAmica::SingleModelAmica, lrate::LearningRate)
-    myAmica.shape = lrate.shape0 .* myAmica.shape
+    myAmica.shape .= lrate.shape0 .* myAmica.shape
 end
 
 function initialize_shape_parameter!(myAmica::MultiModelAmica, lrate::LearningRate)
@@ -52,106 +56,186 @@ function update_parameters!(myAmica::MultiModelAmica{T}, lrate::LearningRate, up
     update_parameters!.(myAmica.models, lrate, upd_shape)
 end
 
-#Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
-@views function update_parameters!(myAmica::SingleModelAmica{T}, lrate::LearningRate, upd_shape::Bool, newton_active::Bool) where {T<:Real}
-    N, n, m = size(myAmica.y)
 
-    myAmica.g .= zero(T)
-    myAmica.newton_kappa .= zero(T)
-    myAmica.newton_lambda .= zero(T)
-
-    for j in 1:m, i in 1:n
-        sum_zfp = zero(T)
-        sum_z = zero(T)
-        dm = zero(T)
-        dbeta_denom = zero(T)
-        drho_numer = zero(T)
-        kp = zero(T)
-        dlambda_numer = zero(T)
-
-        for k in 1:N
-            fp = myAmica.y_rho[k, i, j] * sign(myAmica.y[k, i, j]) * myAmica.shape[i, j]
-
-            zfp = myAmica.z[k, i, j] * fp
-            sum_zfp += zfp
-            sum_z += myAmica.z[k, i, j]
-
-            # kp = sum(z * fp * fp) for use in location update and Newton method
-            kp += zfp * fp
-            dm += zfp / myAmica.y[k, i, j]
-
-            myAmica.g[k, i] += myAmica.scale[i, j] * zfp
-
-            if myAmica.shape[i, j] <= 2
-                dbeta_denom += zfp * myAmica.y[k, i, j]
-            else
-                dbeta_denom += myAmica.z[k, i, j] * myAmica.y_rho[k, i, j]
-            end
-            drho_numer += myAmica.z[k, i, j] * log(myAmica.y_rho[k, i, j]) * myAmica.y_rho[k, i, j]
-
-            if newton_active
-                dlambda_numer += myAmica.z[k, i, j] * (fp * myAmica.y[k, i, j] - 1.0)^2
-            end
-        end
-
-        if dm <= 0
-            dm = one(T)
-        end
-
-        # update proportions
-        if m > 1
-            if sum_z >= 0
-                myAmica.proportions[i, j] = sum_z ./ N
-            else
-                myAmica.proportions[i, j] = 1 ./ N
-            end
-        end
-
-
-
-        # newton parameters
-        if newton_active
-            dkap = (kp / (myAmica.proportions[i, j] * N)) * myAmica.scale[i, j]^2
-            myAmica.newton_kappa[i] += myAmica.proportions[i, j] * dkap
-            myAmica.newton_lambda[i] += myAmica.proportions[i, j] * (dlambda_numer / sum_z + dkap * myAmica.location[i, j]^2)
-        end
-
-        # update location
-        if m > 1
-            if myAmica.shape[i, j] <= 2
-                myAmica.location[i, j] += (1 / myAmica.scale[i, j]) * sum_zfp / dm
-            elseif kp > 0
-                # Fortran: mu += dmu_numer / dmu_denom = sum(z*fp) / (scale * sum(z*fp*fp))
-                # Now kp = sum(z*fp*fp), so:
-                myAmica.location[i, j] += sum_zfp / (myAmica.scale[i, j] * kp)
-            end
-        end
-
-        # update scale
-        if dbeta_denom > 0
-            myAmica.scale[i, j] *= sqrt(sum_z / dbeta_denom)
-        end
-
-        # update shape
-        if upd_shape && sum_z > 0
-            dr2 = 1 - (myAmica.shape[i, j] / digamma(1 + 1 / myAmica.shape[i, j])) * drho_numer / sum_z
-            if !isnan(dr2)
-                myAmica.shape[i, j] += lrate.shapelrate * dr2
-                myAmica.shape[i, j] = clamp(myAmica.shape[i, j], lrate.minrho, lrate.maxrho)
-            end
-        end
+# copied from specialfunctions
+function gpuDigamma(z::T) where T<:Real
+    # Based on eq. (12), without looking at the accompanying source
+    # code, of: K. S. Kölbig, "Programs for computing the logarithm of
+    # the gamma function, and the digamma function, for complex
+    # argument," Computer Phys. Commun.  vol. 4, pp. 221–226 (1972).
+    x = real(z)
+    if x <= 0 # reflection formula
+        ψ = -T(π) / tanpi(z)
+        z = 1 - z
+        x = real(z)
+    else
+        ψ = zero(z)
     end
+    X = 8
+    if x < X
+        # shift using recurrence formula
+        n = X - unsafe_trunc(Int, x)
+        for ν = 1:n-1
+            ψ -= inv(z + ν)
+        end
+        ψ -= inv(z)
+        z += n
+    end
+    t = inv(z)
+    ψ += log(z) - T(0.5) * t
+    t *= t # 1/z^2
+    # the coefficients here are Float64(bernoulli[2:9] .// (2*(1:8)))
+    c = (T(0.08333333333333333),
+        T(-0.008333333333333333),
+        T(0.003968253968253968),
+        T(-0.004166666666666667),
+        T(0.007575757575757576),
+        T(-0.021092796092796094),
+        T(0.08333333333333333),
+        T(-0.4432598039215686))
+    ψ -= t * Base.Math._evalpoly(t, c)
+end
 
-    if any(isnan, myAmica.source_signals) || any(isnan, myAmica.g) || any(isnan, myAmica.proportions)
-        throw(AmicaNaNException())
+
+function fp(myAmica::SingleModelAmica)
+    myAmica.y_rho .* sign.(myAmica.y) .* push_dimension(myAmica.shape)
+end
+
+function notzero(val::T) where T<:Real
+    epsilon = T(1e-16)
+    if val < epsilon && val > -epsilon
+        # Don't use sign(val) because sign(0) = 0, which gives 0 * epsilon = 0
+        ifelse(val >= T(0), epsilon, -epsilon)
+    else
+        val
     end
 end
 
 
+#Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
+@views function update_parameters!(myAmica::SingleModelAmica{T}, lrate::LearningRate, upd_shape::Bool, newton_active::Bool) where {T<:Real}
+    N, _, m = size(myAmica.y)
+
+    check_isnan = false
+
+    if check_isnan && any(isnan, myAmica.y)
+        @warn "NaN in myAmica.y"
+    end
+    if check_isnan && any(isnan, myAmica.z)
+        @warn "NaN in myAmica.z"
+    end
+    if check_isnan && any(isnan, myAmica.y_rho)
+        @warn "NaN in myAmica.y_rho"
+    end
+
+    @timeit to "kernel" begin
+        # sum(z)
+        sum_z = sum(myAmica.z, dims=1)[1, :, :]
+        # sum(z * fp)
+        dmu_numer = sum(myAmica.z .* fp(myAmica), dims=1)[1, :, :]
+        # sum(z * fp * fp)
+        kp = sum(myAmica.z .* fp(myAmica) .^ 2, dims=1)[1, :, :]
+        # rho <= 2 ? sum(z * fp / y) : sum(z * fp * fp)
+        # the 'notzero' clamping isn't present in fortran but helps keeping values numerically stable for float32
+        dmu_denom = sum(ifelse.(push_dimension(myAmica.shape) .<= T(2),
+                myAmica.z .* fp(myAmica) ./ notzero.(myAmica.y),
+                myAmica.z .* fp(myAmica) .^ 2
+            ), dims=1)[1, :, :] .* myAmica.scale
+
+        # sum(z * log(y_rho) * y_rho)
+        drho_numer = sum(ifelse.(
+                myAmica.y_rho .>= T(1.0e-16), myAmica.z .* log.(myAmica.y_rho) .* myAmica.y_rho,
+                T(0.0)
+            ), dims=1)[1, :, :]
+
+        # sum(scale * z * fp)
+        myAmica.g .= sum(push_dimension(myAmica.scale) .* myAmica.z .* fp(myAmica), dims=3)[:, :, 1]
+        # sum(z * (fp * y - 1)^2)
+        dlambda_numer = sum(myAmica.z .* (fp(myAmica) .* myAmica.y .- T(1.0)) .^ 2, dims=1)[1, :, :]
+        # rho <= 2.0 ? sum(z * fp * y) : 0
+        dbeta_denom = sum(ifelse.(push_dimension(myAmica.shape) .<= T(2), myAmica.z .* fp(myAmica) .* myAmica.y, T(0)), dims=1)[1, :, :]
+    end
+
+    if check_isnan && any(isnan, sum_z)
+        @warn "NaN in sum_z"
+    end
+    if check_isnan && any(isnan, dmu_numer)
+        @warn "NaN in dmu_numer"
+    end
+    if check_isnan && any(isnan, kp)
+        @warn "NaN in kp"
+    end
+    if check_isnan && any(isnan, dmu_denom)
+        @warn "NaN in dmu_denom"
+    end
+    if check_isnan && any(isnan, drho_numer)
+        @warn "NaN in drho_numer"
+    end
+    if check_isnan && any(isnan, myAmica.g)
+        @warn "NaN in myAmica.g"
+    end
+    if check_isnan && any(isnan, dlambda_numer)
+        @warn "NaN in dlambda_numer"
+    end
+    if check_isnan && any(isnan, dbeta_denom)
+        @warn "NaN in dbeta_denom"
+    end
+
+    # alpha / proportions
+    @timeit to "prop" if m > 1
+        myAmica.proportions .= ifelse.(sum_z .>= T(0), sum_z ./ N, T(1) / N)
+    end
+
+    # newton parameters
+    @timeit to "para" if newton_active
+        dkap = @. (kp / (myAmica.proportions * N)) * myAmica.scale^2
+        myAmica.newton_kappa .= sum(@. myAmica.proportions * dkap; dims=2)
+        myAmica.newton_lambda .= sum(@. myAmica.proportions * (dlambda_numer / sum_z + dkap * myAmica.location^2); dims=2)
+    end
+
+    # mu / location
+    @timeit to "loc" if m > 1
+        myAmica.location .+= dmu_numer ./ dmu_denom
+    end
+
+    # sbeta / scale
+    @timeit to "scale" begin
+        # dbeta_numer / dbeta_denom
+        myAmica.scale .*= sqrt.(sum_z ./ dbeta_denom)
+    end
+
+    # rho / shape
+    @timeit to "shape" if upd_shape
+        myAmica.shape .= clamp.(
+            myAmica.shape .+ (lrate.shapelrate .* (1 .- (myAmica.shape ./ gpuDigamma.(1 .+ 1 ./ myAmica.shape)) .* drho_numer ./ sum_z)),
+            lrate.minrho,
+            lrate.maxrho
+        )
+    end
+
+    if check_isnan && any(isnan, myAmica.proportions)
+        @warn "NaN in myAmica.proportions"
+    end
+    if check_isnan && any(isnan, myAmica.newton_kappa)
+        @warn "NaN in myAmica.newton_kappa"
+    end
+    if check_isnan && any(isnan, myAmica.newton_lambda)
+        @warn "NaN in myAmica.newton_lambda"
+    end
+    if check_isnan && any(isnan, myAmica.location)
+        @warn "NaN in myAmica.location"
+    end
+    if check_isnan && any(isnan, myAmica.scale)
+        @warn "NaN in myAmica.scale"
+    end
+    if check_isnan && any(isnan, myAmica.shape)
+        @warn "NaN in myAmica.shape"
+    end
+end
 
 "updates the unmixed source_signals: myAmica.source_signals = myAmica.A ^ -1 * data"
 function update_sources!(myAmica::SingleModelAmica{T}, data::AbstractMatrix{T}) where {T<:Real}
-    myAmica.source_signals = ((myAmica.A |> Array) \ (data' |> Array))' |> typeof(myAmica.source_signals)
+    myAmica.source_signals .= ((myAmica.A |> Array) \ (data' |> Array))' |> typeof(myAmica.source_signals)
 end
 
 function update_sources!(myAmica::MultiModelAmica, data)
@@ -199,4 +283,6 @@ function calculate_lrate!(
             end
         end
     end
+
+    false
 end

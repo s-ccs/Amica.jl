@@ -28,6 +28,7 @@ function add_means_back!(myAmica::MultiModelAmica, removed_mean)
 end
 
 "pre-calculate abs(y)^rho"
-function update_y_rho!(myAmica::SingleModelAmica)
-    myAmica.y_rho .= abs.(myAmica.y) .^ push_dimension(myAmica.shape)
+function update_y_rho!(myAmica::SingleModelAmica{T}) where T<:Real
+    # addition compared to fortran: clamp y at 1e-16 to improve numerical stability
+    myAmica.y_rho .= exp.(push_dimension(myAmica.shape) .* log.(abs.(myAmica.y)))
 end
