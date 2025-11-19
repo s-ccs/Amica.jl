@@ -1,12 +1,10 @@
 #Normalizes source density location parameter (mu), scale parameter (beta) and model centers
-function reparameterize!(myAmica::SingleModelAmica, data)
-
+function reparameterize!(myAmica::SingleModelAmica)
     tau = norm.(eachcol(myAmica.A))
     myAmica.A = myAmica.A ./ tau'
     myAmica.learnedParameters.location = myAmica.learnedParameters.location .* tau'
     # Match Fortran: since scale=sbeta, and Fortran does sbeta/=Anrmk, do scale/=tau
     myAmica.learnedParameters.scale = myAmica.learnedParameters.scale ./ tau'
-
 end
 
 #Reparameterizes the parameters for the active models
@@ -79,7 +77,7 @@ function update_location!(location::AbstractArray{T,2}, shape::AbstractArray{T,2
 
     dm = zeros(T, m, n)
 
-    for k = 1:N, i = 1:n, j = 1:m
+    for k in 1:N, i in 1:n, j in 1:m
         @inbounds dm[j, i] += zfp[j, i, k] / y[j, i, k]
     end
 
@@ -121,7 +119,7 @@ end
     db = zeros(T, m, n)
 
     # Accumulate numerator (always) and denominator (conditional on shape)
-    @inbounds for k = 1:N, i = 1:n, j = 1:m
+    @inbounds for k in 1:N, i in 1:n, j in 1:m
         # dbeta_numer = sum(z) (corresponds to Fortran's usum)
         dbeta_numer[j, i] += z[j, i, k]
 
@@ -136,7 +134,7 @@ end
     end
 
     # Update scale: sbeta *= sqrt(dbeta_numer / db)
-    @inbounds for i = 1:n, j = 1:m
+    @inbounds for i in 1:n, j in 1:m
         if db[j, i] > 0
             scale[j, i] *= sqrt(dbeta_numer[j, i] / db[j, i])
         end
@@ -165,7 +163,7 @@ function update_loop!(myAmica::SingleModelAmica{T}, shapelrate::LearningRate{T},
 end
 
 #Updates Gaussian mixture Parameters and mixing matrix.
-function update_loop!(myAmica::MultiModelAmica, fp, lambda, y_rho, shapelrate, update_shape, iter, do_newton, newt_start_iter, lrate)
+function update_loop!(myAmica::MultiModelAmica, fp, y_rho, shapelrate, update_shape, iter, do_newton, newt_start_iter, lrate)
     (_, N) = size(myAmica.models[1].source_signals)
     M = size(myAmica.models, 1)
 
@@ -185,14 +183,14 @@ function update_loop!(myAmica::MultiModelAmica, fp, lambda, y_rho, shapelrate, u
             continue
         end
 
-        g, kappa, lambda = update_parameters!(myAmica, h, fp, lambda, y_rho, shapelrate, update_shape)#todo: remove return
+        g, kappa = update_parameters!(myAmica, h, fp, y_rho, shapelrate, update_shape)#todo: remove return
 
         #Checks for NaN in parameters before updating the mixing matrix
-        if any(isnan, kappa) || any(isnan, myAmica.models[h].source_signals) || any(isnan, lambda) || any(isnan, g) || any(isnan, myAmica.models[h].learnedParameters.proportions)
+        if any(isnan, kappa) || any(isnan, myAmica.models[h].source_signals) || any(isnan) || any(isnan, g) || any(isnan, myAmica.models[h].learnedParameters.proportions)
             throw(AmicaNaNException())
         end
         #Update mixing matrix via Newton method
-        newton_method!(myAmica, h, iter, g, kappa, do_newton, newt_start_iter, lrate, lambda)
+        newton_method!(myAmica, h, iter, g, kappa, do_newton, newt_start_iter, lrate)
     end
 end
 
@@ -218,7 +216,7 @@ end
     # calculate g
     @timeit to "update_g" begin
         myAmica.g .= zero(T)
-        for k = 1:N, i = 1:n, j = 1:m
+        for k in 1:N, i in 1:n, j in 1:m
             @inbounds myAmica.g[i, k] += gg.scale[j, i] * myAmica.zfp[j, i, k]
         end
     end
@@ -226,7 +224,7 @@ end
     # calculate kp
     @timeit to "update_kp" begin
         kp = zeros(T, size(gg.scale))
-        for k = 1:N, i = 1:n, j = 1:m
+        for k in 1:N, i in 1:n, j in 1:m
             @inbounds kp[j, i] += myAmica.zfp[j, i, k] * myAmica.fp[j, i, k]
         end
         kp .*= gg.scale
@@ -248,8 +246,8 @@ end
 end
 
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
-#Todo: Save g, kappa, lambda in structure, remove return
-@views function update_parameters!(myAmica::MultiModelAmica, h, fp, y_rho, lambda, lrate_rho::LearningRate, upd_shape)
+#Todo: Save g, kappa in structure, remove return
+@views function update_parameters!(myAmica::MultiModelAmica, h, fp, y_rho, lrate_rho::LearningRate, upd_shape)
     alpha = myAmica.models[h].learnedParameters.proportions #todo: move into loop and add h
     beta = myAmica.models[h].learnedParameters.scale
     mu = myAmica.models[h].learnedParameters.location
@@ -289,14 +287,13 @@ end
 
             kappa[i] += alpha[j, i] * kp
 
-            lambda[i] += alpha[j, i] .* (sum(myAmica.models[h].z[j, i, :] .* (fp[j, :] .* myAmica.models[h].y[j, i, :] .- 1) .^ 2) .+ mu[j, i]^2 .* kp)
             mu[j, i] = update_location(myAmica, rho[j, i], zfp[j, :], myAmica.models[h].y[j, i, :], mu[j, i], beta[j, i], kp)
 
 
             beta[j, i] = update_scale(zfp[j, :], myAmica.models[h].y[j, i, :], beta[j, i], myAmica.models[h].z[j, i, :], rho[j, i])
 
             if upd_shape == 1
-                myAmica.models[h].log_y_rho .= log(y_rho)
+                log_y_rho .= log.(y_rho)
                 dr = sum(myAmica.models[h].z .* log_y_rho .* y_rho, dims=2)
                 rho[j, i] = update_shape(rho[j, i], dr[j, i, 1], lrate_rho)
             end
@@ -316,26 +313,24 @@ end
     # Match Fortran: drho_numer and drho_denom
     myAmica.drho_numer .= zero(T)
     myAmica.drho_denom .= zero(T)
-    myAmica.log_y_rho .= log.(myAmica.y_rho)
 
     # Accumulate numerator and denominator
-    @inbounds for k = 1:N, i = 1:n, j = 1:m
+    @timeit to "a" for k in 1:N
         # drho_numer = sum(z * y_rho * log(y_rho))
-        myAmica.drho_numer[j, i] += myAmica.z[j, i, k] * myAmica.log_y_rho[j, i, k] * myAmica.y_rho[j, i, k]
+        @. myAmica.drho_numer[:, :] += myAmica.z[:, :, k] * log(myAmica.y_rho[:, :, k]) * myAmica.y_rho[:, :, k]
         # drho_denom = sum(z)
-        myAmica.drho_denom[j, i] += myAmica.z[j, i, k]
+        @. myAmica.drho_denom[:, :] += myAmica.z[:, :, k]
     end
 
+
     # Update shape: rho += rholrate * (1 - (rho / digamma(1 + 1/rho)) * drho_numer / drho_denom)
-    for i in 1:n
-        for j in 1:m
-            _shape = myAmica.learnedParameters.shape[j, i]
-            if myAmica.drho_denom[j, i] > 0
-                # Match Fortran formula
-                dr2 = 1 - (_shape / digamma(1 + 1 / _shape)) * myAmica.drho_numer[j, i] / myAmica.drho_denom[j, i]
-                if !isnan(dr2)
-                    myAmica.learnedParameters.shape[j, i] += shapelrate.lrate * dr2
-                end
+    @timeit to "b" for i in 1:n, j in 1:m
+        shape = myAmica.learnedParameters.shape[j, i]
+        if myAmica.drho_denom[j, i] > 0
+            # Match Fortran formula
+            dr2 = 1 - (shape / digamma(1 + 1 / shape)) * myAmica.drho_numer[j, i] / myAmica.drho_denom[j, i]
+            if !isnan(dr2)
+                myAmica.learnedParameters.shape[j, i] += shapelrate.lrate * dr2
             end
         end
     end

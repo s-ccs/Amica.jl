@@ -34,10 +34,10 @@ end
 
 "pre-calculate abs(y)^rho"
 function update_y_rho!(myAmica::SingleModelAmica)
-    myAmica.y_rho .= abs.(myAmica.y) .^ myAmica.learnedParameters.shape
+    @turbo myAmica.y_rho .= abs.(myAmica.y) .^ myAmica.learnedParameters.shape
 end
 
 
-function ffun!(myAmica::SingleModelAmica) where {T<:Real}
+function ffun!(myAmica::SingleModelAmica)
     myAmica.fp .= myAmica.y_rho .* sign.(myAmica.y) .* myAmica.learnedParameters.shape
 end

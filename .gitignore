@@ -6,3 +6,4 @@
 /.CondaPkg/
 .DS_Store
 *.mem
+repl.jl

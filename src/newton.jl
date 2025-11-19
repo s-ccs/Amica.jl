@@ -12,26 +12,26 @@ function newton_method!(myAmica::SingleModelAmica{T}, iter::Int, g, kappa, do_ne
         B = zeros(n, n)
         bflag = false
 
-        # calculate lambda
-        for k = 1:N, i = 1:n, j = 1:m
-            @inbounds myAmica.lambda[i] += gg.proportions[j, i] * ((myAmica.z[j, i, k] * (myAmica.fp[j, i, k] * myAmica.y[j, i, k])^2) + (gg.location[j, i] .^ 2 .* kp[j, i]) / N)
-        end
 
-        if any(isnan, myAmica.lambda)
-            throw(AmicaNaNException())
-        end
 
-        for i in 1:n
-            for k = 1:n
-                if i == k
-                    B[i, i] = dA[i, i] / (myAmica.lambda[i])
+        for k in 1:N, i in 1:n
+            lambda = zero(T)
+            for j in 1:m
+                lambda += gg.proportions[j, i] * ((myAmica.z[j, i, k] * (myAmica.fp[j, i, k] * myAmica.y[j, i, k])^2) + (gg.location[j, i] .^ 2 .* kp[j, i]) / N)
+            end
+
+            if any(isnan, lambda)
+                throw(AmicaNaNException())
+            end
+
+            if i == k
+                B[i, i] = dA[i, i] / lambda
+            else
+                denom = kappa[i] * kappa[k] * sigma2[i] * sigma2[k] - 1
+                if denom > 0
+                    B[i, k] = (-kappa[k] * sigma2[i] * dA[i, k] + dA[k, i]) / denom
                 else
-                    denom = kappa[i] * kappa[k] * sigma2[i] * sigma2[k] - 1
-                    if denom > 0
-                        B[i, k] = (-kappa[k] * sigma2[i] * dA[i, k] + dA[k, i]) / denom
-                    else
-                        bflag = true
-                    end
+                    bflag = true
                 end
             end
         end
@@ -45,7 +45,7 @@ function newton_method!(myAmica::SingleModelAmica{T}, iter::Int, g, kappa, do_ne
     end
 end
 
-@views function newton_method!(myAmica::MultiModelAmica, h, iter, g, kappa, do_newton, newt_start_iter, lrate::LearningRate, lambda)
+@views function newton_method!(myAmica::MultiModelAmica, h, iter, g, kappa, do_newton, newt_start_iter, lrate::LearningRate)
 
     lnatrate = lrate.natural_rate
     lrate = lrate.lrate
@@ -59,7 +59,7 @@ end
     B = zeros(n, n)
 
     for i in 1:n
-        for k = 1:n
+        for k in 1:N
             if i == k
                 B[i, i] = dA[i, i] / (lambda[i])
             else

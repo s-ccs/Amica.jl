@@ -5,6 +5,7 @@ using LinearAlgebra
 using SpecialFunctions
 using TimerOutputs
 using Statistics
+using LoopVectorization
 
 const to = TimerOutput()
 

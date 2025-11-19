@@ -86,7 +86,7 @@ function amica!(myAmica::AbstractAmica,
             end
         end
 
-        @timeit to "reparameterize" reparameterize!(myAmica, data)
+        @timeit to "reparameterize" reparameterize!(myAmica)
 
         # Calculate iteration time
         iter_time = time() - iter_time_start

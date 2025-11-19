@@ -28,17 +28,14 @@ mutable struct SingleModelAmica{T,ncomps,nmix} <: AbstractAmica
     # --- intermediary values
     # precalculated abs(y)^rho
     y_rho::Array{T,3}
-    log_y_rho::Array{T,3}
-    lambda::Array{T,1}
     fp::Array{T,3}
     # z * fp
     zfp::Array{T,3}
     g::Array{T,2}
     Q::Array{T,3}
+
     drho_numer::Array{T,2}
     drho_denom::Array{T,2}
-
-    u_intermed::Array{T,4}
 end
 
 
@@ -102,7 +99,6 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, l
 
     y = zeros(T, m, n, N)
     y_rho = zeros(T, m, n, N)
-    log_y_rho = zeros(T, m, n, N)
 
     drho_numer = zeros(T, m, n)
     drho_denom = zeros(T, m, n)
@@ -119,12 +115,10 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, l
     end
     ldet = 0.0
     source_signals = zeros(T, n, N)
-    lambda = zeros(T, n)
     fp = zeros(T, m, n, N)
     zfp = zeros(T, m, n, N)
     Q = zeros(T, m, n, N)
     g = zeros(T, n, N)
-    u_intermed = zeros(T, m, n, N, m)
 
     return SingleModelAmica{T,ncomps,nmix}(
         source_signals,
@@ -141,15 +135,12 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, l
         ldet,
         maxiter,
         y_rho,
-        log_y_rho,
-        lambda,
         fp,
         zfp,
         g,
         Q,
         drho_numer,
         drho_denom,
-        u_intermed,
     )
 end
 
