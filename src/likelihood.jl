@@ -56,11 +56,9 @@ function loopiloop!(myAmica::MultiModelAmica)
 end
 
 function calculate_Q!(Q::AbstractArray{T,3}, proportions::AbstractArray{T,2}, scale::AbstractArray{T,2}, shape::AbstractArray{T,2}, y_rho::AbstractArray{T,3}) where {T<:Real}
-    Q .= y_rho
-    logpfun!(Q, y_rho, shape)
-    # idk why but this is faster when stored in a variable?!
-    add = (log.(proportions) .+ log.(scale))
-    Q .+= add
+    # this is way faster when stored in a variable
+    add = -log(2) .- loggamma.(1 .+ 1 ./ shape) .+ log.(proportions) .+ log.(scale)
+    Q .= .-y_rho .+ add
 end
 
 #calculates u but saves it into z. MultiModel also uses the SingleModel version

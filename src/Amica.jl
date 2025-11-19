@@ -1,18 +1,10 @@
 #Amica.jl is based on a MATLAB implementation of AMICA by Jason Palmer.
 module Amica
+
 using LinearAlgebra
-using GaussianMixtures
-using Distributions
-using MKL_jll
-using IntelVectorMath
 using SpecialFunctions
-using ProgressMeter
-using LoopVectorization
-using AppleAccelerate
-using StaticArrays
-using Diagonalizations
-using LogExpFunctions
 using TimerOutputs
+using Statistics
 
 const to = TimerOutput()
 

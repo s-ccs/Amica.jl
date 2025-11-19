@@ -211,7 +211,7 @@ end
         end
     end
 
-    @timeit to "ffun" ffun!(myAmica.fp, myAmica.y, gg.shape)
+    @timeit to "ffun" ffun!(myAmica)
 
     @timeit to "zfp" myAmica.zfp .= myAmica.z .* myAmica.fp
 
@@ -296,7 +296,7 @@ end
             beta[j, i] = update_scale(zfp[j, :], myAmica.models[h].y[j, i, :], beta[j, i], myAmica.models[h].z[j, i, :], rho[j, i])
 
             if upd_shape == 1
-                myAmica.models[h].log_y_rho = optimized_log(y_rho)
+                myAmica.models[h].log_y_rho .= log(y_rho)
                 dr = sum(myAmica.models[h].z .* log_y_rho .* y_rho, dims=2)
                 rho[j, i] = update_shape(rho[j, i], dr[j, i, 1], lrate_rho)
             end

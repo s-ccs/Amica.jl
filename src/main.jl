@@ -44,8 +44,6 @@ function amica!(myAmica::AbstractAmica,
 
     dLL = zeros(1, maxiter)
 
-    prog = ProgressUnknown("Minimizing"; showspeed=true)
-
     for iter in 1:maxiter
         iter_time_start = time()
 
