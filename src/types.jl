@@ -16,6 +16,7 @@ mutable struct SingleModelAmica{T,ncomps,nmix} <: AbstractAmica
     m::Int    #Number of gaussians
     A::Array{T,2} # unmixing matrix
     S::Array{T,2} # sphering matrix
+    LLdetS::T
     z::Array{T,3}
     y::Array{T,3}
     centers::Array{T,1} #model centers
@@ -27,12 +28,15 @@ mutable struct SingleModelAmica{T,ncomps,nmix} <: AbstractAmica
     # --- intermediary values
     # precalculated abs(y)^rho
     y_rho::Array{T,3}
+    log_y_rho::Array{T,3}
     lambda::Array{T,1}
     fp::Array{T,3}
     # z * fp
     zfp::Array{T,3}
     g::Array{T,2}
     Q::Array{T,3}
+    drho_numer::Array{T,2}
+    drho_denom::Array{T,2}
 
     u_intermed::Array{T,4}
 end
@@ -98,6 +102,10 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, l
 
     y = zeros(T, m, n, N)
     y_rho = zeros(T, m, n, N)
+    log_y_rho = zeros(T, m, n, N)
+
+    drho_numer = zeros(T, m, n)
+    drho_denom = zeros(T, m, n)
 
     Lt = zeros(T, N)
     z = ones(T, m, n, N) / N
@@ -124,6 +132,7 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, l
         m,
         A,
         I(size(A, 1)),
+        zero(T),
         z,
         y,
         centers,
@@ -132,12 +141,16 @@ function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, l
         ldet,
         maxiter,
         y_rho,
+        log_y_rho,
         lambda,
         fp,
         zfp,
         g,
         Q,
-        u_intermed)
+        drho_numer,
+        drho_denom,
+        u_intermed,
+    )
 end
 
 #Data type for AMICA with multiple ICA models

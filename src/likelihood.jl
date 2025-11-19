@@ -1,7 +1,14 @@
-#Calculates log-likelihood for whole model. todo: make the calculate LLs one function
+"Calculates log-likelihood for whole model. todo: make the calculate LLs one function"
 function calculate_LL!(myAmica::SingleModelAmica)
     (n, N) = size(myAmica.source_signals)
     push!(myAmica.LL, sum(myAmica.Lt) / (n * N))
+end
+
+"Calculate difference in loglikelihood between iterations"
+function calculate_DLL!(dLL, myAmica::SingleModelAmica, iter)
+    if iter > 1
+        dLL[iter] = myAmica.LL[iter] - myAmica.LL[iter-1]
+    end
 end
 
 #Calculates LL for whole ICA mixture model. Uses LL for dominant model for each time sample.
@@ -26,10 +33,10 @@ end
 #Update loop for Lt and u (which is saved in z). Todo: Rename
 function loopiloop!(myAmica::SingleModelAmica{T}) where {T}
     gg = myAmica.learnedParameters
-    calculate_Q!(myAmica.Q, gg.proportions, gg.scale, gg.shape, myAmica.y_rho)
-    calculate_u!(myAmica.z, myAmica.Q)
-    calculate_Lt!(myAmica.Lt, myAmica.Q)
-
+    @timeit to "calculate_Q" calculate_Q!(myAmica.Q, gg.proportions, gg.scale, gg.shape, myAmica.y_rho)
+    @timeit to "calculate_u" calculate_u!(myAmica.z, myAmica.Q)
+    @timeit to "calculate_Lt" calculate_Lt!(myAmica)
+    @timeit to "calculate_LL" calculate_LL!(myAmica)
 end
 
 function loopiloop!(myAmica::MultiModelAmica)
@@ -37,12 +44,15 @@ function loopiloop!(myAmica::MultiModelAmica)
     (n, _) = size(myAmica.models[1].source_signals)
 
     for h in 1:M #run along models
-        for i in 1:n #run along components
-            Q = calculate_Q(myAmica.models[h], i, y_rho)
-            calculate_u!(myAmica.models[h], @view(Q[:, n, :]), i)
-            calculate_Lt!(myAmica.models[h], @view(Q[:, n, :]))
-        end
+        model = models[h].Q = calculate_Q(myAmica.models[h], i, y_rho)
+        gg = model.learnedParameters
+
+        @timeit to "calculate_Q" calculate_Q!(model.Q, gg.proportions, gg.scale, gg.shape, model.y_rho)
+        @timeit to "calculate_u" calculate_u!(model.z, model.Q)
+        @timeit to "calculate_Lt" calculate_Lt!(model)
+
     end
+    @timeit to "calculate_LL" calculate_LL!(myAmica)
 end
 
 function calculate_Q!(Q::AbstractArray{T,3}, proportions::AbstractArray{T,2}, scale::AbstractArray{T,2}, shape::AbstractArray{T,2}, y_rho::AbstractArray{T,3}) where {T<:Real}
@@ -104,27 +114,41 @@ function calculate_y!(myAmica::MultiModelAmica)
     calculate_y!.(myAmica.models[h])
 end
 
-#Calculates Likelihood for each time sample and for each ICA model
-function calculate_Lt!(Lt::Array{T,1}, Q::Array{T,3}) where {T<:Real}
-    (m, _, _) = size(Q)
+"Calculates the likelihoods for each time sample"
+function calculate_Lt!(myAmica::SingleModelAmica)
+    myAmica.Lt .= myAmica.ldet
+    myAmica.Lt .+= myAmica.LLdetS
+
+    (m, n, N) = size(myAmica.Q)
 
     if m > 1
-        Lt .+= sum(logsumexp(Q; dims=1), dims=2)[1, 1, :]
+        # Manual logsumexp computation without allocations
+        for k in 1:N
+            log_sum = zero(eltype(myAmica.Q))
+            for i in 1:n
+                # Find max for numerical stability
+                Qmax = myAmica.Q[1, i, k]
+                for j in 2:m
+                    @inbounds Qmax = max(Qmax, myAmica.Q[j, i, k])
+                end
+
+                # Compute logsumexp
+                sum_exp = zero(eltype(myAmica.Q))
+                for j in 1:m
+                    @inbounds sum_exp += exp(myAmica.Q[j, i, k] - Qmax)
+                end
+                log_sum += Qmax + log(sum_exp)
+            end
+            @inbounds myAmica.Lt[k] += log_sum
+        end
     else
-        Lt[:] = Lt .+ Q[1, :] #todo: test
-    end
-end
-
-#Initializes the likelihoods for each time sample with the determinant of the mixing matrix
-function initialize_Lt!(myAmica::SingleModelAmica)
-    myAmica.Lt .= myAmica.ldet
-end
-
-#Initializes the likelihoods of each time sample with the determinant of the mixing matrix and the weights for each ICA model
-function initialize_Lt!(myAmica::MultiModelAmica)
-    M = size(myAmica.models, 1)
-    for h in 1:M
-        myAmica.models[h].Lt .= log(myAmica.normalized_ica_weights[h]) + myAmica.models[h].ldet
+        for k in 1:N
+            sum_val = zero(eltype(myAmica.Q))
+            for i in 1:n
+                @inbounds sum_val += myAmica.Q[1, i, k]
+            end
+            @inbounds myAmica.Lt[k] += sum_val
+        end
     end
 end
 

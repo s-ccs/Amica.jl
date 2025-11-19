@@ -32,6 +32,23 @@ function add_means_back!(myAmica::MultiModelAmica, removed_mean)
     end
 end
 
+"pre-calculate abs(y)^rho"
+function update_y_rho!(myAmica::SingleModelAmica)
+    (m, n, _) = size(myAmica.y)
+
+    if !hasproperty(MKL_jll, :libmkl_rt)
+        myAmica.y_rho .= abs.(myAmica.y)
+    else
+        IVM.abs!(myAmica.y_rho, myAmica.y)
+    end
+    for i in 1:n
+        for j in 1:m
+            @views _y_rho = myAmica.y_rho[j, i, :]
+            optimized_pow!(_y_rho, _y_rho, myAmica.learnedParameters.shape[j, i])
+        end
+    end
+end
+
 #taken from amica_a.m
 #L = det(A) * mult p(s|θ)
 function logpfun!(out::AbstractArray{T,3}, y_rho::AbstractArray{T,3}, shape::AbstractArray{T,2}) where {T<:Real}
@@ -45,19 +62,7 @@ function logpfun!(out::AbstractArray{T,3}, y_rho::AbstractArray{T,3}, shape::Abs
 end
 
 function ffun!(fp::AbstractArray{T,3}, y::AbstractArray{T,3}, rho::AbstractArray{T,2}) where {T<:Real}
-    (m, n, _) = size(y)
-
-    fp .= abs.(y)
-
-    for i in 1:n
-        for j in 1:m
-            @views _fp = fp[j, i, :]
-            # matlab uses ^(rho-1) while fortran does ^rho
-            @views optimized_pow!(_fp, _fp, rho[j, i])
-        end
-    end
-
-    fp .*= sign.(y) .* rho
+    fp .= abs.(y) .^ rho .* sign.(y) .* rho
 end
 
 # intelvectormath Pow

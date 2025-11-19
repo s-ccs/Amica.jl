@@ -7,8 +7,8 @@ include("util.jl")
 
 @testset "compare against fortran" begin
 
-    build_fortran()
-    run_fortran("amicadefs.params")
+    # build_fortran()
+    # run_fortran("amicadefs.params")
 
     # verify the raw data is identical
     data = Float64.(read_fdt("input/Memorize.fdt"; ncols=71, T=Float32))
@@ -84,17 +84,13 @@ include("util.jl")
 
     @test g ≈ myAmica.g
 
-    # test lambda
-
     # location after one iteration
     mu_1 = read_fdt("datadumps/mu_1.bin"; ncols=3, T=Float64)
     @test myAmica.learnedParameters.location ≈ mu_1
 
-
     # scale after one iteration
     sbeta_1 = read_fdt("datadumps/sbeta_1.bin"; ncols=3, T=Float64)
     @test myAmica.learnedParameters.scale ≈ sbeta_1
-
 
     # shape
     rho_1 = read_fdt("datadumps/rho_1.bin"; ncols=3, T=Float64)
@@ -103,6 +99,4 @@ include("util.jl")
     # A
     A_1 = read_fdt("datadumps/a_after_iter1.bin"; ncols=71, T=Float64)
     @test myAmica.A ≈ A_1
-
-
 end

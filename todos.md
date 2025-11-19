@@ -1,0 +1,6 @@
+- LL plotten
+- https://github.com/KristofferC/TimerOutputs.jl
+- pre-calc-y in eigene funktion
+- loopiloop umbenennen
+- fortran code pro step benchmarken
+- newton_method vergleichen

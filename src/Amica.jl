@@ -12,6 +12,10 @@ using AppleAccelerate
 using StaticArrays
 using Diagonalizations
 using LogExpFunctions
+using TimerOutputs
+
+const to = TimerOutput()
+
 #using MultivariateStats
 #using StatsAPI
 include("types.jl")

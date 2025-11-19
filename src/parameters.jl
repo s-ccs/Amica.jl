@@ -155,13 +155,13 @@ end
 #Updates Gaussian mixture Parameters and mixing matrix. todo: rename since its not a loop for single model
 function update_loop!(myAmica::SingleModelAmica{T}, shapelrate::LearningRate{T}, update_shape::Bool, iter::Int, do_newton::Bool, newt_start_iter::Int, lrate::LearningRate{T}) where {T<:Real}
     #Update parameters
-    g, kappa = update_parameters!(myAmica, shapelrate, update_shape)
+    @timeit to "update_parameters" g, kappa = update_parameters!(myAmica, shapelrate, update_shape)
     #Checks for NaN in parameters before updating the mixing matrix
     if any(isnan, kappa) || any(isnan, myAmica.source_signals) || any(isnan, g) || any(isnan, myAmica.learnedParameters.proportions)
         throw(AmicaNaNException())
     end
     #Update mixing matrix via Newton method
-    newton_method!(myAmica, iter, g, kappa, do_newton, newt_start_iter, lrate)
+    @timeit to "newton_method" newton_method!(myAmica, iter, g, kappa, do_newton, newt_start_iter, lrate)
 end
 
 #Updates Gaussian mixture Parameters and mixing matrix.
@@ -203,41 +203,45 @@ end
 
     gg = myAmica.learnedParameters
 
-    sumz = calculate_sumz(myAmica.z)
+    @timeit to "update_proportions" begin
+        sumz = calculate_sumz(myAmica.z)
 
-    if m > 1
-        gg.proportions = sumz ./ N
+        if m > 1
+            gg.proportions = sumz ./ N
+        end
     end
 
-    # [OK]
-    ffun!(myAmica.fp, myAmica.y, gg.shape)
+    @timeit to "ffun" ffun!(myAmica.fp, myAmica.y, gg.shape)
 
-    myAmica.zfp .= myAmica.z .* myAmica.fp
+    @timeit to "zfp" myAmica.zfp .= myAmica.z .* myAmica.fp
 
     # calculate g
-    # [OK]
-    myAmica.g .= zero(T)
-    for k = 1:N, i = 1:n, j = 1:m
-        @inbounds myAmica.g[i, k] += gg.scale[j, i] * myAmica.zfp[j, i, k]
+    @timeit to "update_g" begin
+        myAmica.g .= zero(T)
+        for k = 1:N, i = 1:n, j = 1:m
+            @inbounds myAmica.g[i, k] += gg.scale[j, i] * myAmica.zfp[j, i, k]
+        end
     end
 
     # calculate kp
-    kp = zeros(T, size(gg.scale))
-    for k = 1:N, i = 1:n, j = 1:m
-        @inbounds kp[j, i] += myAmica.zfp[j, i, k] * myAmica.fp[j, i, k]
+    @timeit to "update_kp" begin
+        kp = zeros(T, size(gg.scale))
+        for k = 1:N, i = 1:n, j = 1:m
+            @inbounds kp[j, i] += myAmica.zfp[j, i, k] * myAmica.fp[j, i, k]
+        end
+        kp .*= gg.scale
     end
-    kp .*= gg.scale
 
-    kappa = sum(gg.proportions .* kp, dims=1)[1, :]
+    @timeit to "update_kappa" kappa = sum(gg.proportions .* kp, dims=1)[1, :]
 
     # [OK]
-    update_location!(gg.location, gg.shape, myAmica.zfp, myAmica.y, gg.scale, kp)
+    @timeit to "update_location" update_location!(gg.location, gg.shape, myAmica.zfp, myAmica.y, gg.scale, kp)
     # [OK]
-    update_scale!(gg.scale, myAmica.zfp, myAmica.y, myAmica.z, gg.shape, myAmica.y_rho)
+    @timeit to "update_scale" update_scale!(gg.scale, myAmica.zfp, myAmica.y, myAmica.z, gg.shape, myAmica.y_rho)
 
     # [OK]
     if upd_shape
-        update_shape!(gg.shape, myAmica.z, myAmica.y_rho, shapelrate)
+        @timeit to "update_shape" update_shape!(myAmica, shapelrate)
     end
 
     return myAmica.g, kappa
@@ -292,7 +296,7 @@ end
             beta[j, i] = update_scale(zfp[j, :], myAmica.models[h].y[j, i, :], beta[j, i], myAmica.models[h].z[j, i, :], rho[j, i])
 
             if upd_shape == 1
-                log_y_rho = optimized_log(y_rho)
+                myAmica.models[h].log_y_rho = optimized_log(y_rho)
                 dr = sum(myAmica.models[h].z .* log_y_rho .* y_rho, dims=2)
                 rho[j, i] = update_shape(rho[j, i], dr[j, i, 1], lrate_rho)
             end
@@ -305,38 +309,38 @@ end
     return g, kappa
 end
 
-#Updates the Gaussian mixture shape parameter
-@views function update_shape!(shape::AbstractArray{T,2}, z::AbstractArray{T,3}, y_rho::AbstractArray{T,3}, shapelrate::LearningRate) where {T<:Real}
-    (m, n, N) = size(z)
+"Updates the Gaussian mixture shape parameter"
+@views function update_shape!(myAmica::SingleModelAmica{T}, shapelrate::LearningRate) where {T<:Real}
+    (m, n, N) = size(myAmica.z)
 
     # Match Fortran: drho_numer and drho_denom
-    drho_numer = zeros(T, m, n)
-    drho_denom = zeros(T, m, n)
-    log_y_rho = optimized_log(y_rho)
+    myAmica.drho_numer .= zero(T)
+    myAmica.drho_denom .= zero(T)
+    myAmica.log_y_rho .= log.(myAmica.y_rho)
 
     # Accumulate numerator and denominator
     @inbounds for k = 1:N, i = 1:n, j = 1:m
         # drho_numer = sum(z * y_rho * log(y_rho))
-        drho_numer[j, i] += z[j, i, k] * log_y_rho[j, i, k] * y_rho[j, i, k]
+        myAmica.drho_numer[j, i] += myAmica.z[j, i, k] * myAmica.log_y_rho[j, i, k] * myAmica.y_rho[j, i, k]
         # drho_denom = sum(z)
-        drho_denom[j, i] += z[j, i, k]
+        myAmica.drho_denom[j, i] += myAmica.z[j, i, k]
     end
 
     # Update shape: rho += rholrate * (1 - (rho / digamma(1 + 1/rho)) * drho_numer / drho_denom)
     for i in 1:n
         for j in 1:m
-            _shape = shape[j, i]
-            if drho_denom[j, i] > 0
+            _shape = myAmica.learnedParameters.shape[j, i]
+            if myAmica.drho_denom[j, i] > 0
                 # Match Fortran formula
-                dr2 = 1 - (_shape / digamma(1 + 1 / _shape)) * drho_numer[j, i] / drho_denom[j, i]
+                dr2 = 1 - (_shape / digamma(1 + 1 / _shape)) * myAmica.drho_numer[j, i] / myAmica.drho_denom[j, i]
                 if !isnan(dr2)
-                    shape[j, i] += shapelrate.lrate * dr2
+                    myAmica.learnedParameters.shape[j, i] += shapelrate.lrate * dr2
                 end
             end
         end
     end
 
-    clamp!(shape, shapelrate.minimum, shapelrate.maximum)
+    clamp!(myAmica.learnedParameters.shape, shapelrate.minimum, shapelrate.maximum)
 end
 
 "Calculates determinant of mixing Matrix A (with log). first log-likelihood part of L = |A| * p(sources)"
@@ -354,13 +358,8 @@ end
 
 "updates the unmixed source_signals: myAmica.source_signals = myAmica.A ^ -1 * data"
 function update_sources!(myAmica::SingleModelAmica{T}, data::AbstractMatrix{T}) where {T<:Real}
-    #myAmica.source_signals .= myAmica.A \ data#
-    #myAmica.source_signals .= myAmica.A \ data#
-    #ldiv!(myAmica.source_signals,myAmica.A,data)
-    #lu!(myAmica.A)
-
-    LinearAlgebra.ldiv!(myAmica.source_signals, LinearAlgebra.qr(myAmica.A), data)
-    #myAmica.source_signals = pinv(myAmica.A) * data
+    qr_a = LinearAlgebra.qr(myAmica.A)
+    LinearAlgebra.ldiv!(myAmica.source_signals, qr_a, data)
 end
 
 function update_sources!(myAmica::MultiModelAmica, data)
@@ -391,4 +390,8 @@ function calculate_lrate!(dLL, lrateType::LearningRate, iter, newt_start_iter, d
         end
     end
     lrateType.lrate = lrate
+end
+
+function calculate_sdLL(dLL, iter, iterwin)
+    return sum(dLL[iter-iterwin+1:iter]) / iterwin
 end

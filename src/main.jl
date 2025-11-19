@@ -28,11 +28,6 @@ function amica!(myAmica::AbstractAmica,
 
     initialize_shape_parameter!(myAmica, shapelrate)
 
-    (n, N) = size(data)
-    m = myAmica.m
-
-    println("m[j]: $(m), n[i]: $(n), N: $(N)")
-
     #Prepares data by removing means and/or sphering
     if remove_mean
         removed_mean = removeMean!(data)
@@ -41,10 +36,10 @@ function amica!(myAmica::AbstractAmica,
     if do_sphering
         S = sphering!(data)
         myAmica.S = S
-        LLdetS = logabsdet(S)[1]
+        myAmica.LLdetS = logabsdet(S)[1]
     else
         myAmica.S = I
-        LLdetS = 0
+        myAmica.LLdetS = 0
     end
 
     dLL = zeros(1, maxiter)
@@ -52,50 +47,26 @@ function amica!(myAmica::AbstractAmica,
     prog = ProgressUnknown("Minimizing"; showspeed=true)
 
     for iter in 1:maxiter
+        iter_time_start = time()
 
-        # [OK]
-        update_sources!(myAmica, data)
+        @timeit to "update_sources" update_sources!(myAmica, data)
 
-        # [OK]
-        calculate_ldet!(myAmica)
+        @timeit to "calculate_ldet" calculate_ldet!(myAmica)
 
-        # [OK]
-        initialize_Lt!(myAmica)
+        @timeit to "calculate_y" calculate_y!(myAmica)
 
-        # [OK]
-        myAmica.Lt .+= LLdetS
+        @timeit to "update_y_rho" update_y_rho!(myAmica)
 
-        # [OK]
-        calculate_y!(myAmica)
+        @timeit to "loopiloop" loopiloop!(myAmica) #Updates y and Lt. Todo: Rename
 
-        # pre-calculate abs(y)^rho
-        if !hasproperty(MKL_jll, :libmkl_rt)
-            myAmica.y_rho .= abs.(myAmica.y)
-        else
-            IVM.abs!(myAmica.y_rho, myAmica.y)
-        end
-        for i in 1:n
-            for j in 1:m
-                @views _y_rho = myAmica.y_rho[j, i, :]
-                optimized_pow!(_y_rho, _y_rho, myAmica.learnedParameters.shape[j, i])
-            end
-        end
+        @timeit to "calculate_DLL" calculate_DLL!(dLL, myAmica, iter)
 
-        # [OK]
-        loopiloop!(myAmica) #Updates y and Lt. Todo: Rename
-
-        # [OK]
-        calculate_LL!(myAmica)
-
-        #Calculate difference in loglikelihood between iterations
-        if iter > 1
-            dLL[iter] = myAmica.LL[iter] - myAmica.LL[iter-1]
-        end
         if iter > iterwin + 1
-            calculate_lrate!(dLL, lrate, iter, newt_start_iter, do_newton, iterwin)
+            @timeit to "calculate_lrate" calculate_lrate!(dLL, lrate, iter, newt_start_iter, do_newton, iterwin)
             #Calculates average likelihood change over multiple itertions
-            sdll = sum(dLL[iter-iterwin+1:iter]) / iterwin
+
             #Checks termination criterion
+            @timeit to "calculate_sdLL" sdll = calculate_sdLL(dLL, iter, iterwin)
             if (sdll > 0) && (sdll < mindll)
                 println("LL increase to low. Stop at iteration ", iter)
                 break
@@ -106,7 +77,7 @@ function amica!(myAmica::AbstractAmica,
         try
             #Updates parameters and mixing matrix
             # [OK]
-            update_loop!(myAmica, shapelrate, update_shape, iter, do_newton, newt_start_iter, lrate)
+            @timeit to "update_loop" update_loop!(myAmica, shapelrate, update_shape, iter, do_newton, newt_start_iter, lrate)
         catch e
             #Terminates if NaNs are detected in parameters
             if isa(e, AmicaNaNException)
@@ -116,18 +87,22 @@ function amica!(myAmica::AbstractAmica,
                 rethrow()
             end
         end
-        @debug iter, :A myAmica.A[1:2, 1:2]
 
-        reparameterize!(myAmica, data)
+        @timeit to "reparameterize" reparameterize!(myAmica, data)
 
-        @debug iter, :A myAmica.A[1:2, 1:2]
-        #Shows current progress
-        show_progress && ProgressMeter.next!(prog; showvalues=[(:LL, myAmica.LL[iter])])
+        # Calculate iteration time
+        iter_time = time() - iter_time_start
+
+        # Formatted output matching Fortran AMICA
+        if show_progress
+            println(" iter $(lpad(iter, 5)) lrate = $(lpad(string(round(lrate.lrate, digits=10)), 13)) LL = $(lpad(string(round(myAmica.LL[iter], digits=10)), 14))  ($(lpad(string(round(iter_time, digits=2)), 6)) s)")
+        end
 
     end
     #If parameters contain NaNs, the algorithm skips the A update and terminates by jumping here
     @label escape_from_NaN
 
+    show(to)
 
     #If means were removed, they are added back
     if remove_mean
