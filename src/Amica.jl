@@ -5,12 +5,16 @@ using LinearAlgebra
 using SpecialFunctions
 using TimerOutputs
 using Statistics
-using LoopVectorization
+using Parameters
+using KernelAbstractions
 
 const to = TimerOutput()
 
+abstract type AbstractAmica end
+
 #using MultivariateStats
 #using StatsAPI
+include("single_model_amica.jl")
 include("types.jl")
 include("helper.jl")
 include("likelihood.jl")
@@ -26,12 +30,12 @@ export AbstractAmica, MultiModelAmica, SingleModelAmica
 import Base.show
 
 function Base.show(io::Core.IO, m::SingleModelAmica)
+    global like = "not run"
     try
         ix = findlast(.!isnan.(m.LL))
         @show ix
         global like = string(m.LL[ix]) * " (after $(string(ix)) iterations)"
     catch
-        global like = "not run"
     end
     println(
         io,
@@ -44,10 +48,10 @@ $(typeof(m)) with:
 end
 
 function Base.show(io::Core.IO, m::MultiModelAmica)
+    global like = "not run"
     try
         global like = m.LL[findlast(m.LL .!= 0)]
     catch
-        global like = "not run"
     end
     println(
         io,

@@ -17,11 +17,6 @@ function sphering!(x)
     return S
 end
 
-function bene_sphering(data)
-    d_memory_whiten = whitening(data) # Todo: make the dimensionality reduction optional
-    return d_memory_whiten.iF * data
-end
-
 #Adds means back to model centers
 add_means_back!(myAmica::SingleModelAmica, removed_mean) = nothing
 
@@ -34,10 +29,10 @@ end
 
 "pre-calculate abs(y)^rho"
 function update_y_rho!(myAmica::SingleModelAmica)
-    @turbo myAmica.y_rho .= abs.(myAmica.y) .^ myAmica.learnedParameters.shape
+    myAmica.y_rho .= abs.(myAmica.y) .^ myAmica.shape
 end
 
 
 function ffun!(myAmica::SingleModelAmica)
-    myAmica.fp .= myAmica.y_rho .* sign.(myAmica.y) .* myAmica.learnedParameters.shape
+    myAmica.fp .= myAmica.y_rho .* sign.(myAmica.y) .* myAmica.shape
 end

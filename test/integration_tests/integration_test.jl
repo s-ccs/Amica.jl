@@ -38,7 +38,7 @@ include("util.jl")
 
     data = Float64.(read_fdt("input/Memorize.fdt"; ncols=71, T=Float32))
 
-    myAmica = SingleModelAmica(data; maxiter=30, do_sphering=true, remove_mean=true, m=3, A=A, scale=sbeta, location=mu)
+    myAmica = SingleModelAmica(data; m=3, A=A, scale=sbeta, location=mu)
 
     @test A ≈ inv(W)
 
@@ -86,15 +86,15 @@ include("util.jl")
 
     # location after one iteration
     mu_1 = read_fdt("datadumps/mu_1.bin"; ncols=3, T=Float64)
-    @test myAmica.learnedParameters.location ≈ mu_1
+    @test myAmica.location ≈ mu_1
 
     # scale after one iteration
     sbeta_1 = read_fdt("datadumps/sbeta_1.bin"; ncols=3, T=Float64)
-    @test myAmica.learnedParameters.scale ≈ sbeta_1
+    @test myAmica.scale ≈ sbeta_1
 
     # shape
     rho_1 = read_fdt("datadumps/rho_1.bin"; ncols=3, T=Float64)
-    @test myAmica.learnedParameters.shape ≈ rho_1
+    @test myAmica.shape ≈ rho_1
 
     # A
     A_1 = read_fdt("datadumps/a_after_iter1.bin"; ncols=71, T=Float64)

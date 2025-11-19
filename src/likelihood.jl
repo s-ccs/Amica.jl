@@ -31,9 +31,8 @@ function calculate_LL!(myAmica::MultiModelAmica)
 end
 
 #Update loop for Lt and u (which is saved in z). Todo: Rename
-function loopiloop!(myAmica::SingleModelAmica{T}) where {T}
-    gg = myAmica.learnedParameters
-    @timeit to "calculate_Q" calculate_Q!(myAmica.Q, gg.proportions, gg.scale, gg.shape, myAmica.y_rho)
+function loopiloop!(myAmica::SingleModelAmica)
+    @timeit to "calculate_Q" calculate_Q!(myAmica)
     @timeit to "calculate_u_and_Lt" calculate_u_and_Lt!(myAmica)
     @timeit to "calculate_LL" calculate_LL!(myAmica)
 end
@@ -44,18 +43,23 @@ function loopiloop!(myAmica::MultiModelAmica)
 
     for h in 1:M #run along models
         model = myAmica.models[h]
-        gg = model.learnedParameters
 
-        @timeit to "calculate_Q" calculate_Q!(model.Q, gg.proportions, gg.scale, gg.shape, model.y_rho)
+        @timeit to "calculate_Q" calculate_Q!(model)
         @timeit to "calculate_u_and_Lt" calculate_u_and_Lt!(model)
 
     end
     @timeit to "calculate_LL" calculate_LL!(myAmica)
 end
 
-function calculate_Q!(Q::AbstractArray{T,3}, proportions::AbstractArray{T,2}, scale::AbstractArray{T,2}, shape::AbstractArray{T,2}, y_rho::AbstractArray{T,3}) where {T<:Real}
+function calculate_Q!(myAmica::SingleModelAmica{T}) where {T<:Real}
+    Q = myAmica.Q
+    proportions = myAmica.proportions
+    scale = myAmica.scale
+    shape = myAmica.shape
+    y_rho = myAmica.y_rho
+
     # the 'identity' brings a significant speedup
-    Q .= identity(-log(2) .- loggamma.(1 .+ 1 ./ shape) .+ log.(proportions) .+ log.(scale)) .- y_rho
+    Q .= identity(-log(T(2)) .- loggamma.(T(1) .+ T(1) ./ shape) .+ log.(proportions) .+ log.(scale)) .- y_rho
 end
 
 
@@ -110,22 +114,17 @@ end
 
 "Applies location and scale parameter to source signals (per generalized Gaussian)"
 @views function calculate_y!(myAmica::SingleModelAmica)
-    for j in 1:myAmica.m
-        myAmica.y[j, :, :] .= myAmica.learnedParameters.scale[j, :] .* (myAmica.source_signals .- myAmica.learnedParameters.location[j, :])
+    (m, _, _) = size(myAmica.z)
+
+    for j in 1:m
+        myAmica.y[j, :, :] .= myAmica.scale[j, :] .* (myAmica.source_signals .- myAmica.location[j, :])
     end
 end
 
 function calculate_y!(myAmica::MultiModelAmica)
-    calculate_y!.(myAmica.models[h])
-end
-
-
-# calculate loglikelihood for each sample in vector x, given a parameterization of a mixture of PGeneralizedGaussians (not in use)
-function loglikelihoodMMGG(μ::AbstractVector, prop::AbstractVector, shape::AbstractVector, data::AbstractVector, π::AbstractVector)
-    # take the vectors of μ,prop,shape and generate a GG from each
-    GGvec = PGeneralizedGaussian.(μ, prop, shape)
-    MM = MixtureModel(GGvec, Vector(π)) # make it a mixture model with prior probabilities π
-    return loglikelihood.(MM, data) # apply the loglikelihood to each sample individually (note the "." infront of .(MM,x))
+    for model in myAmica.models
+        calculate_y!.(model)
+    end
 end
 
 

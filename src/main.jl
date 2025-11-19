@@ -4,8 +4,8 @@ Main AMICA algorithm
 """
 
 function fit(amicaType::Type{T}, data; m=3, maxiter=500, location=nothing, scale=nothing, A=nothing, kwargs...) where {T<:AbstractAmica}
-    amica = T(data; m=m, maxiter=maxiter, location=location, scale=scale, A=A)
-    fit!(amica, data; kwargs...)
+    amica = T(data; m=m, location=location, scale=scale, A=A)
+    fit!(amica, data; maxiter=maxiter, kwargs...)
     return amica
 end
 function fit!(amica::AbstractAmica, data; kwargs...)
@@ -19,7 +19,7 @@ function amica!(myAmica::AbstractAmica,
     remove_mean::Bool=true,
     do_sphering::Bool=true,
     show_progress::Bool=true,
-    maxiter::Int=myAmica.maxiter,
+    maxiter::Int=50,
     do_newton::Bool=true,
     newt_start_iter::Int=50,
     iterwin::Int=10,

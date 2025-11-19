@@ -1,10 +1,11 @@
 #Updates the mixing matrix with the newton method
-function newton_method!(myAmica::SingleModelAmica{T}, iter::Int, g, kappa, do_newton::Bool, newt_start_iter::Int, lrate::LearningRate) where {T<:Real}
+function newton_method!(myAmica::SingleModelAmica{T}, iter::Int, do_newton::Bool, newt_start_iter::Int, lrate::LearningRate) where {T<:Real}
 
-    (n, N) = size(myAmica.source_signals)
+    (m, n, N) = size(myAmica.z)
 
     # Match Fortran: divide by N (dgm_numer which equals all_blks)
-    dA = Matrix{Float64}(I, n, n) - (g * myAmica.source_signals') / N
+    dA = Matrix{Float64}(I, n, n) - (myAmica.g * myAmica.source_signals') / N
+
 
     if (do_newton == 1) && (iter > newt_start_iter)
         lrate = lrate.lrate
@@ -12,15 +13,16 @@ function newton_method!(myAmica::SingleModelAmica{T}, iter::Int, g, kappa, do_ne
         B = zeros(n, n)
         bflag = false
 
-
-
         for k in 1:N, i in 1:n
             lambda = zero(T)
+            kappa = zero(T)
+
             for j in 1:m
-                lambda += gg.proportions[j, i] * ((myAmica.z[j, i, k] * (myAmica.fp[j, i, k] * myAmica.y[j, i, k])^2) + (gg.location[j, i] .^ 2 .* kp[j, i]) / N)
+                lambda += myAmica.proportions[j, i] * ((myAmica.z[j, i, k] * (myAmica.fp[j, i, k] * myAmica.y[j, i, k])^2) + (myAmica.location[j, i] .^ 2 .* myAmica.kp[j, i]) / N)
+                kappa += myAmica.proportions[j, i] * myAmica.kp[j, i]
             end
 
-            if any(isnan, lambda)
+            if isnan(lambda) || isnan(kappa)
                 throw(AmicaNaNException())
             end
 
@@ -45,36 +47,36 @@ function newton_method!(myAmica::SingleModelAmica{T}, iter::Int, g, kappa, do_ne
     end
 end
 
-@views function newton_method!(myAmica::MultiModelAmica, h, iter, g, kappa, do_newton, newt_start_iter, lrate::LearningRate)
+# @views function newton_method!(myAmica::MultiModelAmica, h, iter, g, kappa, do_newton, newt_start_iter, lrate::LearningRate)
 
-    lnatrate = lrate.natural_rate
-    lrate = lrate.lrate
-    (n, N) = size(myAmica.models[1].source_signals)
+#     lnatrate = lrate.natural_rate
+#     lrate = lrate.lrate
+#     (n, N) = size(myAmica.models[1].source_signals)
 
-    sigma2 = myAmica.models[h].source_signals .^ 2 * myAmica.ica_weights_per_sample[h, :] / myAmica.ica_weights[h]
+#     sigma2 = myAmica.models[h].source_signals .^ 2 * myAmica.ica_weights_per_sample[h, :] / myAmica.ica_weights[h]
 
-    # Match Fortran: divide by N (dgm_numer which equals all_blks)
-    dA = Matrix{Float64}(I, n, n) - (g * myAmica.models[h].source_signals') / N
-    bflag = 0
-    B = zeros(n, n)
+#     # Match Fortran: divide by N (dgm_numer which equals all_blks)
+#     dA = Matrix{Float64}(I, n, n) - (g * myAmica.models[h].source_signals') / N
+#     bflag = 0
+#     B = zeros(n, n)
 
-    for i in 1:n
-        for k in 1:N
-            if i == k
-                B[i, i] = dA[i, i] / (lambda[i])
-            else
-                denom = kappa[i] * kappa[k] * sigma2[i] * sigma2[k] - 1
-                if denom > 0
-                    B[i, k] = (-kappa[k] * sigma2[i] * dA[i, k] + dA[k, i]) / denom
-                else
-                    bflag = 1
-                end
-            end
-        end
-    end
-    if (bflag == 0) && (do_newton == 1) && (iter > newt_start_iter)
-        myAmica.models[h].A = myAmica.models[h].A + lrate * myAmica.models[h].A * B
-    else
-        myAmica.models[h].A = myAmica.models[h].A - lnatrate * myAmica.models[h].A * dA
-    end
-end
+#     for i in 1:n
+#         for k in 1:N
+#             if i == k
+#                 B[i, i] = dA[i, i] / (lambda[i])
+#             else
+#                 denom = kappa[i] * kappa[k] * sigma2[i] * sigma2[k] - 1
+#                 if denom > 0
+#                     B[i, k] = (-kappa[k] * sigma2[i] * dA[i, k] + dA[k, i]) / denom
+#                 else
+#                     bflag = 1
+#                 end
+#             end
+#         end
+#     end
+#     if (bflag == 0) && (do_newton == 1) && (iter > newt_start_iter)
+#         myAmica.models[h].A = myAmica.models[h].A + lrate * myAmica.models[h].A * B
+#     else
+#         myAmica.models[h].A = myAmica.models[h].A - lnatrate * myAmica.models[h].A * dA
+#     end
+# end
