@@ -46,10 +46,6 @@ include("util.jl")
     # run amica for one iteration
     Amica.amica!(myAmica, data, maxiter=1, lrate=lrate)
 
-    # test calculate_ldet!
-    Dsum = read_fdt("datadumps/Dsum.bin"; ncols=1, T=Float64)
-    @test Dsum[1, 1] ≈ myAmica.ldet
-
     # test update_sources!
     b = read_fdt("datadumps/b.bin"; ncols=639000, T=Float64)'[:, 1:319500]
     @test b ≈ myAmica.source_signals

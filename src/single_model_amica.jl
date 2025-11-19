@@ -1,4 +1,4 @@
-@with_kw mutable struct SingleModelAmica{
+@with_kw_noshow mutable struct SingleModelAmica{
     T,
     Array1<:DenseArray{T,1},
     Array2<:DenseArray{T,2},
@@ -18,7 +18,6 @@
     y::Array3
     Lt::Array1                                                  # log likelihood of time point for each model ( M x N )
     LL::Array1                                                  # log likelihood over iterations todo: change to tuple
-    ldet::T
 
     # --- intermediary values
 
@@ -27,7 +26,6 @@
 
     zfp::Array3                                                 # z * fp
     g::Array2
-    Q::Array3
 
     kp::Array2
 
@@ -93,12 +91,10 @@ function SingleModelAmica(
         y=zeros(T, m, n, N) |> Array3,
         Lt=zeros(T, N) |> Array1,
         LL=T[] |> Array1,
-        ldet=zero(T),
         y_rho=zeros(T, m, n, N) |> Array3,
         fp=zeros(T, m, n, N) |> Array3,
         zfp=zeros(T, m, n, N) |> Array3,
         g=zeros(T, n, N) |> Array2,
-        Q=zeros(T, m, n, N) |> Array3,
         kp=zeros(T, m, n) |> Array2,
         drho_numer=zeros(T, m, n) |> Array2,
         drho_denom=zeros(T, m, n) |> Array2,

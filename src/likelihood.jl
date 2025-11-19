@@ -32,7 +32,6 @@ end
 
 #Update loop for Lt and u (which is saved in z). Todo: Rename
 function loopiloop!(myAmica::SingleModelAmica)
-    @timeit to "calculate_Q" calculate_Q!(myAmica)
     @timeit to "calculate_u_and_Lt" calculate_u_and_Lt!(myAmica)
     @timeit to "calculate_LL" calculate_LL!(myAmica)
 end
@@ -44,68 +43,60 @@ function loopiloop!(myAmica::MultiModelAmica)
     for h in 1:M #run along models
         model = myAmica.models[h]
 
-        @timeit to "calculate_Q" calculate_Q!(model)
         @timeit to "calculate_u_and_Lt" calculate_u_and_Lt!(model)
 
     end
     @timeit to "calculate_LL" calculate_LL!(myAmica)
 end
 
-function calculate_Q!(myAmica::SingleModelAmica{T}) where {T<:Real}
-    Q = myAmica.Q
+"Calculates u (saved in z) and Lt contribution in a single pass to avoid duplicate logsumexp computation"
+@views function calculate_u_and_Lt!(myAmica::SingleModelAmica{T}) where {T<:Real}
+    z = myAmica.z
+    Lt = myAmica.Lt
+    LLdetS = myAmica.LLdetS
     proportions = myAmica.proportions
     scale = myAmica.scale
     shape = myAmica.shape
     y_rho = myAmica.y_rho
 
-    # the 'identity' brings a significant speedup
-    Q .= identity(-log(T(2)) .- loggamma.(T(1) .+ T(1) ./ shape) .+ log.(proportions) .+ log.(scale)) .- y_rho
-end
-
-
-"Calculates u (saved in z) and Lt contribution in a single pass to avoid duplicate logsumexp computation"
-@views function calculate_u_and_Lt!(myAmica::SingleModelAmica{T}) where {T<:Real}
-    z = myAmica.z
-    Q = myAmica.Q
-    Lt = myAmica.Lt
-    ldet = myAmica.ldet
-    LLdetS = myAmica.LLdetS
     (m, n, N) = size(z)
 
     # Initialize Lt with base values
+    ldet = -logabsdet(myAmica.A)[1]
+    @info size(ldet)
+
     Lt .= ldet .+ LLdetS
 
-    if m <= 1
-        z .= 1 ./ z
-        # Add Q contribution to Lt for m == 1 case
-        for k in 1:N
-            sum_val = zero(T)
-            for i in 1:n
-                sum_val += Q[1, i, k]
-            end
-            Lt[k] += sum_val
-        end
-        return
-    end
+    Q = zeros(T, m)
 
     @inbounds for k in 1:N, i in 1:n
-        # Find max for numerical stability
-        Qmax = maximum(Q[:, i, k])
-
-        # Compute sum(exp(Q - Qmax))
-        sum_exp = zero(T)
+        # compute Q
         for j in 1:m
-            sum_exp += exp(Q[j, i, k] - Qmax)
+            Q[j] = -log(T(2)) - loggamma(T(1) + T(1) / shape[j, i]) + log(proportions[j, i]) + log(scale[j, i]) - y_rho[j, i, k]
         end
 
-        logsumexp_Q = Qmax + log(sum_exp)
+        if m > 1
+            # Find max for numerical stability
+            Qmax = maximum(Q)
 
-        # Compute z = exp(Q - logsumexp) + e
-        @. z[:, i, k] = exp(Q[:, i, k] - logsumexp_Q) + T(1e-15)
+            # Compute sum(exp(Q - Qmax))
+            sum_exp = zero(T)
+            for j in 1:m
+                sum_exp += exp(Q[j] - Qmax)
+            end
 
-        # Normalize z so that sum(z[:,i,k]) = 1
-        z_sum = sum(z[:, i, k])
-        z[:, i, k] ./= z_sum
+            logsumexp_Q = Qmax + log(sum_exp)
+
+            # Compute z = exp(Q - logsumexp) + e
+            @. z[:, i, k] = exp(Q[:] - logsumexp_Q) + T(1e-15)
+
+            # Normalize z so that sum(z[:,i,k]) = 1
+            z_sum = sum(z[:, i, k])
+            z[:, i, k] ./= z_sum
+
+        else
+            z .= 1 ./ z
+        end
 
         Lt[k] += logsumexp_Q  # Accumulate for Lt
     end

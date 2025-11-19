@@ -7,3 +7,4 @@
 .DS_Store
 *.mem
 repl.jl
+changes.md

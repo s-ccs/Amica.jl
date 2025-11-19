@@ -18,6 +18,7 @@ function newton_method!(myAmica::SingleModelAmica{T}, iter::Int, do_newton::Bool
             kappa = zero(T)
 
             for j in 1:m
+                # TODO use .zfp here??
                 lambda += myAmica.proportions[j, i] * ((myAmica.z[j, i, k] * (myAmica.fp[j, i, k] * myAmica.y[j, i, k])^2) + (myAmica.location[j, i] .^ 2 .* myAmica.kp[j, i]) / N)
                 kappa += myAmica.proportions[j, i] * myAmica.kp[j, i]
             end

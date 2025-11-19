@@ -1,6 +1,5 @@
 """
 Main AMICA algorithm
-
 """
 
 function fit(amicaType::Type{T}, data; m=3, maxiter=500, location=nothing, scale=nothing, A=nothing, kwargs...) where {T<:AbstractAmica}
@@ -48,8 +47,6 @@ function amica!(myAmica::AbstractAmica,
         iter_time_start = time()
 
         @timeit to "update_sources" update_sources!(myAmica, data)
-
-        @timeit to "calculate_ldet" calculate_ldet!(myAmica)
 
         @timeit to "calculate_y" calculate_y!(myAmica)
 
