@@ -1,4 +1,4 @@
-- LL plotten
+<!-- - LL plotten
 - newton_method vergleichen
 - wo wird location berechnet wenn m < 1 ?
 - strided ausprobieren
@@ -16,4 +16,8 @@ neue logik gpu:
 julia> @btime Metal.@sync Amica.update_parameters!(myAmica, lrate, true, true);
 377.276 ms (24881 allocations: 587.52 KiB)
 
-broadcasts gpu:
+broadcasts gpu: -->
+
+- gpu profilen
+- auf server probieren
+- advanced cuda anschauen

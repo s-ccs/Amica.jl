@@ -97,10 +97,6 @@ function gpuDigamma(z::T) where T<:Real
 end
 
 
-function fp(myAmica::SingleModelAmica)
-    myAmica.y_rho .* sign.(myAmica.y) .* push_dimension(myAmica.shape)
-end
-
 function notzero(val::T) where T<:Real
     epsilon = T(1e-16)
     if val < epsilon && val > -epsilon
@@ -110,7 +106,6 @@ function notzero(val::T) where T<:Real
         val
     end
 end
-
 
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
 @views function update_parameters!(myAmica::SingleModelAmica{T}, lrate::LearningRate, upd_shape::Bool, newton_active::Bool) where {T<:Real}
@@ -129,31 +124,42 @@ end
     end
 
     @timeit to "kernel" begin
+        scratch = similar(myAmica.z)
+        fp = myAmica.y_rho .* sign.(myAmica.y) .* push_dimension(myAmica.shape)
+        zfp = myAmica.z .* fp
+
         # sum(z)
         sum_z = sum(myAmica.z, dims=1)[1, :, :]
         # sum(z * fp)
-        dmu_numer = sum(myAmica.z .* fp(myAmica), dims=1)[1, :, :]
+        scratch .= zfp
+        dmu_numer = sum(scratch, dims=1)[1, :, :]
         # sum(z * fp * fp)
-        kp = sum(myAmica.z .* fp(myAmica) .^ 2, dims=1)[1, :, :]
+        scratch .= zfp .^ 2
+        kp = sum(scratch, dims=1)[1, :, :]
         # rho <= 2 ? sum(z * fp / y) : sum(z * fp * fp)
         # the 'notzero' clamping isn't present in fortran but helps keeping values numerically stable for float32
-        dmu_denom = sum(ifelse.(push_dimension(myAmica.shape) .<= T(2),
-                myAmica.z .* fp(myAmica) ./ notzero.(myAmica.y),
-                myAmica.z .* fp(myAmica) .^ 2
-            ), dims=1)[1, :, :] .* myAmica.scale
+        scratch .= ifelse.(push_dimension(myAmica.shape) .<= T(2),
+            zfp ./ notzero.(myAmica.y),
+            zfp .^ 2
+        )
+        dmu_denom = sum(scratch, dims=1)[1, :, :] .* myAmica.scale
 
         # sum(z * log(y_rho) * y_rho)
-        drho_numer = sum(ifelse.(
-                myAmica.y_rho .>= T(1.0e-16), myAmica.z .* log.(myAmica.y_rho) .* myAmica.y_rho,
-                T(0.0)
-            ), dims=1)[1, :, :]
+        scratch .= ifelse.(
+            myAmica.y_rho .>= T(1.0e-16), myAmica.z .* log.(myAmica.y_rho) .* myAmica.y_rho,
+            T(0.0)
+        )
+        drho_numer = sum(scratch, dims=1)[1, :, :]
 
         # sum(scale * z * fp)
-        myAmica.g .= sum(push_dimension(myAmica.scale) .* myAmica.z .* fp(myAmica), dims=3)[:, :, 1]
+        scratch .= push_dimension(myAmica.scale) .* zfp
+        myAmica.g .= sum(scratch, dims=3)[:, :, 1]
         # sum(z * (fp * y - 1)^2)
-        dlambda_numer = sum(myAmica.z .* (fp(myAmica) .* myAmica.y .- T(1.0)) .^ 2, dims=1)[1, :, :]
+        scratch .= myAmica.z .* (fp .* myAmica.y .- T(1.0)) .^ 2
+        dlambda_numer = sum(scratch, dims=1)[1, :, :]
         # rho <= 2.0 ? sum(z * fp * y) : 0
-        dbeta_denom = sum(ifelse.(push_dimension(myAmica.shape) .<= T(2), myAmica.z .* fp(myAmica) .* myAmica.y, T(0)), dims=1)[1, :, :]
+        scratch .= ifelse.(push_dimension(myAmica.shape) .<= T(2), zfp .* myAmica.y, T(0))
+        dbeta_denom = sum(scratch, dims=1)[1, :, :]
     end
 
     if check_isnan && any(isnan, sum_z)
