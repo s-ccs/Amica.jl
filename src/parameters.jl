@@ -1,10 +1,10 @@
 #Normalizes source density location parameter (mu), scale parameter (beta) and model centers
-function reparameterize!(myAmica::SingleModelAmica)
-    ArrayType = typeof(myAmica.Lt)
-    T = eltype(myAmica.A)
-    tau = ArrayType(norm.(eachcol(myAmica.A)))
+function reparameterize!(myAmica::SingleModelAmica{T}) where T<:Real
+    (N, n, m) = size(myAmica.z)
 
-    # Only reparameterize columns where tau > 0 (matching Fortran behavior)
+    # Calculate norm of column k: Anrmk = sqrt(sum(A(:,k)*A(:,k)))
+    tau = sqrt.(sum(myAmica.A .^ 2, dims=1))[1, :]
+
     mask = tau .> zero(T)
     myAmica.A .= ifelse.(push_dimension(mask), myAmica.A ./ tau', myAmica.A)
     myAmica.location .= ifelse.(mask, myAmica.location .* tau, myAmica.location)
@@ -131,18 +131,14 @@ end
         # sum(z)
         sum_z = sum(myAmica.z, dims=1)[1, :, :]
         # sum(z * fp)
-        scratch .= zfp
-        dmu_numer = sum(scratch, dims=1)[1, :, :]
+        dmu_numer = sum(zfp, dims=1)[1, :, :]
         # sum(z * fp * fp)
-        scratch .= zfp .^ 2
+        scratch .= zfp .* fp
         kp = sum(scratch, dims=1)[1, :, :]
         # rho <= 2 ? sum(z * fp / y) : sum(z * fp * fp)
         # the 'notzero' clamping isn't present in fortran but helps keeping values numerically stable for float32
-        scratch .= ifelse.(push_dimension(myAmica.shape) .<= T(2),
-            zfp ./ notzero.(myAmica.y),
-            zfp .^ 2
-        )
-        dmu_denom = sum(scratch, dims=1)[1, :, :] .* myAmica.scale
+        scratch .= zfp ./ notzero.(myAmica.y)
+        dmu_denom = ifelse.(myAmica.shape .<= T(2), sum(scratch, dims=1)[1, :, :], kp) .* myAmica.scale
 
         # sum(z * log(y_rho) * y_rho)
         scratch .= ifelse.(
@@ -241,7 +237,8 @@ end
 
 "updates the unmixed source_signals: myAmica.source_signals = myAmica.A ^ -1 * data"
 function update_sources!(myAmica::SingleModelAmica{T}, data::AbstractMatrix{T}) where {T<:Real}
-    myAmica.source_signals .= ((myAmica.A |> Array) \ (data' |> Array))' |> typeof(myAmica.source_signals)
+    W = inv(myAmica.A)
+    myAmica.source_signals .= data * W'
 end
 
 function update_sources!(myAmica::MultiModelAmica, data)

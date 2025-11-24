@@ -25,7 +25,6 @@ function amica!(myAmica::AbstractAmica,
     update_shape::Bool=true,
     mindll::T=T(1e-8)) where {T<:Real}
 
-
     # Check that data dimensions match the model
     if size(data) != size(myAmica.source_signals)
         error("Data dimension mismatch: data has size $(size(data)) but model expects $(size(myAmica.source_signals))")
@@ -48,6 +47,13 @@ function amica!(myAmica::AbstractAmica,
     end
 
     dLL = zeros(1, maxiter)
+
+
+    backend = KernelAbstractions.get_backend(myAmica.z)
+
+    # TODO make previous operations run on gpu as well
+    # move to gpu
+    data = data |> typeof(myAmica.A)
 
     for iter in 1:maxiter
         iter_time_start = time()
@@ -106,6 +112,15 @@ function amica!(myAmica::AbstractAmica,
         if show_progress
             println(" iter $(lpad(iter, 5)) lrate = $(lpad(string(round(lrate.lrate, digits=10)), 13)) LL = $(lpad(string(round(myAmica.LL[iter], digits=10)), 14))  ($(lpad(string(round(iter_time, digits=2)), 6)) s)")
         end
+
+        # TODO remove
+        if iter == 1
+            reset_timer!(to)
+        end
+
+        # TODO is this required?
+        KernelAbstractions.synchronize(backend)
+
 
     end
     #If parameters contain NaNs, the algorithm skips the A update and terminates by jumping here

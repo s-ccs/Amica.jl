@@ -76,7 +76,7 @@ end
 
     myAmica.Lt .= ldet .+ myAmica.LLdetS
 
-    QConst = .-log(T(2)) .- loggamma.(T(1) .+ T(1) ./ (myAmica.shape |> Array)) .+ log.(myAmica.proportions |> Array) .+ log.(myAmica.scale |> Array) |> typeof(myAmica.source_signals)
+    QConst = .-log(T(2)) .- (loggamma.(T(1) .+ T(1) ./ (myAmica.shape)) |> typeof(myAmica.source_signals)) .+ log.(myAmica.proportions) .+ log.(myAmica.scale)
 
     backend = KernelAbstractions.get_backend(myAmica.source_signals)
     kernel! = calculate_u_kernel!(backend)
