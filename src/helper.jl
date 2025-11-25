@@ -29,6 +29,27 @@ end
 
 "pre-calculate abs(y)^rho"
 function update_y_rho!(myAmica::SingleModelAmica{T}) where T<:Real
-    # addition compared to fortran: clamp y at 1e-16 to improve numerical stability
-    myAmica.y_rho .= exp.(push_dimension(myAmica.shape) .* log.(abs.(myAmica.y)))
+    if NAN_CHECK_ACTIVE && any(isnan, myAmica.shape)
+        @warn "NaN in myAmica.shape"
+    end
+    if NAN_CHECK_ACTIVE && any(isnan, myAmica.y)
+        @warn "NaN in myAmica.y"
+    end
+
+    myAmica.y_rho .= exp.((push_dimension(myAmica.shape .- T(1.0))) .* log.(abs.(notzero.(myAmica.y))))
+
+    if NAN_CHECK_ACTIVE && any(isnan, myAmica.y_rho)
+        @warn "NaN in myAmica.y_rho"
+    end
+
+end
+
+function notzero(val::T) where T<:Real
+    epsilon = T(1e-16)
+    if val < epsilon && val > -epsilon
+        # Don't use sign(val) because sign(0) = 0, which gives 0 * epsilon = 0
+        ifelse(val >= T(0), epsilon, -epsilon)
+    else
+        val
+    end
 end

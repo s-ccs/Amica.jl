@@ -7,8 +7,8 @@ include("util.jl")
 
 @testset "compare against fortran" begin
 
-    # build_fortran()
-    # run_fortran("amicadefs.params")
+    build_fortran()
+    run_fortran("amicadefs.params")
 
     # verify the raw data is identical
     data = Float64.(read_fdt("input/Memorize.fdt"; ncols=71, T=Float32))'

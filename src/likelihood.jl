@@ -15,31 +15,36 @@ end
 @kernel function calculate_u_kernel!(
     z::DenseArray{T},
     Lt::DenseArray{T},
-    @Const(y_rho::DenseArray{T}),
-    @Const(QConst::DenseArray{T})
-) where {T<:Real}
+    @Const(y::DenseArray{T}),
+    @Const(shape::DenseArray{T}),
+    @Const(QConst::DenseArray{T}),
+    ::Val{M}
+) where {T<:Real,M}
     k, i = @index(Global, NTuple)
 
-    _, _, m = size(z)
+    m = M  # Use compile-time constant
 
     # compute Q
 
+    Q = @private eltype(z) (M,)
+
+    for j in 1:m
+        # compute y^rho
+        y_rho_val = exp((shape[i, j]) * log(abs(y[k, i, j])))
+        Q[j] = QConst[i, j] - y_rho_val
+    end
+
     # # Find max for numerical stability
-    Qmax = QConst[i, 1] .- y_rho[k, i, 1]
+    Qmax = Q[1]
     for j in 2:m
-        Q = QConst[i, j] .- y_rho[k, i, j]
-        if Q > Qmax
-            Qmax = Q
-        end
+        Qmax = max(Qmax, Q[j])
     end
 
     # Compute sum(exp(Q - Qmax))
     sum_exp = zero(T)
     for j in 1:m
-        Q = QConst[i, j] .- y_rho[k, i, j]
-        sum_exp += exp(Q - Qmax)
+        sum_exp += exp(Q[j] - Qmax)
     end
-
 
     logsumexp_Q = Qmax + log(sum_exp)
 
@@ -47,8 +52,7 @@ end
         # Compute z = exp(Q - logsumexp) + e
         z_sum = zero(T)
         for j in 1:m
-            Q = QConst[i, j] .- y_rho[k, i, j]
-            z[k, i, j] = exp(Q - logsumexp_Q) + T(1e-15)
+            z[k, i, j] = exp(Q[j] - logsumexp_Q) + T(1e-15)
             z_sum += z[k, i, j]
         end
 
@@ -69,20 +73,30 @@ end
 
 "Calculates u (saved in z) and Lt contribution in a single pass to avoid duplicate logsumexp computation"
 @views function calculate_u_and_Lt!(myAmica::SingleModelAmica{T}) where {T<:Real}
-    N, n = size(myAmica.z)
+    N, n, m = size(myAmica.y)
 
     # Initialize Lt with base values
-    ldet = -logabsdet(myAmica.A |> Array)[1]
+    @timeit to "ldet" begin
+        ldet = -logabsdet(myAmica.A |> Array)[1]
+        myAmica.Lt .= ldet .+ myAmica.LLdetS
+    end
 
-    myAmica.Lt .= ldet .+ myAmica.LLdetS
+    @timeit to "qconst" QConst = .-log(T(2)) .- (loggamma.(T(1) .+ T(1) ./ myAmica.shape)) .+ log.(myAmica.proportions) .+ log.(myAmica.scale)
 
-    QConst = .-log(T(2)) .- (loggamma.(T(1) .+ T(1) ./ (myAmica.shape)) |> typeof(myAmica.source_signals)) .+ log.(myAmica.proportions) .+ log.(myAmica.scale)
+    @timeit to "kernel" begin
+        backend = KernelAbstractions.get_backend(myAmica.source_signals)
+        kernel! = calculate_u_kernel!(backend)
+        kernel!(myAmica.z, myAmica.Lt, myAmica.y, myAmica.shape, QConst, Val(m), ndrange=(N, n))
+    end
 
-    backend = KernelAbstractions.get_backend(myAmica.source_signals)
-    kernel! = calculate_u_kernel!(backend)
-    kernel!(myAmica.z, myAmica.Lt, myAmica.y_rho, QConst, ndrange=(N, n))
+    if NAN_CHECK_ACTIVE && any(isnan, myAmica.Lt)
+        @warn "NaN in myAmica.Lt"
+    end
+    if NAN_CHECK_ACTIVE && any(isnan, myAmica.z)
+        @warn "NaN in myAmica.z"
+    end
 
-    push!(myAmica.LL, sum(myAmica.Lt) / (N * n))
+    @timeit to "sum" push!(myAmica.LL, sum(myAmica.Lt) / (N * n))
 end
 
 "add a unit dimension in front to be able to e.g. broadcast a (1000, 12, 3) with a (12, 3) array, transforms a from (12, 3) to (1, 12, 3)"
@@ -99,6 +113,11 @@ end
     for j in 1:m
         myAmica.y[:, :, j] .= myAmica.scale[:, j]' .* (myAmica.source_signals .- myAmica.location[:, j]')
     end
+
+    if NAN_CHECK_ACTIVE && any(isnan, myAmica.y)
+        @warn "NaN in myAmica.y"
+    end
+
 end
 
 function calculate_y!(myAmica::MultiModelAmica)

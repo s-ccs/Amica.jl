@@ -114,7 +114,7 @@ function amica!(myAmica::AbstractAmica,
         end
 
         # TODO remove
-        if iter == 1
+        if iter == 1 && maxiter > 1
             reset_timer!(to)
         end
 

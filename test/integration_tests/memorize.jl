@@ -1,7 +1,7 @@
 using Test
 using Statistics
 using Amica
-using Metal
+using CUDA
 
 include("util.jl")
 
@@ -11,8 +11,8 @@ include("util.jl")
 
     (N, n) = size(data)
 
-    # myAmica = fit(Float32, SingleModelAmica, data; maxiter=5, do_sphering=true, remove_mean=true, m=3, Array=MtlArray)
-    myAmica = SingleModelAmica(Float32, ncomps=n, nsamples=N, m=3, ArrayType=MtlArray)
+    # myAmica = fit(Float32, SingleModelAmica, data; maxiter=5, do_sphering=true, remove_mean=true, m=3, Array=CuArray)
+    myAmica = SingleModelAmica(Float32, ncomps=n, nsamples=N, m=3, ArrayType=CuArray)
     Amica.amica!(myAmica, data, maxiter=40)
 
     using Plots

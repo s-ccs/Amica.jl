@@ -97,89 +97,98 @@ function gpuDigamma(z::T) where T<:Real
 end
 
 
-function notzero(val::T) where T<:Real
-    epsilon = T(1e-16)
-    if val < epsilon && val > -epsilon
-        # Don't use sign(val) because sign(0) = 0, which gives 0 * epsilon = 0
-        ifelse(val >= T(0), epsilon, -epsilon)
-    else
-        val
-    end
-end
 
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
 @views function update_parameters!(myAmica::SingleModelAmica{T}, lrate::LearningRate, upd_shape::Bool, newton_active::Bool) where {T<:Real}
     N, _, m = size(myAmica.y)
 
-    check_isnan = false
-
-    if check_isnan && any(isnan, myAmica.y)
-        @warn "NaN in myAmica.y"
-    end
-    if check_isnan && any(isnan, myAmica.z)
-        @warn "NaN in myAmica.z"
-    end
-    if check_isnan && any(isnan, myAmica.y_rho)
-        @warn "NaN in myAmica.y_rho"
-    end
 
     @timeit to "kernel" begin
-        scratch = similar(myAmica.z)
-        fp = myAmica.y_rho .* sign.(myAmica.y) .* push_dimension(myAmica.shape)
-        zfp = myAmica.z .* fp
+        backend = KernelAbstractions.get_backend(myAmica.z)
+
+        # fp = y_rho * sign(y) * shape
+        @timeit to "fp" begin
+            fp = myAmica.y_rho .* sign.(myAmica.y) .* push_dimension(myAmica.shape)
+        end
+
+        # zfp = z * fp
+        @timeit to "zfp" begin
+            zfp = myAmica.z .* fp
+        end
 
         # sum(z)
-        sum_z = sum(myAmica.z, dims=1)[1, :, :]
+        @timeit to "sum_z" begin
+            sum_z = sum(myAmica.z, dims=1)[1, :, :]
+        end
+
         # sum(z * fp)
-        dmu_numer = sum(zfp, dims=1)[1, :, :]
+        @timeit to "dmu_numer" begin
+            dmu_numer = sum(zfp, dims=1)[1, :, :]
+        end
+
         # sum(z * fp * fp)
-        scratch .= zfp .* fp
-        kp = sum(scratch, dims=1)[1, :, :]
+        @timeit to "kp" begin
+            myAmica.scratch .= zfp .* fp
+            kp = sum(myAmica.scratch, dims=1)[1, :, :]
+        end
+
         # rho <= 2 ? sum(z * fp / y) : sum(z * fp * fp)
-        # the 'notzero' clamping isn't present in fortran but helps keeping values numerically stable for float32
-        scratch .= zfp ./ notzero.(myAmica.y)
-        dmu_denom = ifelse.(myAmica.shape .<= T(2), sum(scratch, dims=1)[1, :, :], kp) .* myAmica.scale
+        @timeit to "dmu_denom" begin
+            myAmica.scratch .= zfp ./ notzero.(myAmica.y)
+            dmu_denom = ifelse.(myAmica.shape .<= T(2), sum(myAmica.scratch, dims=1)[1, :, :], kp) .* myAmica.scale
+        end
 
         # sum(z * log(y_rho) * y_rho)
-        scratch .= ifelse.(
-            myAmica.y_rho .>= T(1.0e-16), myAmica.z .* log.(myAmica.y_rho) .* myAmica.y_rho,
-            T(0.0)
-        )
-        drho_numer = sum(scratch, dims=1)[1, :, :]
+        @timeit to "drho_numer" begin
+            myAmica.scratch = myAmica.y_rho .* abs.(myAmica.y)
+            myAmica.scratch .= ifelse.(
+                myAmica.scratch .>= T(1.0e-16), myAmica.z .* log.(myAmica.scratch) .* myAmica.scratch,
+                T(0.0)
+            )
+            drho_numer = sum(myAmica.scratch, dims=1)[1, :, :]
+        end
 
         # sum(scale * z * fp)
-        scratch .= push_dimension(myAmica.scale) .* zfp
-        myAmica.g .= sum(scratch, dims=3)[:, :, 1]
+        @timeit to "g" begin
+            myAmica.scratch .= push_dimension(myAmica.scale) .* zfp
+            myAmica.g .= sum(myAmica.scratch, dims=3)[:, :, 1]
+        end
+
         # sum(z * (fp * y - 1)^2)
-        scratch .= myAmica.z .* (fp .* myAmica.y .- T(1.0)) .^ 2
-        dlambda_numer = sum(scratch, dims=1)[1, :, :]
+        @timeit to "dlambda_numer" begin
+            myAmica.scratch .= myAmica.z .* (fp .* myAmica.y .- T(1.0)) .^ 2
+            dlambda_numer = sum(myAmica.scratch, dims=1)[1, :, :]
+        end
+
         # rho <= 2.0 ? sum(z * fp * y) : 0
-        scratch .= ifelse.(push_dimension(myAmica.shape) .<= T(2), zfp .* myAmica.y, T(0))
-        dbeta_denom = sum(scratch, dims=1)[1, :, :]
+        @timeit to "dbeta_denom" begin
+            myAmica.scratch .= ifelse.(push_dimension(myAmica.shape) .<= T(2), zfp .* myAmica.y, T(0))
+            dbeta_denom = sum(myAmica.scratch, dims=1)[1, :, :]
+        end
     end
 
-    if check_isnan && any(isnan, sum_z)
+    if NAN_CHECK_ACTIVE && any(isnan, sum_z)
         @warn "NaN in sum_z"
     end
-    if check_isnan && any(isnan, dmu_numer)
+    if NAN_CHECK_ACTIVE && any(isnan, dmu_numer)
         @warn "NaN in dmu_numer"
     end
-    if check_isnan && any(isnan, kp)
+    if NAN_CHECK_ACTIVE && any(isnan, kp)
         @warn "NaN in kp"
     end
-    if check_isnan && any(isnan, dmu_denom)
+    if NAN_CHECK_ACTIVE && any(isnan, dmu_denom)
         @warn "NaN in dmu_denom"
     end
-    if check_isnan && any(isnan, drho_numer)
+    if NAN_CHECK_ACTIVE && any(isnan, drho_numer)
         @warn "NaN in drho_numer"
     end
-    if check_isnan && any(isnan, myAmica.g)
+    if NAN_CHECK_ACTIVE && any(isnan, myAmica.g)
         @warn "NaN in myAmica.g"
     end
-    if check_isnan && any(isnan, dlambda_numer)
+    if NAN_CHECK_ACTIVE && any(isnan, dlambda_numer)
         @warn "NaN in dlambda_numer"
     end
-    if check_isnan && any(isnan, dbeta_denom)
+    if NAN_CHECK_ACTIVE && any(isnan, dbeta_denom)
         @warn "NaN in dbeta_denom"
     end
 
@@ -215,22 +224,22 @@ end
         )
     end
 
-    if check_isnan && any(isnan, myAmica.proportions)
+    if NAN_CHECK_ACTIVE && any(isnan, myAmica.proportions)
         @warn "NaN in myAmica.proportions"
     end
-    if check_isnan && any(isnan, myAmica.newton_kappa)
+    if NAN_CHECK_ACTIVE && any(isnan, myAmica.newton_kappa)
         @warn "NaN in myAmica.newton_kappa"
     end
-    if check_isnan && any(isnan, myAmica.newton_lambda)
+    if NAN_CHECK_ACTIVE && any(isnan, myAmica.newton_lambda)
         @warn "NaN in myAmica.newton_lambda"
     end
-    if check_isnan && any(isnan, myAmica.location)
+    if NAN_CHECK_ACTIVE && any(isnan, myAmica.location)
         @warn "NaN in myAmica.location"
     end
-    if check_isnan && any(isnan, myAmica.scale)
+    if NAN_CHECK_ACTIVE && any(isnan, myAmica.scale)
         @warn "NaN in myAmica.scale"
     end
-    if check_isnan && any(isnan, myAmica.shape)
+    if NAN_CHECK_ACTIVE && any(isnan, myAmica.shape)
         @warn "NaN in myAmica.shape"
     end
 end
@@ -239,6 +248,11 @@ end
 function update_sources!(myAmica::SingleModelAmica{T}, data::AbstractMatrix{T}) where {T<:Real}
     W = inv(myAmica.A)
     myAmica.source_signals .= data * W'
+
+    if NAN_CHECK_ACTIVE && any(isnan, myAmica.source_signals)
+        @warn "NaN in myAmica.source_signals"
+    end
+
 end
 
 function update_sources!(myAmica::MultiModelAmica, data)

@@ -1596,7 +1596,7 @@ subroutine get_updates_and_likelihood
                !call vrda_log(tblksize,abs(y(bstrt:bstp,i,j,h)),tmpvec(bstrt:bstp))
                !call vrda_exp(tblksize,(rho(j,comp_list(i,h))-dble(0.0))*tmpvec(bstrt:bstp),tmpvec2(bstrt:bstp))
                tmpvec(bstrt:bstp) = log(abs(y(bstrt:bstp,i,j,h)))
-               tmpvec2(bstrt:bstp) = exp((rho(j,comp_list(i,h))-dble(0.0))*tmpvec(bstrt:bstp))
+               tmpvec2(bstrt:bstp) = exp((rho(j,comp_list(i,h))-dble(1.0))*tmpvec(bstrt:bstp))
 #endif
                     fp(bstrt:bstp) = rho(j,comp_list(i,h)) * sign(dble(1.0),y(bstrt:bstp,i,j,h)) * tmpvec2(bstrt:bstp)
 
