@@ -15,35 +15,33 @@ end
 @kernel function calculate_u_kernel!(
     z::DenseArray{T},
     Lt::DenseArray{T},
-    @Const(y::DenseArray{T}),
-    @Const(shape::DenseArray{T}),
-    @Const(QConst::DenseArray{T}),
-    ::Val{M}
-) where {T<:Real,M}
+    scratch::DenseArray{T,3},
+    @Const(y::DenseArray{T,3}),
+    @Const(shape::DenseArray{T,2}),
+    @Const(QConst::DenseArray{T,2}),
+) where {T<:Real}
     k, i = @index(Global, NTuple)
 
-    m = M  # Use compile-time constant
+    _, _, m = size(z)
 
-    # compute Q
 
-    Q = @private eltype(z) (M,)
-
+    # set z to Q
     for j in 1:m
         # compute y^rho
         y_rho_val = exp((shape[i, j]) * log(abs(y[k, i, j])))
-        Q[j] = QConst[i, j] - y_rho_val
+        scratch[k, i, j] = QConst[i, j] - y_rho_val
     end
 
-    # # Find max for numerical stability
-    Qmax = Q[1]
+    # Find max for numerical stability
+    Qmax = scratch[k, i, 1]
     for j in 2:m
-        Qmax = max(Qmax, Q[j])
+        Qmax = max(Qmax, scratch[k, i, j])
     end
 
     # Compute sum(exp(Q - Qmax))
     sum_exp = zero(T)
     for j in 1:m
-        sum_exp += exp(Q[j] - Qmax)
+        sum_exp += exp(scratch[k, i, j] - Qmax)
     end
 
     logsumexp_Q = Qmax + log(sum_exp)
@@ -52,7 +50,7 @@ end
         # Compute z = exp(Q - logsumexp) + e
         z_sum = zero(T)
         for j in 1:m
-            z[k, i, j] = exp(Q[j] - logsumexp_Q) + T(1e-15)
+            z[k, i, j] = exp(scratch[k, i, j] - logsumexp_Q) + T(1e-15)
             z_sum += z[k, i, j]
         end
 
@@ -73,7 +71,7 @@ end
 
 "Calculates u (saved in z) and Lt contribution in a single pass to avoid duplicate logsumexp computation"
 @views function calculate_u_and_Lt!(myAmica::SingleModelAmica{T}) where {T<:Real}
-    N, n, m = size(myAmica.y)
+    N, n = size(myAmica.y)
 
     # Initialize Lt with base values
     @timeit to "ldet" begin
@@ -82,11 +80,10 @@ end
     end
 
     @timeit to "qconst" QConst = .-log(T(2)) .- (loggamma.(T(1) .+ T(1) ./ myAmica.shape)) .+ log.(myAmica.proportions) .+ log.(myAmica.scale)
-
     @timeit to "kernel" begin
         backend = KernelAbstractions.get_backend(myAmica.source_signals)
         kernel! = calculate_u_kernel!(backend)
-        kernel!(myAmica.z, myAmica.Lt, myAmica.y, myAmica.shape, QConst, Val(m), ndrange=(N, n))
+        kernel!(myAmica.z, myAmica.Lt, myAmica.scratch, myAmica.y, myAmica.shape, QConst, ndrange=(N, n))
     end
 
     if NAN_CHECK_ACTIVE && any(isnan, myAmica.Lt)
