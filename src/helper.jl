@@ -27,7 +27,7 @@ function add_means_back!(myAmica::MultiModelAmica, removed_mean)
     end
 end
 
-"pre-calculate abs(y)^rho"
+"pre-calculate abs(y)^(rho - 1)"
 function update_y_rho!(myAmica::SingleModelAmica{T}) where T<:Real
     if NAN_CHECK_ACTIVE && any(isnan, myAmica.shape)
         @warn "NaN in myAmica.shape"

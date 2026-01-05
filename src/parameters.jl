@@ -140,7 +140,7 @@ end
 
         # sum(z * log(y_rho) * y_rho)
         @timeit to "drho_numer" begin
-            myAmica.scratch = myAmica.y_rho .* abs.(myAmica.y)
+            myAmica.scratch .= myAmica.y_rho .* abs.(myAmica.y)
             myAmica.scratch .= ifelse.(
                 myAmica.scratch .>= T(1.0e-16), myAmica.z .* log.(myAmica.scratch) .* myAmica.scratch,
                 T(0.0)
