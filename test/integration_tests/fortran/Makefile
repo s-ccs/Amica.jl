@@ -1,7 +1,7 @@
 # Simple Makefile for mean_test (OpenMP + MPI)
 
 FC      = mpif90
-FFLAGS  = -O2 -w -cpp -fopenmp
+FFLAGS  = -O2 -w -cpp -fopenmp -ffree-line-length-none
 # Use one BLAS: either Accelerate (macOS) or OpenBLAS (brew)
 #LDFLAGS = -fopenmp -framework Accelerate
 LDFLAGS = -fopenmp -L/opt/homebrew/opt/openblas/lib -lopenblas
