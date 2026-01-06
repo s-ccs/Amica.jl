@@ -6,10 +6,10 @@ using LinearAlgebra
 include("util.jl")
 build_fortran()
 
+run_fortran("amicadefs.params", "datadumps")
+run_fortran("amicadefs_newton.params", "datadumps_newton")
 
-@testset "compare against fortran" begin
-    run_fortran("amicadefs.params")
-
+@testset "basic tests" begin
     # verify the raw data is identical
     data = Float64.(read_fdt("input/Memorize.fdt"; ncols=71, T=Float32))'
     raw = read_fdt("datadumps/raw_data_seg_1.bin"; ncols=71, T=Float64)'
@@ -24,7 +24,10 @@ build_fortran()
 
     Amica.sphering!(data)
     @test sphered ≈ data
+end
 
+
+@testset "compare without newton" begin
     A = read_fdt("datadumps/A.bin"; ncols=71, T=Float64)
     A_init = read_fdt("datadumps/A_init.bin"; ncols=71, T=Float64)
     W = read_fdt("datadumps/W.bin"; ncols=71, T=Float64)
@@ -44,7 +47,7 @@ build_fortran()
 
     lrate = Amica.LearningRate{Float64}()
     # run amica for one iteration
-    Amica.amica!(myAmica, data, maxiter=1, lrate=lrate, newt_start_iter=0)
+    Amica.amica!(myAmica, data, maxiter=1, lrate=lrate, newt_start_iter=50)
 
     # test update_sources!
     b = read_fdt("datadumps/b.bin"; ncols=639000, T=Float64)'[:, 1:319500]'
@@ -94,5 +97,78 @@ build_fortran()
     @test myAmica.newton_lambda ≈ lambda
 
     alpha = read_fdt("datadumps/alpha_1.bin"; ncols=3, T=Float64)'
+    @test myAmica.proportions ≈ alpha
+end
+
+@testset "compare with newton" begin
+    A = read_fdt("datadumps_newton/A.bin"; ncols=71, T=Float64)
+    A_init = read_fdt("datadumps_newton/A_init.bin"; ncols=71, T=Float64)
+    W = read_fdt("datadumps_newton/W.bin"; ncols=71, T=Float64)
+
+
+    sbeta = read_fdt("datadumps_newton/sbeta.bin"; ncols=3, T=Float64)'
+    rho = read_fdt("datadumps_newton/rho.bin"; ncols=3, T=Float64)'
+    mu = read_fdt("datadumps_newton/mu.bin"; ncols=3, T=Float64)'
+
+    data = Float64.(read_fdt("input/Memorize.fdt"; ncols=71, T=Float32))'
+
+    (N, n) = size(data)
+
+    myAmica = SingleModelAmica(Float64, ncomps=n, nsamples=N, m=3, A=A, scale=sbeta, location=mu)
+
+    @test A ≈ inv(W)
+
+    lrate = Amica.LearningRate{Float64}()
+    # run amica for one iteration
+    Amica.amica!(myAmica, data, maxiter=1, lrate=lrate, newt_start_iter=0)
+
+    # test update_sources!
+    b = read_fdt("datadumps_newton/b.bin"; ncols=639000, T=Float64)'[:, 1:319500]'
+    @test b ≈ myAmica.source_signals
+
+    # test calculate_y!
+    y = read_3d_fdt("datadumps_newton/y.bin"; ncols=639000, nslabs=3, T=Float64)[1:319500, :, :]
+    @test y ≈ myAmica.y
+
+    # test calculate_u!
+    z = read_3d_fdt("datadumps_newton/z.bin"; ncols=639000, nslabs=3, T=Float64)[1:319500, :, :]
+    @test z ≈ myAmica.z
+
+    # test calculate_Lt!
+    Ptmp = read_fdt("datadumps_newton/Ptmp.bin"; ncols=639000, T=Float64)[1:319500, 1]
+    @test Ptmp ≈ myAmica.Lt
+
+    # test calculate_LL!
+    LL = read_fdt("datadumps_newton/LL.bin"; ncols=1, T=Float64)[1, :]'
+    @test LL[1] ≈ myAmica.LL[1]
+
+    # test g 
+    g = read_fdt("datadumps_newton/g_after_iter1.bin"; ncols=639000, T=Float64)[1:319500, :]
+    @test g ≈ myAmica.g
+
+    # location after one iteration
+    mu_1 = read_fdt("datadumps_newton/mu_1.bin"; ncols=3, T=Float64)'
+    @test myAmica.location ≈ mu_1
+
+    # scale after one iteration
+    sbeta_1 = read_fdt("datadumps_newton/sbeta_1.bin"; ncols=3, T=Float64)'
+    @test myAmica.scale ≈ sbeta_1
+
+    # shape
+    rho_1 = read_fdt("datadumps_newton/rho_1.bin"; ncols=3, T=Float64)'
+    @test myAmica.shape ≈ rho_1
+
+    # A
+    A_1 = read_fdt("datadumps_newton/a_after_iter1.bin"; ncols=71, T=Float64)
+    @test myAmica.A ≈ A_1
+
+    # kappa
+    kappa = read_fdt("datadumps_newton/kappa_after_iter1.bin"; ncols=71, T=Float64)
+    @test myAmica.newton_kappa ≈ kappa
+    # lambda
+    lambda = read_fdt("datadumps_newton/lambda_after_iter1.bin"; ncols=71, T=Float64)
+    @test myAmica.newton_lambda ≈ lambda
+
+    alpha = read_fdt("datadumps_newton/alpha_1.bin"; ncols=3, T=Float64)'
     @test myAmica.proportions ≈ alpha
 end

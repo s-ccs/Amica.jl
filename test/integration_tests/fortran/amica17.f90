@@ -76,6 +76,13 @@ if (myrank == 0) then
    print "(a)", 'Processing arguments ...'
    call flush(6)
 
+   ! Read datadumps path from environment variable
+   call get_environment_variable('OUT_PATH', datadumps_path)
+   if (len_trim(datadumps_path) == 0) then
+      datadumps_path = 'datadumps'
+   end if
+   print *, 'datadumps path = ', trim(datadumps_path); call flush(6)
+
    call get_cmd_args ! process input arguments from command line and file
 
    call date_and_time(date,time) ! tag output with (hopefully) unique month/day/hr/min/sec of execution
@@ -1220,17 +1227,19 @@ contains
 !----------------------------------------------------------------------
 
 subroutine write_data(prefix)
-
+ 
    character(len=*), intent(in) :: prefix
    integer :: seg, u, ldim
    character(len=256) :: fname
+   character(len=512) :: mkdir_cmd
 
    ! Ensure the datadumps directory exists
-   call system('mkdir -p datadumps')
+   write(mkdir_cmd,'("mkdir -p ",A)') trim(datadumps_path)
+   call system(trim(mkdir_cmd))
 
    do seg = 1, numsegs
       ldim = dataseg(seg)%lastdim
-      write(fname,'("datadumps/",A,"data_seg_",I0,".bin")') trim(prefix), seg
+      write(fname,'(A,"/",A,"data_seg_",I0,".bin")') trim(datadumps_path), trim(prefix), seg
       open(newunit=u, file=fname, access='stream', form='unformatted', status='replace', action='write')
       write(u) dataseg(seg)%data(:, 1:ldim)
       close(u)
@@ -1244,11 +1253,13 @@ subroutine write_matrix(name, variable)
    real(8), intent(in), dimension(:,:) :: variable
    integer :: u
    character(len=256) :: fname
+   character(len=512) :: mkdir_cmd
 
    ! Ensure the datadumps directory exists
-   call system('mkdir -p datadumps')
+   write(mkdir_cmd,'("mkdir -p ",A)') trim(datadumps_path)
+   call system(trim(mkdir_cmd))
 
-   write(fname,'("datadumps/",A,".bin")') trim(name)
+   write(fname,'(A,"/",A,".bin")') trim(datadumps_path), trim(name)
    open(newunit=u, file=fname, access='stream', form='unformatted', status='replace', action='write')
    write(u) variable
    close(u)
@@ -1259,11 +1270,13 @@ subroutine write3dmatrix(name, variable)
    real(8), intent(in), dimension(:,:,:) :: variable
    integer :: u
    character(len=256) :: fname
+   character(len=512) :: mkdir_cmd
 
    ! Ensure the datadumps directory exists
-   call system('mkdir -p datadumps')
+   write(mkdir_cmd,'("mkdir -p ",A)') trim(datadumps_path)
+   call system(trim(mkdir_cmd))
 
-   write(fname,'("datadumps/",A,".bin")') trim(name)
+   write(fname,'(A,"/",A,".bin")') trim(datadumps_path), trim(name)
    open(newunit=u, file=fname, access='stream', form='unformatted', status='replace', action='write')
    write(u) variable
    close(u)
@@ -1274,11 +1287,13 @@ subroutine write_vector(name, vector)
    real(8), intent(in), dimension(:) :: vector
    integer :: u
    character(len=256) :: fname
+   character(len=512) :: mkdir_cmd
 
    ! Ensure the datadumps directory exists
-   call system('mkdir -p datadumps')
+   write(mkdir_cmd,'("mkdir -p ",A)') trim(datadumps_path)
+   call system(trim(mkdir_cmd))
 
-   write(fname,'("datadumps/",A,".bin")') trim(name)
+   write(fname,'(A,"/",A,".bin")') trim(datadumps_path), trim(name)
    open(newunit=u, file=fname, access='stream', form='unformatted', status='replace', action='write')
    write(u) vector
    close(u)
@@ -1289,11 +1304,13 @@ subroutine write_scalar(name, value)
    real(8), intent(in) :: value
    integer :: u
    character(len=256) :: fname
+   character(len=512) :: mkdir_cmd
 
    ! Ensure the datadumps directory exists
-   call system('mkdir -p datadumps')
+   write(mkdir_cmd,'("mkdir -p ",A)') trim(datadumps_path)
+   call system(trim(mkdir_cmd))
 
-   write(fname,'("datadumps/",A,".bin")') trim(name)
+   write(fname,'(A,"/",A,".bin")') trim(datadumps_path), trim(name)
    open(newunit=u, file=fname, access='stream', form='unformatted', status='replace', action='write')
    write(u) value
    close(u)

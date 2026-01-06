@@ -112,6 +112,7 @@ CHARACTER(len=500), ALLOCATABLE :: arglist(:), infile(:)
 CHARACTER(len=500) :: W_infile='', infilename='', argname='', tmparg=''
 character(len=500) :: tmpdirarg = '', outdirparam = '', indirparam = ''
 CHARACTER(len=500) :: tmpstring='', tmpstring2='', host_name=''
+CHARACTER(len=500) :: datadumps_path = 'datadumps'
 CHARACTER(len=6) :: outdir = 'output'
 character(len=1) :: tmpchar
 character(len=8) :: ipstr

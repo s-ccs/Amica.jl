@@ -4,12 +4,12 @@ function build_fortran()
     run(`make -C $fortran_dir`)
 end
 
-function run_fortran(config::String)
+function run_fortran(config::String, outPath::String)
     current_file = @__FILE__
     script_dir = dirname(current_file)
     amica_exe = joinpath(script_dir, "fortran", "amica")
     full_filename = joinpath(script_dir, config)
-    run(`$amica_exe $full_filename`)
+    run(setenv(`$amica_exe $full_filename`, "OUT_PATH" => outPath))
 end
 
 function read_fdt(path::String; ncols::Int, T::Type=Float32)::Array{T,2}

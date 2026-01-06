@@ -1,4 +1,4 @@
 fortran/amica
 fortran/*.mod
 amicaout
-datadumps
+datadumps*
