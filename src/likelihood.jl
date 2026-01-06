@@ -15,33 +15,22 @@ end
 @kernel function calculate_u_kernel!(
     z::DenseArray{T},
     Lt::DenseArray{T},
-    scratch::DenseArray{T,3},
-    @Const(y::DenseArray{T,3}),
-    @Const(shape::DenseArray{T,2}),
-    @Const(QConst::DenseArray{T,2}),
+    Q::DenseArray{T,3},
 ) where {T<:Real}
     k, i = @index(Global, NTuple)
 
     _, _, m = size(z)
 
-
-    # set z to Q
-    for j in 1:m
-        # compute y^rho
-        y_rho_val = exp((shape[i, j]) * log(abs(y[k, i, j])))
-        scratch[k, i, j] = QConst[i, j] - y_rho_val
-    end
-
     # Find max for numerical stability
-    Qmax = scratch[k, i, 1]
+    Qmax = Q[k, i, 1]
     for j in 2:m
-        Qmax = max(Qmax, scratch[k, i, j])
+        Qmax = max(Qmax, Q[k, i, j])
     end
 
     # Compute sum(exp(Q - Qmax))
     sum_exp = zero(T)
     for j in 1:m
-        sum_exp += exp(scratch[k, i, j] - Qmax)
+        sum_exp += exp(Q[k, i, j] - Qmax)
     end
 
     logsumexp_Q = Qmax + log(sum_exp)
@@ -50,7 +39,7 @@ end
         # Compute z = exp(Q - logsumexp) + e
         z_sum = zero(T)
         for j in 1:m
-            z[k, i, j] = exp(scratch[k, i, j] - logsumexp_Q) + T(1e-15)
+            z[k, i, j] = exp(Q[k, i, j] - logsumexp_Q) + T(1e-15)
             z_sum += z[k, i, j]
         end
 
@@ -80,10 +69,14 @@ end
     end
 
     @timeit to "qconst" QConst = .-log(T(2)) .- (loggamma.(T(1) .+ T(1) ./ myAmica.shape)) .+ log.(myAmica.proportions) .+ log.(myAmica.scale)
+
+
+    @timeit to "Q" myAmica.scratch .= push_dimension(QConst) .- (exp.(push_dimension(myAmica.shape) .* log.(abs.(myAmica.y))))
+
     @timeit to "kernel" begin
         backend = KernelAbstractions.get_backend(myAmica.source_signals)
         kernel! = calculate_u_kernel!(backend)
-        kernel!(myAmica.z, myAmica.Lt, myAmica.scratch, myAmica.y, myAmica.shape, QConst, ndrange=(N, n))
+        kernel!(myAmica.z, myAmica.Lt, myAmica.scratch, ndrange=(N, n))
     end
 
     if NAN_CHECK_ACTIVE && any(isnan, myAmica.Lt)
