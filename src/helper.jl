@@ -27,23 +27,6 @@ function add_means_back!(myAmica::MultiModelAmica, removed_mean)
     end
 end
 
-"pre-calculate abs(y)^(rho - 1)"
-function update_y_rho!(myAmica::SingleModelAmica{T}) where T<:Real
-    if NAN_CHECK_ACTIVE && any(isnan, myAmica.shape)
-        @warn "NaN in myAmica.shape"
-    end
-    if NAN_CHECK_ACTIVE && any(isnan, myAmica.y)
-        @warn "NaN in myAmica.y"
-    end
-
-    myAmica.y_rho .= exp.((push_dimension(myAmica.shape .- T(1.0))) .* log.(abs.(notzero.(myAmica.y))))
-
-    if NAN_CHECK_ACTIVE && any(isnan, myAmica.y_rho)
-        @warn "NaN in myAmica.y_rho"
-    end
-
-end
-
 function notzero(val::T) where T<:Real
     epsilon = T(1e-16)
     if val < epsilon && val > -epsilon

@@ -102,9 +102,8 @@ end
 @views function update_parameters!(myAmica::SingleModelAmica{T}, lrate::LearningRate, upd_shape::Bool, newton_active::Bool) where {T<:Real}
     N, _, m = size(myAmica.y)
 
-
     @timeit to "kernel" begin
-        backend = KernelAbstractions.get_backend(myAmica.z)
+        myAmica.y_rho .= exp.((push_dimension(myAmica.shape .- T(1.0))) .* log.(abs.(notzero.(myAmica.y))))
 
         # fp = y_rho * sign(y) * shape
         @timeit to "fp" begin
@@ -167,6 +166,15 @@ end
         end
     end
 
+    if NAN_CHECK_ACTIVE && any(isnan, myAmica.y_rho)
+        @warn "NaN in myAmica.y_rho"
+    end
+    if NAN_CHECK_ACTIVE && any(isnan, myAmica.shape)
+        @warn "NaN in myAmica.shape"
+    end
+    if NAN_CHECK_ACTIVE && any(isnan, myAmica.y)
+        @warn "NaN in myAmica.y"
+    end
     if NAN_CHECK_ACTIVE && any(isnan, sum_z)
         @warn "NaN in sum_z"
     end

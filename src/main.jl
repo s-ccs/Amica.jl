@@ -62,8 +62,6 @@ function amica!(myAmica::AbstractAmica,
 
         @timeit to "calculate_y" calculate_y!(myAmica)
 
-        @timeit to "update_y_rho" update_y_rho!(myAmica)
-
         @timeit to "calculate_u_and_Lt" calculate_u_and_Lt!(myAmica)
 
         @timeit to "calculate_DLL" calculate_DLL!(dLL, myAmica, iter)
