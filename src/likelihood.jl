@@ -70,8 +70,9 @@ end
 
     @timeit to "qconst" QConst = .-log(T(2)) .- (loggamma.(T(1) .+ T(1) ./ myAmica.shape)) .+ log.(myAmica.proportions) .+ log.(myAmica.scale)
 
-
-    @timeit to "Q" myAmica.scratch .= push_dimension(QConst) .- (exp.(push_dimension(myAmica.shape) .* log.(abs.(myAmica.y))))
+    # Q = qconst * abs(y)^rho 
+    # Q = qconst * abs(y)^(rho - 1) * abs(y)
+    @timeit to "Q" myAmica.scratch .= push_dimension(QConst) .- (myAmica.y_rho .* abs.(myAmica.y))
 
     @timeit to "kernel" begin
         backend = KernelAbstractions.get_backend(myAmica.source_signals)

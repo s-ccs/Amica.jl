@@ -58,10 +58,9 @@ end
 
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
 @views function update_parameters!(myAmica::SingleModelAmica{T}, lrate::LearningRate, upd_shape::Bool, newton_active::Bool) where {T<:Real}
-    N, _, m = size(myAmica.y)
+    N, n, m = size(myAmica.y)
 
     @timeit to "kernel" begin
-        myAmica.y_rho .= exp.((push_dimension(myAmica.shape .- T(1.0))) .* log.(abs.(notzero.(myAmica.y))))
 
         # fp = y_rho * sign(y) * shape
         @timeit to "fp" begin
@@ -105,10 +104,12 @@ end
             drho_numer = sum(myAmica.scratch, dims=1)[1, :, :]
         end
 
-        # sum(scale * z * fp)
-        @timeit to "g" begin
+        # g = sum(scale * z * fp)
+        # dA = I - g' * source_signals / N
+        @timeit to "dA" begin
             myAmica.scratch .= push_dimension(myAmica.scale) .* zfp
-            myAmica.g .= sum(myAmica.scratch, dims=3)[:, :, 1]
+            ArrayType = typeof(myAmica.shape)
+            myAmica.dA .= ArrayType(I(n)) - ((sum(myAmica.scratch, dims=3)[:, :, 1])' * myAmica.source_signals) / N
         end
 
         # sum(z * (fp * y - 1)^2)

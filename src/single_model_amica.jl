@@ -21,9 +21,9 @@ mutable struct SingleModelAmica{
 
     # --- intermediary values
 
-    y_rho::Array3                                               # abs(y)^rho
+    y_rho::Array3                                               # abs(y)^(rho-1)
     scratch::Array3
-    g::Array2
+    dA::Array2
 
     # Pre-computed values for Newton method (using scale before update)
     newton_kappa::Array1
@@ -92,7 +92,7 @@ function SingleModelAmica(T::Type{<:Real}=Float64;
         T[] |> Array1,
         zeros(T, N, n, m) |> Array3,
         zeros(T, N, n, m) |> Array3,
-        zeros(T, N, n) |> Array2,
+        zeros(T, n, n) |> Array2,
         zeros(T, n) |> Array1,
         zeros(T, n) |> Array1,
         zeros(T, n) |> Array1,

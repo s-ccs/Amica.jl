@@ -14,10 +14,7 @@ const NAN_CHECK_ACTIVE = true
 
 abstract type AbstractAmica end
 
-#using MultivariateStats
-#using StatsAPI
 include("single_model_amica.jl")
-include("util.jl")
 include("types.jl")
 include("helper.jl")
 include("likelihood.jl")

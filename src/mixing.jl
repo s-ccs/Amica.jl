@@ -1,44 +1,36 @@
 "Updates the mixing matrix"
 function update_mixing!(myAmica::SingleModelAmica{T}, iter::Int, do_newton::Bool, newt_start_iter::Int, lrate::LearningRate) where {T<:Real}
-    N, n = size(myAmica.y)
-
-    @timeit to "calc dA" begin
-        # Calculate dA = I - g' * source_signals / N
-        ArrayType = typeof(myAmica.shape)
-        dA = ArrayType(I(n)) - (myAmica.g' * myAmica.source_signals) / N
-    end
-
     if (do_newton && iter >= newt_start_iter)
         if iter == newt_start_iter
             println("Starting Newton ... setting numdecs to 0")
             lrate.numdecs = 0
         end
 
-        @timeit to "do_newton!" do_newton!(myAmica, dA, lrate)
+        @timeit to "do_newton!" do_newton!(myAmica, lrate)
     else
         @timeit to "update A" begin
             # Use natural gradient (Fortran line 2077)
             # Still ramp up learning rate but cap at lrate0
             lrate.lrate = min(lrate.lrate0, lrate.lrate + min(T(1.0) / T(lrate.newt_ramp), lrate.lrate))
-            myAmica.A -= lrate.lrate * myAmica.A * dA
+            myAmica.A -= lrate.lrate * myAmica.A * myAmica.dA
         end
     end
 end
 
 "Perform the newton method"
-function do_newton!(myAmica::SingleModelAmica{T}, dA, lrate::LearningRate) where {T<:Real}
+function do_newton!(myAmica::SingleModelAmica{T}, lrate::LearningRate) where {T<:Real}
     N, n = size(myAmica.y)
 
     myAmica.newton_sigma2 .= sum(myAmica.source_signals .^ 2, dims=1)[1, :] ./ N
 
     # Build the Newton update matrix B
-    B = similar(dA)
+    B = similar(myAmica.dA)
     posdef = true
 
     backend = KernelAbstractions.get_backend(myAmica.source_signals)
     kernel! = calc_b_kernel(backend)
 
-    @timeit to "kernel" kernel!(B, posdef, myAmica.newton_kappa, myAmica.newton_lambda, myAmica.newton_sigma2, dA, ndrange=(n, n))
+    @timeit to "kernel" kernel!(B, posdef, myAmica.newton_kappa, myAmica.newton_lambda, myAmica.newton_sigma2, myAmica.dA, ndrange=(n, n))
 
     # Apply update if Hessian is positive definite
     if posdef
@@ -50,7 +42,7 @@ function do_newton!(myAmica::SingleModelAmica{T}, dA, lrate::LearningRate) where
 
         # Still ramp up learning rate but cap at lrate0 instead of maximum
         lrate.lrate = min(lrate.lrate0, lrate.lrate + min(T(1.0) / T(lrate.newt_ramp), lrate.lrate))
-        myAmica.A -= lrate.lrate * myAmica.A * dA
+        myAmica.A -= lrate.lrate * myAmica.A * myAmica.dA
     end
 end
 
