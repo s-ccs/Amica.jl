@@ -1,4 +1,4 @@
-#Normalizes source density location parameter (mu), scale parameter (beta) and model centers
+"Normalizes source density location parameter (mu), scale parameter (beta) and model centers"
 function reparameterize!(myAmica::SingleModelAmica{T}) where T<:Real
     (N, n, m) = size(myAmica.z)
 
@@ -11,7 +11,7 @@ function reparameterize!(myAmica::SingleModelAmica{T}) where T<:Real
     myAmica.scale .= ifelse.(mask, myAmica.scale ./ tau, myAmica.scale)
 end
 
-#Reparameterizes the parameters for the active models
+"Reparameterizes the parameters for the active models"
 function reparameterize!(myAmica::MultiModelAmica, data)
     (N, _, n) = size(myAmica.models[1].source_signals)
     M = size(myAmica.models, 1)
@@ -55,48 +55,6 @@ end
 function update_parameters!(myAmica::MultiModelAmica{T}, lrate::LearningRate, upd_shape::Bool) where {T<:Real}
     update_parameters!.(myAmica.models, lrate, upd_shape)
 end
-
-
-# copied from specialfunctions
-function gpuDigamma(z::T) where T<:Real
-    # Based on eq. (12), without looking at the accompanying source
-    # code, of: K. S. Kölbig, "Programs for computing the logarithm of
-    # the gamma function, and the digamma function, for complex
-    # argument," Computer Phys. Commun.  vol. 4, pp. 221–226 (1972).
-    x = real(z)
-    if x <= 0 # reflection formula
-        ψ = -T(π) / tanpi(z)
-        z = 1 - z
-        x = real(z)
-    else
-        ψ = zero(z)
-    end
-    X = 8
-    if x < X
-        # shift using recurrence formula
-        n = X - unsafe_trunc(Int, x)
-        for ν = 1:n-1
-            ψ -= inv(z + ν)
-        end
-        ψ -= inv(z)
-        z += n
-    end
-    t = inv(z)
-    ψ += log(z) - T(0.5) * t
-    t *= t # 1/z^2
-    # the coefficients here are Float64(bernoulli[2:9] .// (2*(1:8)))
-    c = (T(0.08333333333333333),
-        T(-0.008333333333333333),
-        T(0.003968253968253968),
-        T(-0.004166666666666667),
-        T(0.007575757575757576),
-        T(-0.021092796092796094),
-        T(0.08333333333333333),
-        T(-0.4432598039215686))
-    ψ -= t * Base.Math._evalpoly(t, c)
-end
-
-
 
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
 @views function update_parameters!(myAmica::SingleModelAmica{T}, lrate::LearningRate, upd_shape::Bool, newton_active::Bool) where {T<:Real}
@@ -166,40 +124,6 @@ end
         end
     end
 
-    if NAN_CHECK_ACTIVE && any(isnan, myAmica.y_rho)
-        @warn "NaN in myAmica.y_rho"
-    end
-    if NAN_CHECK_ACTIVE && any(isnan, myAmica.shape)
-        @warn "NaN in myAmica.shape"
-    end
-    if NAN_CHECK_ACTIVE && any(isnan, myAmica.y)
-        @warn "NaN in myAmica.y"
-    end
-    if NAN_CHECK_ACTIVE && any(isnan, sum_z)
-        @warn "NaN in sum_z"
-    end
-    if NAN_CHECK_ACTIVE && any(isnan, dmu_numer)
-        @warn "NaN in dmu_numer"
-    end
-    if NAN_CHECK_ACTIVE && any(isnan, kp)
-        @warn "NaN in kp"
-    end
-    if NAN_CHECK_ACTIVE && any(isnan, dmu_denom)
-        @warn "NaN in dmu_denom"
-    end
-    if NAN_CHECK_ACTIVE && any(isnan, drho_numer)
-        @warn "NaN in drho_numer"
-    end
-    if NAN_CHECK_ACTIVE && any(isnan, myAmica.g)
-        @warn "NaN in myAmica.g"
-    end
-    if NAN_CHECK_ACTIVE && any(isnan, dlambda_numer)
-        @warn "NaN in dlambda_numer"
-    end
-    if NAN_CHECK_ACTIVE && any(isnan, dbeta_denom)
-        @warn "NaN in dbeta_denom"
-    end
-
     # alpha / proportions
     @timeit to "prop" if m > 1
         myAmica.proportions .= ifelse.(sum_z .>= T(0), sum_z ./ N, T(1) / N)
@@ -232,35 +156,12 @@ end
         )
     end
 
-    if NAN_CHECK_ACTIVE && any(isnan, myAmica.proportions)
-        @warn "NaN in myAmica.proportions"
-    end
-    if NAN_CHECK_ACTIVE && any(isnan, myAmica.newton_kappa)
-        @warn "NaN in myAmica.newton_kappa"
-    end
-    if NAN_CHECK_ACTIVE && any(isnan, myAmica.newton_lambda)
-        @warn "NaN in myAmica.newton_lambda"
-    end
-    if NAN_CHECK_ACTIVE && any(isnan, myAmica.location)
-        @warn "NaN in myAmica.location"
-    end
-    if NAN_CHECK_ACTIVE && any(isnan, myAmica.scale)
-        @warn "NaN in myAmica.scale"
-    end
-    if NAN_CHECK_ACTIVE && any(isnan, myAmica.shape)
-        @warn "NaN in myAmica.shape"
-    end
 end
 
 "updates the unmixed source_signals: myAmica.source_signals = myAmica.A ^ -1 * data"
 function update_sources!(myAmica::SingleModelAmica{T}, data::AbstractMatrix{T}) where {T<:Real}
     W = inv(myAmica.A)
     myAmica.source_signals .= data * W'
-
-    if NAN_CHECK_ACTIVE && any(isnan, myAmica.source_signals)
-        @warn "NaN in myAmica.source_signals"
-    end
-
 end
 
 function update_sources!(myAmica::MultiModelAmica, data)

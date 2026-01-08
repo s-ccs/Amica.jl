@@ -79,13 +79,6 @@ end
         kernel!(myAmica.z, myAmica.Lt, myAmica.scratch, ndrange=(N, n))
     end
 
-    if NAN_CHECK_ACTIVE && any(isnan, myAmica.Lt)
-        @warn "NaN in myAmica.Lt"
-    end
-    if NAN_CHECK_ACTIVE && any(isnan, myAmica.z)
-        @warn "NaN in myAmica.z"
-    end
-
     @timeit to "sum" push!(myAmica.LL, sum(myAmica.Lt) / (N * n))
 end
 
@@ -103,11 +96,6 @@ end
     for j in 1:m
         myAmica.y[:, :, j] .= myAmica.scale[:, j]' .* (myAmica.source_signals .- myAmica.location[:, j]')
     end
-
-    if NAN_CHECK_ACTIVE && any(isnan, myAmica.y)
-        @warn "NaN in myAmica.y"
-    end
-
 end
 
 function calculate_y!(myAmica::MultiModelAmica)

@@ -116,10 +116,12 @@ function amica!(myAmica::AbstractAmica,
             reset_timer!(to)
         end
 
+        if NAN_CHECK_ACTIVE
+            check_nan(myAmica)
+        end
+
         # TODO is this required?
         KernelAbstractions.synchronize(backend)
-
-
     end
     #If parameters contain NaNs, the algorithm skips the A update and terminates by jumping here
     @label escape_from_NaN
