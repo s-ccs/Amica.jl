@@ -12,8 +12,9 @@ include("util.jl")
     (N, n) = size(data)
 
     # myAmica = fit(Float32, SingleModelAmica, data; maxiter=5, do_sphering=true, remove_mean=true, m=3, Array=CuArray)
+    lrate = Amica.LearningRate{Float32}(newtrate=Float32(1.0))
     myAmica = SingleModelAmica(Float32, ncomps=n, nsamples=N, m=3, ArrayType=CuArray)
-    Amica.amica!(myAmica, data, maxiter=40)
+    Amica.amica!(myAmica, data, maxiter=40, newt_start_iter=0, lrate=lrate)
 
     using Plots
     gr()   # Backend aktivieren

@@ -1,4 +1,32 @@
-#Updates the mixing matrix with the newton method
+
+@kernel function newton_kernel!(
+    B::DenseArray{T,2},
+    posdef::Bool,
+    @Const(newton_kappa::DenseArray{T,1}),
+    @Const(newton_lambda::DenseArray{T,1}),
+    @Const(newton_sigma2::DenseArray{T,1}),
+    @Const(dA::DenseArray{T,2})
+) where T<:Real
+    k, i = @index(Global, NTuple)
+
+    if i == k
+        # Diagonal elements
+        B[i, k] = dA[i, k] / newton_lambda[i]
+    else
+        # Off-diagonal elements
+        sk1 = newton_sigma2[i] * newton_kappa[k]
+        sk2 = newton_sigma2[k] * newton_kappa[i]
+
+        if sk1 * sk2 > T(1.0)
+            B[i, k] = (sk1 * dA[i, k] - dA[k, i]) / (sk1 * sk2 - T(1.0))
+        else
+            posdef = false
+        end
+    end
+end
+
+
+# Updates the mixing matrix with the newton method
 function newton_method!(myAmica::SingleModelAmica{T}, iter::Int, do_newton::Bool, newt_start_iter::Int, lrate::LearningRate) where {T<:Real}
 
     N, n, m = size(myAmica.y)
@@ -10,35 +38,23 @@ function newton_method!(myAmica::SingleModelAmica{T}, iter::Int, do_newton::Bool
     end
 
     if (do_newton && iter >= newt_start_iter)
-        myAmica.newton_sigma2 = vec(sum(myAmica.source_signals .^ 2, dims=1) / N)
+        myAmica.newton_sigma2 .= sum(myAmica.source_signals .^ 2, dims=1)[1, :] ./ N
 
         # Build the Newton update matrix B
-        B = zeros(T, n, n)
+        B = similar(dA)
         posdef = true
-
-        # compute B and posdef
-
-        for i in 1:n, k in 1:n
-            if i == k
-                # Diagonal elements
-                B[i, i] = dA[i, i] / myAmica.newton_lambda[i]
-            else
-                # Off-diagonal elements
-                sk1 = myAmica.newton_sigma2[i] * myAmica.newton_kappa[k]
-                sk2 = myAmica.newton_sigma2[k] * myAmica.newton_kappa[i]
-
-                if sk1 * sk2 > 1.0
-                    B[i, k] = (sk1 * dA[i, k] - dA[k, i]) / (sk1 * sk2 - 1.0)
-                else
-                    posdef = false
-                end
-            end
-        end
-
         if iter == newt_start_iter
             println("Starting Newton ... setting numdecs to 0")
             lrate.numdecs = 0
         end
+
+
+
+        backend = KernelAbstractions.get_backend(myAmica.source_signals)
+        kernel! = newton_kernel!(backend)
+
+
+        @timeit to "kernel" kernel!(B, posdef, myAmica.newton_kappa, myAmica.newton_lambda, myAmica.newton_sigma2, dA, ndrange=(n, n))
 
         # Apply update if Hessian is positive definite
         if posdef
