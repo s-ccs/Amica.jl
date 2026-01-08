@@ -21,7 +21,7 @@ include("types.jl")
 include("helper.jl")
 include("likelihood.jl")
 include("parameters.jl")
-include("newton.jl")
+include("mixing.jl")
 include("main.jl")
 
 export amica!

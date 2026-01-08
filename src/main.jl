@@ -90,7 +90,7 @@ function amica!(myAmica::AbstractAmica,
         try
             #Updates parameters and mixing matrix
             @timeit to "update_parameters" update_parameters!(myAmica, lrate, update_shape, do_newton && iter >= newt_start_iter)
-            @timeit to "newton_method" newton_method!(myAmica, iter, do_newton, newt_start_iter, lrate)
+            @timeit to "update_mixing" update_mixing!(myAmica, iter, do_newton, newt_start_iter, lrate)
         catch e
             #Terminates if NaNs are detected in parameters
             if isa(e, AmicaNaNException)
