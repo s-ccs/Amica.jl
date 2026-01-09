@@ -46,7 +46,7 @@ function do_newton!(myAmica::SingleModelAmica{T}, lrate::LearningRate) where {T<
     end
 end
 
-@kernel function calc_b_kernel(
+@kernel inbounds = true unsafe_indices = true function calc_b_kernel(
     B::DenseArray{T,2},
     posdef::Bool,
     @Const(newton_kappa::DenseArray{T,1}),

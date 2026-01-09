@@ -12,7 +12,7 @@ function calculate_u_and_Lt!(myAmica::MultiModelAmica)
     calculate_u_and_Lt!.(myAmica.models)
 end
 
-@kernel function calculate_u_kernel!(
+@kernel inbounds = true unsafe_indices = true function calculate_u_kernel!(
     z::DenseArray{T},
     Lt::DenseArray{T},
     Q::DenseArray{T,3},
