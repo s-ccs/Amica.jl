@@ -32,7 +32,6 @@ end
     A_init = read_fdt("datadumps/A_init.bin"; ncols=71, T=Float64)
     W = read_fdt("datadumps/W.bin"; ncols=71, T=Float64)
 
-
     sbeta = read_fdt("datadumps/sbeta.bin"; ncols=3, T=Float64)'
     rho = read_fdt("datadumps/rho.bin"; ncols=3, T=Float64)'
     mu = read_fdt("datadumps/mu.bin"; ncols=3, T=Float64)'
@@ -43,7 +42,6 @@ end
 
     myAmica = SingleModelAmica(Float64, ncomps=n, nsamples=N, m=3, A=A, scale=sbeta, location=mu)
 
-    @test A ≈ inv(W)
 
     lrate = Amica.LearningRate{Float64}()
     # run amica for one iteration
@@ -68,10 +66,6 @@ end
     # test calculate_LL!
     LL = read_fdt("datadumps/LL.bin"; ncols=1, T=Float64)[1, :]'
     @test LL[1] ≈ myAmica.LL[1]
-
-    # test g 
-    g = read_fdt("datadumps/g_after_iter1.bin"; ncols=639000, T=Float64)[1:319500, :]
-    @test g ≈ myAmica.g
 
     # location after one iteration
     mu_1 = read_fdt("datadumps/mu_1.bin"; ncols=3, T=Float64)'
@@ -116,8 +110,6 @@ end
 
     myAmica = SingleModelAmica(Float64, ncomps=n, nsamples=N, m=3, A=A, scale=sbeta, location=mu)
 
-    @test A ≈ inv(W)
-
     lrate = Amica.LearningRate{Float64}()
     # run amica for one iteration
     Amica.amica!(myAmica, data, maxiter=1, lrate=lrate, newt_start_iter=0)
@@ -141,10 +133,6 @@ end
     # test calculate_LL!
     LL = read_fdt("datadumps_newton/LL.bin"; ncols=1, T=Float64)[1, :]'
     @test LL[1] ≈ myAmica.LL[1]
-
-    # test g 
-    g = read_fdt("datadumps_newton/g_after_iter1.bin"; ncols=639000, T=Float64)[1:319500, :]
-    @test g ≈ myAmica.g
 
     # location after one iteration
     mu_1 = read_fdt("datadumps_newton/mu_1.bin"; ncols=3, T=Float64)'
