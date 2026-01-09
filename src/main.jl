@@ -30,14 +30,14 @@ function amica!(myAmica::AbstractAmica,
         error("Data dimension mismatch: data has size $(size(data)) but model expects $(size(myAmica.source_signals))")
     end
 
-    initialize_shape_parameter!(myAmica, lrate)
+    @timeit to "initialize_shape_parameter!" initialize_shape_parameter!(myAmica, lrate)
 
     #Prepares data by removing means and/or sphering
-    if remove_mean
+    @timeit to "removeMean" if remove_mean
         removed_mean = removeMean!(data)
     end
 
-    if do_sphering
+    @timeit to "sphering" if do_sphering
         S = sphering!(data)
         myAmica.S = S
         myAmica.LLdetS = logabsdet(S |> Array)[1]
@@ -48,23 +48,37 @@ function amica!(myAmica::AbstractAmica,
 
     dLL = zeros(1, maxiter)
 
-
     backend = KernelAbstractions.get_backend(myAmica.z)
 
     # TODO make previous operations run on gpu as well
     # move to gpu
-    data = data |> typeof(myAmica.A)
+
+    @timeit to "movetogpu" if typeof(myAmica.A) != typeof(data)
+        data = data |> typeof(myAmica.A)
+    end
 
     for iter in 1:maxiter
         iter_time_start = time()
 
-        @timeit to "update_sources" update_sources!(myAmica, data)
+        @timeit to "update_sources" begin
+            update_sources!(myAmica, data)
+        end
 
-        @timeit to "calculate_y" calculate_y!(myAmica)
+        @timeit to "calculate_y" begin
+            calculate_y!(myAmica)
+        end
 
-        @timeit to "calculate_u_and_Lt" calculate_u_and_Lt!(myAmica)
+        @timeit to "update_y_rho" begin
+            calculate_y_rho!(myAmica)
+        end
 
-        @timeit to "calculate_DLL" calculate_DLL!(dLL, myAmica, iter)
+        @timeit to "calculate_u_and_Lt" begin
+            calculate_u_and_Lt!(myAmica)
+        end
+
+        @timeit to "calculate_DLL" begin
+            calculate_DLL!(dLL, myAmica, iter)
+        end
 
         if iter > 1
             # Check for NaN
@@ -89,8 +103,12 @@ function amica!(myAmica::AbstractAmica,
         #M-step
         try
             #Updates parameters and mixing matrix
-            @timeit to "update_parameters" update_parameters!(myAmica, lrate, update_shape, do_newton && iter >= newt_start_iter)
-            @timeit to "update_mixing" update_mixing!(myAmica, iter, do_newton, newt_start_iter, lrate)
+            @timeit to "update_parameters" begin
+                update_parameters!(myAmica, lrate, update_shape, do_newton && iter >= newt_start_iter)
+            end
+            @timeit to "update_mixing" begin
+                update_mixing!(myAmica, iter, do_newton, newt_start_iter, lrate)
+            end
         catch e
             #Terminates if NaNs are detected in parameters
             if isa(e, AmicaNaNException)
@@ -101,7 +119,9 @@ function amica!(myAmica::AbstractAmica,
             end
         end
 
-        @timeit to "reparameterize" reparameterize!(myAmica)
+        @timeit to "reparameterize" begin
+            reparameterize!(myAmica)
+        end
 
         # Calculate iteration time
         iter_time = time() - iter_time_start
@@ -126,7 +146,7 @@ function amica!(myAmica::AbstractAmica,
     #If parameters contain NaNs, the algorithm skips the A update and terminates by jumping here
     @label escape_from_NaN
 
-    show(to)
+    print_timer(to, sortby=:allocations)
 
     #If means were removed, they are added back
     if remove_mean

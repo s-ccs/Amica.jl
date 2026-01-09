@@ -60,17 +60,13 @@ end
 @views function update_parameters!(myAmica::SingleModelAmica{T}, lrate::LearningRate, upd_shape::Bool, newton_active::Bool) where {T<:Real}
     N, n, m = size(myAmica.y)
 
+
     @timeit to "kernel" begin
 
+        # it's more memory efficient and as fast to inline the computation of fp & zfp below 
+        # instead of calculating and storing it
         # fp = y_rho * sign(y) * shape
-        @timeit to "fp" begin
-            fp = myAmica.y_rho .* sign.(myAmica.y) .* push_dimension(myAmica.shape)
-        end
-
         # zfp = z * fp
-        @timeit to "zfp" begin
-            zfp = myAmica.z .* fp
-        end
 
         # sum(z)
         @timeit to "sum_z" begin
@@ -79,18 +75,19 @@ end
 
         # sum(z * fp)
         @timeit to "dmu_numer" begin
-            dmu_numer = sum(zfp, dims=1)[1, :, :]
+            myAmica.scratch .= (myAmica.z .* (myAmica.y_rho .* sign.(myAmica.y) .* push_dimension(myAmica.shape)))
+            dmu_numer = sum(myAmica.scratch, dims=1)[1, :, :]
         end
 
         # sum(z * fp * fp)
         @timeit to "kp" begin
-            myAmica.scratch .= zfp .* fp
+            myAmica.scratch .= (myAmica.z .* (myAmica.y_rho .* sign.(myAmica.y) .* push_dimension(myAmica.shape))) .* (myAmica.y_rho .* sign.(myAmica.y) .* push_dimension(myAmica.shape))
             kp = sum(myAmica.scratch, dims=1)[1, :, :]
         end
 
         # rho <= 2 ? sum(z * fp / y) : sum(z * fp * fp)
         @timeit to "dmu_denom" begin
-            myAmica.scratch .= zfp ./ notzero.(myAmica.y)
+            myAmica.scratch .= (myAmica.z .* (myAmica.y_rho .* sign.(myAmica.y) .* push_dimension(myAmica.shape))) ./ notzero.(myAmica.y)
             dmu_denom = ifelse.(myAmica.shape .<= T(2), sum(myAmica.scratch, dims=1)[1, :, :], kp) .* myAmica.scale
         end
 
@@ -107,22 +104,23 @@ end
         # g = sum(scale * z * fp)
         # dA = I - g' * source_signals / N
         @timeit to "dA" begin
-            myAmica.scratch .= push_dimension(myAmica.scale) .* zfp
+            myAmica.scratch .= push_dimension(myAmica.scale) .* (myAmica.z .* (myAmica.y_rho .* sign.(myAmica.y) .* push_dimension(myAmica.shape)))
             ArrayType = typeof(myAmica.shape)
             myAmica.dA .= ArrayType(I(n)) - ((sum(myAmica.scratch, dims=3)[:, :, 1])' * myAmica.source_signals) / N
         end
 
         # sum(z * (fp * y - 1)^2)
         @timeit to "dlambda_numer" begin
-            myAmica.scratch .= myAmica.z .* (fp .* myAmica.y .- T(1.0)) .^ 2
+            myAmica.scratch .= myAmica.z .* ((myAmica.y_rho .* sign.(myAmica.y) .* push_dimension(myAmica.shape)) .* myAmica.y .- T(1.0)) .^ 2
             dlambda_numer = sum(myAmica.scratch, dims=1)[1, :, :]
         end
 
         # rho <= 2.0 ? sum(z * fp * y) : 0
         @timeit to "dbeta_denom" begin
-            myAmica.scratch .= ifelse.(push_dimension(myAmica.shape) .<= T(2), zfp .* myAmica.y, T(0))
+            myAmica.scratch .= ifelse.(push_dimension(myAmica.shape) .<= T(2), (myAmica.z .* (myAmica.y_rho .* sign.(myAmica.y) .* push_dimension(myAmica.shape))) .* myAmica.y, T(0))
             dbeta_denom = sum(myAmica.scratch, dims=1)[1, :, :]
         end
+
     end
 
     # alpha / proportions
