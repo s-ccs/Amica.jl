@@ -10,7 +10,7 @@ using KernelAbstractions
 using Atomix
 
 const to = TimerOutput()
-const NAN_CHECK_ACTIVE = true
+const NAN_CHECK_ACTIVE = false
 
 abstract type AbstractAmica end
 

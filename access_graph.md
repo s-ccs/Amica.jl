@@ -3,7 +3,7 @@
 | update_sources!     |     |       | w              | r    | r   |      |     |       |             |       |          |     |     |        |     |     |     |     |     |     |
 | calculate_ldet!     |     |       |                |      | r   | w    |     |       |             |       |          |     |     |        |     |     |     |     |     |     |
 | calculate_y!        | w   |       | r              |      |     |      |     |       |             | r     | r        |     |     |        |     |     |     |     |     |     |
-| update_y_rho!       | r   | w     |                |      |     |      |     | r     |             |       |          |     |     |        |     |     |     |     |     |     |
+| calculate_y_rho!       | r   | w     |                |      |     |      |     | r     |             |       |          |     |     |        |     |     |     |     |     |     |
 | calculate_Q!        |     | r     |                |      |     |      | w   | r     | r           | r     |          |     |     |        |     |     |     |     |     |     |
 | calculate_u_and_Lt! |     |       |                |      |     | r    | r   |       |             |       |          | w   | w   | r      |     |     |     |     |     |     |
 | calculate_LL!       |     |       |                |      |     |      |     |       |             |       |          | r   |     |        | w   |     |     |     |     |     |
@@ -26,7 +26,7 @@
 | ------------------- | --- | ----- | -------------- | ---- | --- | ----- | ----------- | ----- | -------- | --- | --- | ------ | --- | --- | --- | --- | --- | --- |
 | update_sources!     |     |       | w              | r    | r   |       |             |       |          |     |     |        |     |     |     |     |     |     |
 | calculate_y!        | w   |       | r              |      |     |       |             | r     | r        |     |     |        |     |     |     |     |     |     |
-| update_y_rho!       | r   | w     |                |      |     | r     |             |       |          |     |     |        |     |     |     |     |     |     |
+| calculate_y_rho!       | r   | w     |                |      |     | r     |             |       |          |     |     |        |     |     |     |     |     |     |
 | calculate_u_and_Lt! |     | r     |                |      | r   | r     | r           | r     |          | w   | w   | r      | w   |     |     |     |     |     |
 | calculate_DLL!      |     |       |                |      |     |       |             |       |          |     |     |        | r   | w   |     |     |     |     |
 | calculate_lrate!    |     |       |                |      |     |       |             |       |          |     |     |        |     | r   |     |     |     |     |

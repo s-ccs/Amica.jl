@@ -45,7 +45,7 @@ function SingleModelAmica(T::Type{<:Real}=Float64;
     n = ncomps
 
     #initialize parameters
-    if isnothing(A)
+    @timeit to "init A" if isnothing(A)
         # Initialize A to match Fortran: small random ±0.005, diagonal = 1.0, then normalize
         Wtmp = rand(T, n, n)
         A = T(0.01) .* (T(0.5) .- Wtmp)  # Random values in range [-0.005, 0.005]
@@ -55,8 +55,8 @@ function SingleModelAmica(T::Type{<:Real}=Float64;
         end
     end
 
-    proportions = (1 / m) * ones(T, n, m)
-    if isnothing(location)
+    @timeit to "init proportions" proportions = (1 / m) * ones(T, n, m)
+    @timeit to "init location" if isnothing(location)
         # Initialize location to match Fortran: mu(j,k) = j - 1 - (m-1)/2
         # This creates centered values around 0 (e.g., -1, 0, 1 for m=3)
         location = zeros(T, n, m)
@@ -66,7 +66,7 @@ function SingleModelAmica(T::Type{<:Real}=Float64;
         # Add small random perturbation: ±0.05
         location .+= T(0.05) .* (T(1.0) .- T(2.0) .* rand(T, n, m))
     end
-    if isnothing(scale)
+    @timeit to "init scale" if isnothing(scale)
         # Initialize scale to match Fortran: 1.0 + 0.1*(0.5 - random[0,1])
         # This gives values in range [0.95, 1.05]
         scale = ones(T, n, m) .+ T(0.1) .* (T(0.5) .- rand(T, n, m))

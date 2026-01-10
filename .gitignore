@@ -8,3 +8,4 @@
 *.mem
 repl.jl
 changes.md
+.CondaPkg
