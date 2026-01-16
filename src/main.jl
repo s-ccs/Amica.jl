@@ -47,6 +47,7 @@ function amica!(myAmica::AbstractAmica,
     end
 
     dLL = zeros(1, maxiter)
+    iter_times = Float64[]
 
     backend = KernelAbstractions.get_backend(myAmica.z)
 
@@ -123,14 +124,6 @@ function amica!(myAmica::AbstractAmica,
             reparameterize!(myAmica)
         end
 
-        # Calculate iteration time
-        iter_time = time() - iter_time_start
-
-        # Formatted output matching Fortran AMICA
-        if show_progress
-            println(" iter $(lpad(iter, 5)) lrate = $(lpad(string(round(lrate.lrate, digits=10)), 13)) LL = $(lpad(string(round(myAmica.LL[iter], digits=10)), 14))  ($(lpad(string(round(iter_time, digits=2)), 6)) s)")
-        end
-
         # TODO remove
         if iter == 1 && maxiter > 1
             reset_timer!(to)
@@ -142,11 +135,26 @@ function amica!(myAmica::AbstractAmica,
 
         # TODO is this required?
         KernelAbstractions.synchronize(backend)
+
+        # Calculate iteration time
+        iter_time = time() - iter_time_start
+        push!(iter_times, iter_time)
+
+        # Formatted output matching Fortran AMICA
+        if show_progress
+            println(" iter $(lpad(iter, 5)) lrate = $(lpad(string(round(lrate.lrate, digits=10)), 13)) LL = $(lpad(string(round(myAmica.LL[iter], digits=10)), 14))  ($(lpad(string(round(iter_time, digits=2)), 6)) s)")
+        end
     end
     #If parameters contain NaNs, the algorithm skips the A update and terminates by jumping here
     @label escape_from_NaN
 
     print_timer(to, sortby=:allocations)
+
+    # Log average iteration time
+    if !isempty(iter_times)
+        avg_iter_time = sum(iter_times) / length(iter_times)
+        println("\nAverage iteration time: $(round(avg_iter_time, digits=3)) s (over $(length(iter_times)) iterations)")
+    end
 
     #If means were removed, they are added back
     if remove_mean
