@@ -2,9 +2,9 @@
 Main AMICA algorithm
 """
 
-function fit(amicaType::Type{T}, data; m=3, maxiter=500, location=nothing, scale=nothing, A=nothing, kwargs...) where {T<:AbstractAmica}
+function fit(amicaType::Type{AmicaKind}, data::Array{T,2}; m=3, maxiter=500, location=nothing, scale=nothing, A=nothing, ArrayType::Type{<:DenseArray}=Array, kwargs...) where {AmicaKind<:AbstractAmica,T<:Real}
     (N, n) = size(data)
-    amica = T(m=m, ncomps=n, nsamples=N, location=location, scale=scale, A=A)
+    amica = AmicaKind(T, m=m, ncomps=n, nsamples=N, location=location, scale=scale, A=A, ArrayType=ArrayType)
     fit!(amica, data; maxiter=maxiter, kwargs...)
     return amica
 end
@@ -24,6 +24,8 @@ function amica!(myAmica::AbstractAmica,
     iterwin::Int=10,
     update_shape::Bool=true,
     mindll::T=T(1e-8)) where {T<:Real}
+
+    amica_start = time()
 
     # Check that data dimensions match the model
     if size(data) != size(myAmica.source_signals)
@@ -49,8 +51,6 @@ function amica!(myAmica::AbstractAmica,
     dLL = zeros(1, maxiter)
     iter_times = Float64[]
 
-    backend = KernelAbstractions.get_backend(myAmica.z)
-
     # TODO make previous operations run on gpu as well
     # move to gpu
 
@@ -58,7 +58,15 @@ function amica!(myAmica::AbstractAmica,
         data = data |> typeof(myAmica.A)
     end
 
+    if show_progress
+        preparation_time = time() - amica_start
+        println("\nPreparation completed, starting main loop ($(round(preparation_time, digits=3)) s)")
+    end
+    niter = 0
+    loop_start = time()
+
     for iter in 1:maxiter
+        niter += 1
         iter_time_start = time()
 
         @timeit to "update_sources" begin
@@ -133,12 +141,8 @@ function amica!(myAmica::AbstractAmica,
             check_nan(myAmica)
         end
 
-        # TODO is this required?
-        KernelAbstractions.synchronize(backend)
-
         # Calculate iteration time
         iter_time = time() - iter_time_start
-        push!(iter_times, iter_time)
 
         # Formatted output matching Fortran AMICA
         if show_progress
@@ -148,12 +152,11 @@ function amica!(myAmica::AbstractAmica,
     #If parameters contain NaNs, the algorithm skips the A update and terminates by jumping here
     @label escape_from_NaN
 
-    print_timer(to, sortby=:allocations)
-
-    # Log average iteration time
-    if !isempty(iter_times)
-        avg_iter_time = sum(iter_times) / length(iter_times)
-        println("\nAverage iteration time: $(round(avg_iter_time, digits=3)) s (over $(length(iter_times)) iterations)")
+    if show_progress
+        print_timer(to, sortby=:allocations)
+        # Log average iteration time
+        avg_iter_time = (time() - loop_start) / niter
+        println("\nAverage iteration time: $(round(avg_iter_time, digits=3)) s (over $(niter) iterations)")
     end
 
     #If means were removed, they are added back

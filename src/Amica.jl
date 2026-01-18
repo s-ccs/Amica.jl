@@ -8,6 +8,8 @@ using Statistics
 using Parameters
 using KernelAbstractions
 using Atomix
+using PrecompileTools: @setup_workload, @compile_workload
+
 
 const to = TimerOutput()
 const NAN_CHECK_ACTIVE = false
@@ -26,6 +28,10 @@ export amica!
 export fit, fit!
 export AbstractAmica, MultiModelAmica, SingleModelAmica
 
+@compile_workload begin
+    Amica.fit(SingleModelAmica, zeros(Float32, 3_000, 24), m=3, maxiter=1, newt_start_iter=0, show_progress=false)
+    Amica.fit(SingleModelAmica, zeros(Float64, 3_000, 24), m=3, maxiter=1, newt_start_iter=0, show_progress=false)
+end
 
 import Base.show
 
