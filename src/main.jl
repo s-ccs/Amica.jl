@@ -69,24 +69,36 @@ function amica!(myAmica::AbstractAmica,
         niter += 1
         iter_time_start = time()
 
-        @timeit to "update_sources" begin
-            update_sources!(myAmica, data)
-        end
+        # @timeit to "update_sources" begin
+        #     update_sources!(myAmica, data)
+        # end
 
-        @timeit to "calculate_y" begin
-            calculate_y!(myAmica)
-        end
+        # @timeit to "calculate_y" begin
+        #     calculate_y!(myAmica)
+        # end
 
-        @timeit to "update_y_rho" begin
-            calculate_y_rho!(myAmica)
-        end
+        # @timeit to "update_y_rho" begin
+        #     calculate_y_rho!(myAmica)
+        # end
 
-        @timeit to "calculate_u_and_Lt" begin
-            calculate_u_and_Lt!(myAmica)
+        # @timeit to "calculate_u_and_Lt" begin
+        #     calculate_u_and_Lt!(myAmica)
+        # end
+
+        @timeit to "update_parameters" begin
+            update_parameters!(myAmica, data, lrate, update_shape, do_newton && iter >= newt_start_iter)
         end
 
         @timeit to "calculate_DLL" begin
             calculate_DLL!(dLL, myAmica, iter)
+        end
+
+        @timeit to "update_mixing" begin
+            update_mixing!(myAmica, iter, do_newton, newt_start_iter, lrate)
+        end
+
+        @timeit to "reparameterize" begin
+            reparameterize!(myAmica)
         end
 
         if iter > 1
@@ -109,28 +121,6 @@ function amica!(myAmica::AbstractAmica,
             end
         end
 
-        #M-step
-        try
-            #Updates parameters and mixing matrix
-            @timeit to "update_parameters" begin
-                update_parameters!(myAmica, lrate, update_shape, do_newton && iter >= newt_start_iter)
-            end
-            @timeit to "update_mixing" begin
-                update_mixing!(myAmica, iter, do_newton, newt_start_iter, lrate)
-            end
-        catch e
-            #Terminates if NaNs are detected in parameters
-            if isa(e, AmicaNaNException)
-                println("\nNaN detected. Better stop. Current iteration: ", iter)
-                @goto escape_from_NaN
-            else
-                rethrow()
-            end
-        end
-
-        @timeit to "reparameterize" begin
-            reparameterize!(myAmica)
-        end
 
         # TODO remove
         if iter == 1 && maxiter > 1
@@ -149,8 +139,6 @@ function amica!(myAmica::AbstractAmica,
             println(" iter $(lpad(iter, 5)) lrate = $(lpad(string(round(lrate.lrate, digits=10)), 13)) LL = $(lpad(string(round(myAmica.LL[iter], digits=10)), 14))  ($(lpad(string(round(iter_time, digits=2)), 6)) s)")
         end
     end
-    #If parameters contain NaNs, the algorithm skips the A update and terminates by jumping here
-    @label escape_from_NaN
 
     if show_progress
         print_timer(to, sortby=:allocations)
