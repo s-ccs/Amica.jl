@@ -7,7 +7,7 @@ include("util.jl")
 
 @testset "run against memorize set" begin
     data = (read_fdt("input/Memorize.fdt"; ncols=71, T=Float32))'
-    LL = (read_fdt("LL"; ncols=1, T=Float64))'
+    LL = (read_fdt("LL_newton"; ncols=1, T=Float64))'
 
     (N, n) = size(data)
 
