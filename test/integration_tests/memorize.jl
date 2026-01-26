@@ -16,6 +16,8 @@ include("util.jl")
     myAmica = SingleModelAmica(Float32, ncomps=n, nsamples=N, m=3, ArrayType=CuArray)
     Amica.amica!(myAmica, data, maxiter=40, newt_start_iter=0, lrate=lrate)
 
+    @test myAmica.LL ≈ LL
+
     using Plots
     gr()   # Backend aktivieren
 
@@ -23,4 +25,6 @@ include("util.jl")
     plot!(p, 1:40, myAmica.LL[1:40], label="Amica LL", marker=:circle)
     savefig(p, "out.png")
     # @info myAmica.LL
+
+
 end

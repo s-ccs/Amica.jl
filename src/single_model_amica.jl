@@ -22,7 +22,8 @@ mutable struct SingleModelAmica{
     # --- intermediary values
 
     y_rho::Array3                                               # abs(y)^(rho-1)
-    scratch::Array3
+    scratch1::Array3
+    scratch2::Array3
     dA::Array2
 
     # Pre-computed values for Newton method (using scale before update)
@@ -78,23 +79,24 @@ function SingleModelAmica(T::Type{<:Real}=Float64;
     Array3 = ArrayType{T,3}
 
     return SingleModelAmica{T,Array1,Array2,Array3}(
-        zeros(T, N, n) |> Array2,
-        proportions |> Array2,
-        scale |> Array2,
-        location |> Array2,
-        ones(T, n, m) |> Array2,
-        A |> Array2,
-        Matrix{T}(I(size(A, 1))) |> Array2,
-        zero(T),
-        (ones(T, N, n, m) / N) |> Array3,
-        zeros(T, N, n, m) |> Array3,
-        zeros(T, N) |> Array1,
-        T[] |> Array1,
-        zeros(T, N, n, m) |> Array3,
-        zeros(T, N, n, m) |> Array3,
-        zeros(T, n, n) |> Array2,
-        zeros(T, n) |> Array1,
-        zeros(T, n) |> Array1,
-        zeros(T, n) |> Array1,
+        zeros(T, BLOCK_SIZE, n) |> Array2,           # source_signals
+        proportions |> Array2,                       # proportions
+        scale |> Array2,                             # scale
+        location |> Array2,                          # location
+        ones(T, n, m) |> Array2,                     # shape
+        A |> Array2,                                 # A
+        Matrix{T}(I(size(A, 1))) |> Array2,          # S
+        zero(T),                                     # LLdetS
+        (ones(T, BLOCK_SIZE, n, m) / N) |> Array3,   # z
+        zeros(T, BLOCK_SIZE, n, m) |> Array3,        # y
+        zeros(T, N) |> Array1,                       # Lt
+        T[] |> Array1,                               # LL
+        zeros(T, BLOCK_SIZE, n, m) |> Array3,        # y_rho
+        zeros(T, BLOCK_SIZE, n, m) |> Array3,        # scratch1
+        zeros(T, BLOCK_SIZE, n, m) |> Array3,        # scratch2
+        zeros(T, n, n) |> Array2,                    # dA
+        zeros(T, n) |> Array1,                       # newton_kappa
+        zeros(T, n) |> Array1,                       # newton_lambda
+        zeros(T, n) |> Array1,                       # newton_sigma2
     )
 end

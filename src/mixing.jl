@@ -19,9 +19,7 @@ end
 
 "Perform the newton method"
 function do_newton!(myAmica::SingleModelAmica{T}, lrate::LearningRate) where {T<:Real}
-    N, n = size(myAmica.y)
-
-    myAmica.newton_sigma2 .= sum(myAmica.source_signals .^ 2, dims=1)[1, :] ./ N
+    N, n = size(myAmica.z)
 
     # Build the Newton update matrix B
     B = similar(myAmica.dA)

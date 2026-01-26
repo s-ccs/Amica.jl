@@ -58,7 +58,8 @@ BLOCK_SIZE = 10_000
 
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
 @views function update_parameters!(myAmica::SingleModelAmica{T}, data, lrate::LearningRate, upd_shape::Bool, newton_active::Bool) where {T<:Real}
-    N, n, m = size(myAmica.y)
+    N, n = size(data)
+    _, _, m = size(myAmica.z)
     num_blocks = cld(N, BLOCK_SIZE)
 
     # Initialize Lt with base values
@@ -78,95 +79,126 @@ BLOCK_SIZE = 10_000
     dbeta_denom = zero(myAmica.shape)
     dlambda_numer = zero(myAmica.shape)
     drho_numer = zero(myAmica.shape)
+    myAmica.newton_sigma2 .= zero(T)
 
     for block in 1:num_blocks
-        range = (1+((block-1)*BLOCK_SIZE)):(min(N, block * BLOCK_SIZE))
+        lower = (1 + ((block - 1) * BLOCK_SIZE))
+        upper = (min(N, block * BLOCK_SIZE))
+        full_range = lower:upper
+        r = 1:(upper-lower+1)
 
         # update sources
-        myAmica.source_signals[range, :] .= data[range, :] * W'
+        myAmica.source_signals[r, :] .= data[full_range, :] * W'
 
-        # calculate y
+        # calculate y 
         for j in 1:m
-            myAmica.y[range, :, j] .= myAmica.scale[:, j]' .* (myAmica.source_signals[range, :] .- myAmica.location[:, j]')
+            myAmica.y[r, :, j] .= myAmica.scale[:, j]' .* (myAmica.source_signals[r, :] .- myAmica.location[:, j]')
         end
 
         # calculate y_rho
-        myAmica.y_rho[range, :, :] .= exp.((push_dimension(myAmica.shape .- T(1.0))) .* log.(abs.(notzero.(myAmica.y[range, :, :]))))
-
-
-        @timeit to "qconst" QConst = .-log(T(2)) .- (loggamma.(T(1) .+ T(1) ./ myAmica.shape)) .+ log.(myAmica.proportions) .+ log.(myAmica.scale)
-        # Q = qconst * abs(y)^rho 
-        # Q = qconst * abs(y)^(rho - 1) * abs(y)
-        @timeit to "Q" Q = push_dimension(QConst) .- (myAmica.y_rho[range, :, :] .* abs.(myAmica.y[range, :, :]))
+        myAmica.y_rho[r, :, :] .= exp.((push_dimension(myAmica.shape .- T(1.0))) .* log.(abs.(notzero.(myAmica.y[r, :, :]))))
 
         @timeit to "q_and_u" begin
-            # Find max for numerical stability (over mixture components, dim 3)
-            Qmax = maximum(Q, dims=3)
+            # Q = qconst * abs(y)^rho 
+            # Q = qconst * abs(y)^(rho - 1) * abs(y)
+            @timeit to "qconst" QConst = .-log(T(2)) .- (loggamma.(T(1) .+ T(1) ./ myAmica.shape)) .+ log.(myAmica.proportions) .+ log.(myAmica.scale)
+            @timeit to "Q" myAmica.scratch1[r, :, :] .= push_dimension(QConst) .- (myAmica.y_rho[r, :, :] .* abs.(myAmica.y[r, :, :]))
 
-            # Compute logsumexp: Qmax + log(sum(exp(Q - Qmax)))
-            logsumexp_Q = Qmax .+ log.(sum(exp.(Q .- Qmax), dims=3))
+            @timeit to "logexp" begin
+                # Find max for numerical stability (over mixture components, dim 3)
+                maximum!(myAmica.scratch2[r, :, 1:1], myAmica.scratch1[r, :, :])
+                # Compute logsumexp: Qmax + log(sum(exp(Q - Qmax)))
+                myAmica.scratch2[r, :, 1] .= myAmica.scratch2[r, :, 1:1] .+ log.(sum(exp.(myAmica.scratch1[r, :, :] .- myAmica.scratch2[r, :, 1:1]), dims=3))
+            end
 
             # Compute z = exp(Q - logsumexp) + epsilon
-            myAmica.z[range, :, :] .= exp.(Q .- logsumexp_Q) .+ T(1e-15)
-
-            # Normalize z so that sum over mixtures = 1
-            myAmica.z[range, :, :] ./= sum(myAmica.z[range, :, :], dims=3)
+            @timeit to "z" myAmica.z[r, :, :] .= exp.(myAmica.scratch1[r, :, :] .- myAmica.scratch2[r, :, 1]) .+ T(1e-15)
 
             # Accumulate Lt: sum logsumexp over channels (dim 2)
-            myAmica.Lt[range] .+= dropdims(sum(logsumexp_Q, dims=(2, 3)), dims=(2, 3))
+            @timeit to "Lt" begin
+                sum!(myAmica.scratch1[r, 1:1, 1], myAmica.scratch2[r, :, 1])
+                myAmica.Lt[full_range] .+= myAmica.scratch1[r, 1, 1]
+            end
+
+            # scratch1 = sum(z)
+            # Normalize z so that sum over mixtures = 1
+            @timeit to "z_norm" begin
+                sum!(myAmica.scratch1[r, :, 1], myAmica.z[r, :, :])
+                myAmica.z[r, :, :] ./= myAmica.scratch1[r, :, 1]
+            end
         end
 
-        @timeit to "zfp/fp" begin
-            fp = myAmica.y_rho[range, :, :] .* sign.(myAmica.y[range, :, :]) .* push_dimension(myAmica.shape)
-            zfp = myAmica.z[range, :, :] .* fp
+        @timeit to "fp" begin
+            fp = myAmica.scratch1[r, :, :]
+            fp .= myAmica.y_rho[r, :, :] .* sign.(myAmica.y[r, :, :]) .* push_dimension(myAmica.shape)
         end
 
         # g = sum(scale * z * fp, dims=3)
         # accumulate g' * source_signals
         @timeit to "dA" begin
-            g_block = sum(push_dimension(myAmica.scale) .* zfp, dims=3)[:, :, 1]
-            g_times_sources .+= g_block' * myAmica.source_signals[range, :]
+            g_block = sum(push_dimension(myAmica.scale) .* myAmica.z[r, :, :] .* fp, dims=3)[:, :, 1]
+            g_times_sources .+= g_block' * myAmica.source_signals[r, :]
         end
 
         # sum(z)
         @timeit to "sum_z" begin
-            sum_z .+= sum(myAmica.z[range, :, :], dims=1)[1, :, :]
+            sum_z .+= sum(myAmica.z[r, :, :], dims=1)[1, :, :]
         end
 
         # sum(z * fp)
         @timeit to "dmu_numer" begin
-            dmu_numer .+= sum(zfp, dims=1)[1, :, :]
+            dmu_numer .+= sum(fp .* myAmica.z[r, :, :], dims=1)[1, :, :]
         end
 
         # sum(z * fp * fp)
         @timeit to "kp" begin
-            kp .+= sum(zfp .* fp, dims=1)[1, :, :]
+            kp .+= sum(fp .* myAmica.z[r, :, :] .* fp, dims=1)[1, :, :]
         end
 
         # rho <= 2 ? sum(z * fp / y) : sum(z * fp * fp)
         @timeit to "dmu_denom" begin
-            dmu_denom .+= sum(ifelse.(push_dimension(myAmica.shape) .<= T(2), zfp ./ notzero.(myAmica.y[range, :, :]), zfp .* fp), dims=1)[1, :, :] .* myAmica.scale
+            myAmica.scratch2[r, :, :] .= ifelse.(
+                push_dimension(myAmica.shape) .<= T(2),
+                myAmica.z[r, :, :] .* fp ./ notzero.(myAmica.y[r, :, :]),
+                myAmica.z[r, :, :] .* fp .* fp)
+
+            sum!(myAmica.scratch2[1:1, :, :], myAmica.scratch2[r, :, :])
+            dmu_denom .+= myAmica.scratch2[1, :, :] .* myAmica.scale
         end
 
         # rho <= 2.0 ? sum(z * fp * y) : 0
         @timeit to "dbeta_denom" begin
-            dbeta_denom .+= sum(ifelse.(push_dimension(myAmica.shape) .<= T(2), zfp .* myAmica.y[range, :, :], T(0)), dims=1)[1, :, :]
+            myAmica.scratch2[r, :, :] .= ifelse.(push_dimension(myAmica.shape) .<= T(2), fp .* myAmica.z[r, :, :] .* myAmica.y[r, :, :], T(0))
+            sum!(myAmica.scratch2[1:1, :, :], myAmica.scratch2[r, :, :])
+            dbeta_denom .+= myAmica.scratch2[1, :, :]
         end
 
         # sum(z * (fp * y - 1)^2)
         @timeit to "dlambda_numer" begin
-            dlambda_numer .+= sum(myAmica.z[range, :, :] .* (fp .* myAmica.y[range, :, :] .- T(1.0)) .^ 2, dims=1)[1, :, :]
+            myAmica.scratch2[r, :, :] .= myAmica.z[r, :, :] .* (fp .* myAmica.y[r, :, :] .- T(1.0)) .^ 2
+            sum!(myAmica.scratch2[1:1, :, :], myAmica.scratch2[r, :, :])
+            dlambda_numer .+= myAmica.scratch2[1, :, :]
         end
 
         # sum(z * log(y_rho * abs(y)) * y_rho * abs(y))
         @timeit to "drho_numer" begin
-            y_rho_abs_y = myAmica.y_rho[range, :, :] .* abs.(myAmica.y[range, :, :])
-            drho_numer .+= sum(ifelse.(y_rho_abs_y .>= T(1.0e-16), myAmica.z[range, :, :] .* log.(y_rho_abs_y) .* y_rho_abs_y, T(0.0)), dims=1)[1, :, :]
+            myAmica.scratch2[r, :, :] .= myAmica.y_rho[r, :, :] .* abs.(myAmica.y[r, :, :])
+            myAmica.scratch2[r, :, :] .= ifelse.(
+                myAmica.scratch2[r, :, :] .>= T(1.0e-16),
+                myAmica.z[r, :, :] .* log.(myAmica.scratch2[r, :, :]) .* myAmica.scratch2[r, :, :],
+                T(0.0)
+            )
+            sum!(myAmica.scratch2[1:1, :, :], myAmica.scratch2[r, :, :])
+            drho_numer .+= myAmica.scratch2[1, :, :]
+        end
+
+        @timeit to "newton_sigma2" if newton_active
+            myAmica.newton_sigma2 .+= sum(myAmica.source_signals .^ 2, dims=1)[1, :] ./ N
         end
     end
 
     # dA = I - g' * source_signals / N
-    myAmica.dA .= ArrayType(I(n)) - g_times_sources / N
+    @timeit to "myAmica.dA" myAmica.dA .= ArrayType(I(n)) - g_times_sources / N
     @timeit to "myAmica.LL" push!(myAmica.LL, sum(myAmica.Lt) / (N * n))
 
 
