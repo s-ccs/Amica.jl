@@ -19,13 +19,13 @@ end
 
 "Perform the newton method"
 function do_newton!(myAmica::SingleModelAmica{T}, lrate::LearningRate) where {T<:Real}
-    N, n = size(myAmica.z)
+    N, n = myAmica.dims
 
     # Build the Newton update matrix B
     B = similar(myAmica.dA)
     posdef = true
 
-    backend = KernelAbstractions.get_backend(myAmica.source_signals)
+    backend = KernelAbstractions.get_backend(myAmica.A)
     kernel! = calc_b_kernel(backend)
 
     @timeit to "kernel" kernel!(B, posdef, myAmica.newton_kappa, myAmica.newton_lambda, myAmica.newton_sigma2, myAmica.dA, ndrange=(n, n))

@@ -27,11 +27,6 @@ function amica!(myAmica::AbstractAmica,
 
     amica_start = time()
 
-    # Check that data dimensions match the model
-    # if size(data) != size(myAmica.source_signals)
-    #     error("Data dimension mismatch: data has size $(size(data)) but model expects $(size(myAmica.source_signals))")
-    # end
-
     @timeit to "initialize_shape_parameter!" initialize_shape_parameter!(myAmica, lrate)
 
     #Prepares data by removing means and/or sphering

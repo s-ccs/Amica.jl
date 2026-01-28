@@ -16,6 +16,7 @@ const NAN_CHECK_ACTIVE = false
 
 abstract type AbstractAmica end
 
+include("object_pool.jl")
 include("single_model_amica.jl")
 include("types.jl")
 include("helper.jl")

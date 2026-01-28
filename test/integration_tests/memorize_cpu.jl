@@ -13,5 +13,3 @@ lrate = Amica.LearningRate{Float64}(newtrate=Float64(1.0))
 
 myAmica = SingleModelAmica(Float64, ncomps=n, nsamples=N, m=3, ArrayType=Array)
 Amica.amica!(myAmica, data, maxiter=1, newt_start_iter=0, lrate=lrate)
-
-@info Base.summarysize(myAmica) / 1024^3

@@ -4,8 +4,7 @@ mutable struct SingleModelAmica{
     Array2<:DenseArray{T,2},
     Array3<:DenseArray{T,3}
 } <: AbstractAmica
-    source_signals::Array2                                      # unmixed source signals (A^-1 * x)
-
+    dims::NTuple{3,Int}
     proportions::Array2                                         # source density mixture proportions
     scale::Array2                                               # source density inverse scale parameter
     location::Array2                                            # source density location parameter
@@ -14,14 +13,11 @@ mutable struct SingleModelAmica{
     A::Array2                                                   # unmixing matrix
     S::Array2                                                   # sphering matrix
     LLdetS::T                                                   # logabsdet(S)
-    z::Array3
-    y::Array3
     Lt::Array1                                                  # log likelihood of time point for each model ( M x N )
     LL::Array{T,1}                                              # log likelihood over iterations
 
     # --- intermediary values
 
-    y_rho::Array3                                               # abs(y)^(rho-1)
     scratch1::Array3
     scratch2::Array3
     dA::Array2
@@ -30,6 +26,7 @@ mutable struct SingleModelAmica{
     newton_kappa::Array1
     newton_lambda::Array1
     newton_sigma2::Array1
+    pool::ObjectPool{T,Array1}
 end
 
 "Data type for AMICA with just one ICA model."
@@ -79,7 +76,7 @@ function SingleModelAmica(T::Type{<:Real}=Float64;
     Array3 = ArrayType{T,3}
 
     return SingleModelAmica{T,Array1,Array2,Array3}(
-        zeros(T, BLOCK_SIZE, n) |> Array2,           # source_signals
+        (N, n, m),
         proportions |> Array2,                       # proportions
         scale |> Array2,                             # scale
         location |> Array2,                          # location
@@ -87,16 +84,14 @@ function SingleModelAmica(T::Type{<:Real}=Float64;
         A |> Array2,                                 # A
         Matrix{T}(I(size(A, 1))) |> Array2,          # S
         zero(T),                                     # LLdetS
-        (ones(T, BLOCK_SIZE, n, m) / N) |> Array3,   # z
-        zeros(T, BLOCK_SIZE, n, m) |> Array3,        # y
         zeros(T, N) |> Array1,                       # Lt
         T[] |> Array1,                               # LL
-        zeros(T, BLOCK_SIZE, n, m) |> Array3,        # y_rho
         zeros(T, BLOCK_SIZE, n, m) |> Array3,        # scratch1
         zeros(T, BLOCK_SIZE, n, m) |> Array3,        # scratch2
         zeros(T, n, n) |> Array2,                    # dA
         zeros(T, n) |> Array1,                       # newton_kappa
         zeros(T, n) |> Array1,                       # newton_lambda
         zeros(T, n) |> Array1,                       # newton_sigma2
+        ObjectPool{T,Array1}(N * n * m, 6)
     )
 end

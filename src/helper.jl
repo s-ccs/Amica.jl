@@ -20,11 +20,6 @@ end
 #Adds means back to model centers
 add_means_back!(myAmica::SingleModelAmica, removed_mean) = nothing
 
-"pre-calculate abs(y)^(rho - 1)"
-function calculate_y_rho!(myAmica::SingleModelAmica{T}) where T<:Real
-    myAmica.y_rho .= exp.((push_dimension(myAmica.shape .- T(1.0))) .* log.(abs.(notzero.(myAmica.y))))
-end
-
 
 function add_means_back!(myAmica::MultiModelAmica, removed_mean)
     (_, _, m) = size(myAmica.models, 1)
