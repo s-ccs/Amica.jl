@@ -1,5 +1,8 @@
 const Dims{N} = NTuple{N,Integer} where N
 
+# Set to true to detect use-after-release bugs (fills released arrays with NaN)
+const DEBUG_POOL = true
+
 """
     ObjectPool{T,A}
 
@@ -16,17 +19,19 @@ array type (Vector, CuArray, etc.) and can reshape arrays on acquisition.
 - `max_arrays::Int`: Maximum number of arrays that can be obtained simultaneously
 - `arrays::Vector{A}`: The pre-allocated flat arrays
 - `available::Vector{Bool}`: Tracks which arrays are available for use
+- `lock::ReentrantLock`: Lock for thread-safe access
 """
 mutable struct ObjectPool{T,A<:DenseArray{T,1}}
     base_size::Int
     max_arrays::Int
     arrays::Vector{A}
     available::Vector{Bool}
+    lock::ReentrantLock
 
     function ObjectPool{T,A}(base_size::Int, max_arrays::Int) where {T,A<:DenseArray{T,1}}
         arrays = Vector[A(undef, base_size) for _ in 1:max_arrays]
         available = fill(true, max_arrays)
-        new{T,A}(base_size, max_arrays, arrays, available)
+        new{T,A}(base_size, max_arrays, arrays, available, ReentrantLock())
     end
 end
 
@@ -56,20 +61,27 @@ arr = pool_acquire!(pool, (10, 20))  # Returns a 10x20 view (200 elements)
 matrix = pool_acquire!(pool, (50, 20))  # Returns a 50x20 view (1000 elements)
 ```
 """
-@views function pool_acquire!(pool::ObjectPool{T,A}, dims::Dims{N}) where {T,A,N}
+@views function pool_acquire!(who, pool::ObjectPool{T,A}, dims::Dims{N}) where {T,A,N}
     total_size = prod(dims)
     if total_size > pool.base_size
         throw(ArgumentError("Requested size $total_size (dims=$dims) exceeds pool base_size $(pool.base_size)"))
     end
 
-    for i in 1:pool.max_arrays
-        if pool.available[i]
-            pool.available[i] = false
-            flat_view = pool.arrays[i][1:total_size]
-            return reshape(flat_view, dims)
+    lock(pool.lock) do
+        for i in 1:pool.max_arrays
+            if pool.available[i]
+                pool.available[i] = false
+                flat_view = pool.arrays[i][1:total_size]
+                # @info "$(who) locked $(i)"
+                # If this is the last available array, log it
+                # if count(pool.available) == 0
+                #     @info "All arrays have been acquired from the pool by $who"
+                # end
+                return reshape(flat_view, dims)
+            end
         end
+        error("ObjectPool exhausted: all $(pool.max_arrays) arrays are currently in use")
     end
-    error("ObjectPool exhausted: all $(pool.max_arrays) arrays are currently in use")
 end
 
 """
@@ -84,7 +96,7 @@ Release an array back to the pool, making it available for reuse.
 # Throws
 - `ErrorException` if the array does not belong to this pool
 """
-function pool_release!(pool::ObjectPool{T,A}, arr::AbstractArray{T}) where {T,A}
+function pool_release!(who, pool::ObjectPool{T,A}, arr::AbstractArray{T}) where {T,A}
     # Get the parent array (in case arr is a reshaped view)
     parent_arr = parent(arr)
     # If it's a view, get the underlying array
@@ -92,16 +104,26 @@ function pool_release!(pool::ObjectPool{T,A}, arr::AbstractArray{T}) where {T,A}
         parent_arr = parent(parent_arr)
     end
 
-    for i in 1:pool.max_arrays
-        if pool.arrays[i] === parent_arr || pointer(pool.arrays[i]) == pointer(arr)
-            if pool.available[i]
-                @warn "Array at index $i was already released"
+    lock(pool.lock) do
+        for i in 1:pool.max_arrays
+            if pool.arrays[i] === parent_arr || pointer(pool.arrays[i]) == pointer(arr)
+                if pool.available[i]
+                    @warn "Array at index $i was already released"
+                end
+
+                # @info "$(who) unlocked $(i)"
+
+                # Poison the data to detect use-after-release
+                if DEBUG_POOL && T <: AbstractFloat
+                    fill!(arr, T(NaN))
+                end
+
+                pool.available[i] = true
+                return nothing
             end
-            pool.available[i] = true
-            return nothing
         end
+        error("Array does not belong to this ObjectPool")
     end
-    error("Array does not belong to this ObjectPool")
 end
 
 """
@@ -128,6 +150,8 @@ end
 Reset the pool, marking all arrays as available.
 """
 function reset!(pool::ObjectPool)
-    fill!(pool.available, true)
+    lock(pool.lock) do
+        fill!(pool.available, true)
+    end
     return nothing
 end

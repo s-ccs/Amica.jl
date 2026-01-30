@@ -25,13 +25,14 @@ function amica!(myAmica::AbstractAmica,
     update_shape::Bool=true,
     mindll::T=T(1e-8)) where {T<:Real}
 
+
     amica_start = time()
 
     @timeit to "initialize_shape_parameter!" initialize_shape_parameter!(myAmica, lrate)
 
     #Prepares data by removing means and/or sphering
-    @timeit to "removeMean" if remove_mean
-        removed_mean = removeMean!(data)
+    if remove_mean
+        @timeit to "removeMean" removed_mean = removeMean!(data)
     end
 
     @timeit to "sphering" if do_sphering
@@ -44,7 +45,6 @@ function amica!(myAmica::AbstractAmica,
     end
 
     dLL = zeros(1, maxiter)
-    iter_times = Float64[]
 
     # TODO make previous operations run on gpu as well
     # move to gpu
@@ -136,7 +136,7 @@ function amica!(myAmica::AbstractAmica,
     end
 
     if show_progress
-        print_timer(to, sortby=:allocations)
+        print_timer(to)
         # Log average iteration time
         avg_iter_time = (time() - loop_start) / niter
         println("\nAverage iteration time: $(round(avg_iter_time, digits=3)) s (over $(niter) iterations)")
@@ -148,4 +148,5 @@ function amica!(myAmica::AbstractAmica,
     end
     @debug myAmica.LL
     return myAmica
+
 end

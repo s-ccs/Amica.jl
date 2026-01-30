@@ -5,6 +5,7 @@ mutable struct SingleModelAmica{
     Array3<:DenseArray{T,3}
 } <: AbstractAmica
     dims::NTuple{3,Int}
+    block_size::Int
     proportions::Array2                                         # source density mixture proportions
     scale::Array2                                               # source density inverse scale parameter
     location::Array2                                            # source density location parameter
@@ -18,8 +19,6 @@ mutable struct SingleModelAmica{
 
     # --- intermediary values
 
-    scratch1::Array3
-    scratch2::Array3
     dA::Array2
 
     # Pre-computed values for Newton method (using scale before update)
@@ -37,6 +36,7 @@ function SingleModelAmica(T::Type{<:Real}=Float64;
     A=nothing,
     location=nothing,
     scale=nothing,
+    block_size=10_000,
     ArrayType::Type{<:DenseArray}=Array
 )
     N = nsamples
@@ -54,6 +54,7 @@ function SingleModelAmica(T::Type{<:Real}=Float64;
     end
 
     @timeit to "init proportions" proportions = (1 / m) * ones(T, n, m)
+
     @timeit to "init location" if isnothing(location)
         # Initialize location to match Fortran: mu(j,k) = j - 1 - (m-1)/2
         # This creates centered values around 0 (e.g., -1, 0, 1 for m=3)
@@ -64,6 +65,7 @@ function SingleModelAmica(T::Type{<:Real}=Float64;
         # Add small random perturbation: ±0.05
         location .+= T(0.05) .* (T(1.0) .- T(2.0) .* rand(T, n, m))
     end
+
     @timeit to "init scale" if isnothing(scale)
         # Initialize scale to match Fortran: 1.0 + 0.1*(0.5 - random[0,1])
         # This gives values in range [0.95, 1.05]
@@ -75,8 +77,11 @@ function SingleModelAmica(T::Type{<:Real}=Float64;
     Array2 = ArrayType{T,2}
     Array3 = ArrayType{T,3}
 
+    @timeit to "init pool" pool = ObjectPool{T,Array1}(block_size * n * m, 7)
+
     return SingleModelAmica{T,Array1,Array2,Array3}(
         (N, n, m),
+        block_size,
         proportions |> Array2,                       # proportions
         scale |> Array2,                             # scale
         location |> Array2,                          # location
@@ -86,12 +91,10 @@ function SingleModelAmica(T::Type{<:Real}=Float64;
         zero(T),                                     # LLdetS
         zeros(T, N) |> Array1,                       # Lt
         T[] |> Array1,                               # LL
-        zeros(T, BLOCK_SIZE, n, m) |> Array3,        # scratch1
-        zeros(T, BLOCK_SIZE, n, m) |> Array3,        # scratch2
         zeros(T, n, n) |> Array2,                    # dA
         zeros(T, n) |> Array1,                       # newton_kappa
         zeros(T, n) |> Array1,                       # newton_lambda
         zeros(T, n) |> Array1,                       # newton_sigma2
-        ObjectPool{T,Array1}(N * n * m, 6)
+        pool
     )
 end
