@@ -1,3 +1,18 @@
+
+"Temporary storage for block computation results used in update_parameters!"
+mutable struct BlockAccumulators{T,Array2<:DenseArray{T,2},Array3<:DenseArray{T,3}}
+    g_times_sources::Array3      # (n, n, num_threads)
+    sum_z::Array3                # (n, m, num_threads)
+    kp::Array3                   # (n, m, num_threads)
+    dmu_numer::Array3            # (n, m, num_threads)
+    dmu_denom::Array3            # (n, m, num_threads)
+    dbeta_denom::Array3          # (n, m, num_threads)
+    dlambda_numer::Array3        # (n, m, num_threads)
+    drho_numer::Array3           # (n, m, num_threads)
+    newton_sigma2::Array2        # (n, num_threads)
+    Lt_accum::Array2             # (N, num_threads)
+end
+
 mutable struct SingleModelAmica{
     T,
     Array1<:DenseArray{T,1},
@@ -6,6 +21,7 @@ mutable struct SingleModelAmica{
 } <: AbstractAmica
     dims::NTuple{3,Int}
     block_size::Int
+    num_threads::Int
     proportions::Array2                                         # source density mixture proportions
     scale::Array2                                               # source density inverse scale parameter
     location::Array2                                            # source density location parameter
@@ -21,12 +37,17 @@ mutable struct SingleModelAmica{
 
     dA::Array2
 
-    # Pre-computed values for Newton method (using scale before update)
+    # Pre-computed values for Newton method
     newton_kappa::Array1
     newton_lambda::Array1
     newton_sigma2::Array1
-    pool::ObjectPool{T,Array1}
+
+    pools::Vector{ObjectPool{T,Array1}}                         # one pool per thread
+    acc::BlockAccumulators{T,Array2,Array3}
 end
+
+
+
 
 "Data type for AMICA with just one ICA model."
 function SingleModelAmica(T::Type{<:Real}=Float64;
@@ -37,10 +58,16 @@ function SingleModelAmica(T::Type{<:Real}=Float64;
     location=nothing,
     scale=nothing,
     block_size=10_000,
+    num_threads=1,
     ArrayType::Type{<:DenseArray}=Array
 )
     N = nsamples
     n = ncomps
+
+    # Extract array type parameters
+    Array1 = ArrayType{T,1}
+    Array2 = ArrayType{T,2}
+    Array3 = ArrayType{T,3}
 
     #initialize parameters
     @timeit to "init A" if isnothing(A)
@@ -51,9 +78,14 @@ function SingleModelAmica(T::Type{<:Real}=Float64;
             A[i, i] = T(1.0)  # Set diagonal to 1.0
             A[:, i] = A[:, i] / norm(A[:, i])  # Normalize each column
         end
+
+        A = A |> Array2
     end
 
-    @timeit to "init proportions" proportions = (1 / m) * ones(T, n, m)
+    @timeit to "init proportions" begin
+        proportions = Array2(undef, n, m)
+        proportions .= one(T) * (1 / m)
+    end
 
     @timeit to "init location" if isnothing(location)
         # Initialize location to match Fortran: mu(j,k) = j - 1 - (m-1)/2
@@ -72,29 +104,51 @@ function SingleModelAmica(T::Type{<:Real}=Float64;
         scale = ones(T, n, m) .+ T(0.1) .* (T(0.5) .- rand(T, n, m))
     end
 
-    # Extract array type parameters
-    Array1 = ArrayType{T,1}
-    Array2 = ArrayType{T,2}
-    Array3 = ArrayType{T,3}
 
-    @timeit to "init pool" pool = ObjectPool{T,Array1}(block_size * n * m, 7)
+    @timeit to "init pools" pools = [ObjectPool{T,Array1}(block_size * n * m, 7) for _ in 1:num_threads]
 
     return SingleModelAmica{T,Array1,Array2,Array3}(
         (N, n, m),
         block_size,
+        num_threads,
         proportions |> Array2,                       # proportions
         scale |> Array2,                             # scale
         location |> Array2,                          # location
         ones(T, n, m) |> Array2,                     # shape
-        A |> Array2,                                 # A
-        Matrix{T}(I(size(A, 1))) |> Array2,          # S
+        A,                                           # A
+        Array2(undef, n, n),                         # S
         zero(T),                                     # LLdetS
-        zeros(T, N) |> Array1,                       # Lt
-        T[] |> Array1,                               # LL
-        zeros(T, n, n) |> Array2,                    # dA
-        zeros(T, n) |> Array1,                       # newton_kappa
-        zeros(T, n) |> Array1,                       # newton_lambda
-        zeros(T, n) |> Array1,                       # newton_sigma2
-        pool
-    )
+        Array1(undef, N),                            # Lt
+        Array1(undef, 0),                            # LL
+        Array2(undef, n, n),                         # dA
+        Array1(undef, n),                            # newton_kappa
+        Array1(undef, n),                            # newton_lambda
+        Array1(undef, n),                            # newton_sigma2
+        pools,
+        BlockAccumulators{T,Array2,Array3}(
+            Array3(undef, n, n, num_threads),           # g_times_sources
+            Array3(undef, n, m, num_threads),           # sum_z
+            Array3(undef, n, m, num_threads),           # kp
+            Array3(undef, n, m, num_threads),           # dmu_numer
+            Array3(undef, n, m, num_threads),           # dmu_denom
+            Array3(undef, n, m, num_threads),           # dbeta_denom
+            Array3(undef, n, m, num_threads),           # dlambda_numer
+            Array3(undef, n, m, num_threads),           # drho_numer
+            Array2(undef, n, num_threads),              # newton_sigma2
+            Array2(undef, N, num_threads)               # Lt_accum
+        ))
+end
+
+"Reset all accumulators to zero"
+function reset!(acc::BlockAccumulators{T}) where {T<:Real}
+    acc.g_times_sources .= zero(T)
+    acc.sum_z .= zero(T)
+    acc.kp .= zero(T)
+    acc.dmu_numer .= zero(T)
+    acc.dmu_denom .= zero(T)
+    acc.dbeta_denom .= zero(T)
+    acc.dlambda_numer .= zero(T)
+    acc.drho_numer .= zero(T)
+    acc.newton_sigma2 .= zero(T)
+    acc.Lt_accum .= zero(T)
 end
