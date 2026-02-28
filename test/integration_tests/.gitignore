@@ -3,3 +3,4 @@ fortran/*.mod
 amicaout
 datadumps*
 dumps/
+out.png

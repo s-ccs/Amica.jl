@@ -17,7 +17,6 @@ julia_with_newton = integration_dump_dir(:julia, :with_newton)
 
 try
     run_fortran("amicadefs.params", fortran_without_newton)
-    run_fortran("amicadefs_newton.params", fortran_with_newton)
 
     @testset "basic tests" begin
         data = Float64.(read_fdt(integration_test_path("input", "Memorize.fdt"); ncols=71, T=Float32))'
@@ -91,6 +90,8 @@ try
         alpha = read_fdt(joinpath(fortran_without_newton, "alpha_1.bin"); ncols=3, T=Float64)'
         @test myAmica.proportions ≈ alpha
     end
+
+    run_fortran("amicadefs_newton.params", fortran_with_newton)
 
     @testset "compare with newton" begin
         A = read_fdt(joinpath(fortran_with_newton, "A.bin"); ncols=71, T=Float64)

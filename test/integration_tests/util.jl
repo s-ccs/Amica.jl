@@ -44,7 +44,7 @@ function run_fortran(config::String, out_path::String)
 
     base_cmd = `$amica_exe $full_filename`
     cmd = Cmd(base_cmd; dir=script_dir)
-    run(setenv(cmd, "OUT_PATH" => resolved_out_path))
+    run(setenv(cmd, "OUT_PATH" => resolved_out_path, "OMPI_MCA_plm" => "isolated"))
 end
 
 function read_fdt(path::String; ncols::Int, T::Type=Float32)::Array{T,2}
