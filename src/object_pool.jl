@@ -114,31 +114,3 @@ function pool_release!(who, pool::ObjectPool{T,A}, arr::AbstractArray{T}) where 
     end
     error("Array does not belong to this ObjectPool")
 end
-
-"""
-    available_count(pool::ObjectPool) -> Int
-
-Returns the number of arrays currently available in the pool.
-"""
-function available_count(pool::ObjectPool)
-    return count(pool.available)
-end
-
-"""
-    in_use_count(pool::ObjectPool) -> Int
-
-Returns the number of arrays currently in use from the pool.
-"""
-function in_use_count(pool::ObjectPool)
-    return pool.max_arrays - available_count(pool)
-end
-
-"""
-    reset!(pool::ObjectPool)
-
-Reset the pool, marking all arrays as available.
-"""
-function reset!(pool::ObjectPool)
-    fill!(pool.available, true)
-    return nothing
-end

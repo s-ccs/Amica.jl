@@ -17,17 +17,6 @@ function sphering!(x)
     return S
 end
 
-#Adds means back to model centers
-add_means_back!(myAmica::SingleModelAmica, removed_mean) = nothing
-
-
-function add_means_back!(myAmica::MultiModelAmica, removed_mean)
-    (_, _, m) = size(myAmica.models, 1)
-    for h in 1:m
-        myAmica.models[h].centers = myAmica.models[h].centers + removed_mean #add mean back to model centers
-    end
-end
-
 function notzero(val::T) where T<:Real
     epsilon = T(1e-16)
     if val < epsilon && val > -epsilon
@@ -36,6 +25,18 @@ function notzero(val::T) where T<:Real
     else
         val
     end
+end
+
+"Calculate difference in loglikelihood between iterations"
+function calculate_DLL!(dLL, myAmica::SingleModelAmica, iter)
+    if iter > 1
+        dLL[iter] = myAmica.LL[iter] - myAmica.LL[iter-1]
+    end
+end
+
+"add a unit dimension in front to be able to e.g. broadcast a (1000, 12, 3) with a (12, 3) array, transforms a from (12, 3) to (1, 12, 3)"
+function push_dimension(a::AbstractArray)
+    reshape(a, 1, size(a)...)
 end
 
 

@@ -142,11 +142,5 @@ function amica!(myAmica::AbstractAmica,
         println("\nAverage iteration time: $(round(avg_iter_time, digits=3)) s (over $(niter) iterations)")
     end
 
-    #If means were removed, they are added back
-    if remove_mean
-        add_means_back!(myAmica, removed_mean)
-    end
-    @debug myAmica.LL
     return myAmica
-
 end

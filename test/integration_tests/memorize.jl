@@ -14,7 +14,7 @@ include("util.jl")
     # myAmica = fit(Float32, SingleModelAmica, data; maxiter=5, do_sphering=true, remove_mean=true, m=3, Array=CuArray)
     lrate = Amica.LearningRate{Float64}(newtrate=Float64(1.0))
     myAmica = SingleModelAmica(Float64, ncomps=n, nsamples=N, m=3, ArrayType=CuArray)
-    Amica.amica!(myAmica, data, maxiter=500, newt_start_iter=0, lrate=lrate)
+    Amica.amica!(myAmica, data, maxiter=40, newt_start_iter=0, lrate=lrate)
 
 
     using Plots

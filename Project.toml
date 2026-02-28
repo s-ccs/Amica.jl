@@ -4,10 +4,8 @@ version = "0.1.0"
 authors = ["Alexander Lulkin", "Benedikt V. Ehinger"]
 
 [deps]
-Atomix = "a9b6321e-bd34-4604-b9c9-b65b8de01458"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
 PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
@@ -22,7 +20,6 @@ CudaExt = ["CUDA"]
 MetalExt = ["Metal"]
 
 [compat]
-Atomix = "1.1.2"
 KernelAbstractions = "0.9.39"
 PrecompileTools = "1.3.3"
 Statistics = "1.11.1"
