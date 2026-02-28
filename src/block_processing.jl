@@ -53,6 +53,7 @@
             y_rho = pool_acquire!("y_rho", pool, (n_samples, n, m))
 
             # calculate y_rho
+            # y_rho = abs(y) ^ (rho - 1)
             y_rho .= exp.((push_dimension(myAmica.shape .- T(1.0))) .* log.(abs.(notzero.(y))))
         end
 
