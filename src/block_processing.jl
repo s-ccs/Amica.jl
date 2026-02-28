@@ -141,6 +141,9 @@
             g_block .= push_dimension(myAmica.scale) .* z .* fp
             sum!(g_block_sum, g_block)
             g_times_sources_t .+= g_block_sum[:, :, 1]' * source_signals
+            if !isnothing(dump_dir)
+                write_binary(joinpath(dump_dir, "g.bin"), g_block_sum[:, :, 1])
+            end
             pool_release!("g_block", pool, g_block)
             pool_release!("g_block_sum", pool, g_block_sum)
         end

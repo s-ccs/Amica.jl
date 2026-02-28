@@ -38,7 +38,6 @@ try
 
     @testset "compare without newton" begin
         A = read_fdt(joinpath(fortran_without_newton, "A.bin"); ncols=71, T=Float64)
-        A_init = read_fdt(joinpath(fortran_without_newton, "A_init.bin"); ncols=71, T=Float64)
         W = read_fdt(joinpath(fortran_without_newton, "W.bin"); ncols=71, T=Float64)
 
         sbeta = read_fdt(joinpath(fortran_without_newton, "sbeta.bin"); ncols=3, T=Float64)'
@@ -57,6 +56,10 @@ try
         b_fortran = read_fdt(joinpath(fortran_without_newton, "b.bin"); ncols=2 * N, T=Float64)'[:, 1:N]'
         b_julia = read_fdt(joinpath(julia_without_newton, "source_signals.bin"); ncols=N, T=Float64)
         @test b_fortran ≈ b_julia
+
+        g_fortran = read_fdt(joinpath(fortran_without_newton, "g_after_iter1.bin"); ncols=2 * N, T=Float64)'[:, 1:N]'
+        g_julia = read_fdt(joinpath(julia_without_newton, "g.bin"); ncols=N, T=Float64)
+        @test g_fortran ≈ g_julia
 
         y_fortran = read_3d_fdt(joinpath(fortran_without_newton, "y.bin"); ncols=2 * N, nslabs=3, T=Float64)[1:N, :, :]
         y_julia = read_3d_fdt(joinpath(julia_without_newton, "y.bin"); ncols=N, nslabs=3, T=Float64)
@@ -91,8 +94,8 @@ try
 
     @testset "compare with newton" begin
         A = read_fdt(joinpath(fortran_with_newton, "A.bin"); ncols=71, T=Float64)
-        A_init = read_fdt(joinpath(fortran_with_newton, "A_init.bin"); ncols=71, T=Float64)
         W = read_fdt(joinpath(fortran_with_newton, "W.bin"); ncols=71, T=Float64)
+        @test W ≈ inv(A)
 
 
         sbeta = read_fdt(joinpath(fortran_with_newton, "sbeta.bin"); ncols=3, T=Float64)'
@@ -111,6 +114,10 @@ try
         b_fortran = read_fdt(joinpath(fortran_with_newton, "b.bin"); ncols=2 * N, T=Float64)'[:, 1:N]'
         b_julia = read_fdt(joinpath(julia_with_newton, "source_signals.bin"); ncols=N, T=Float64)
         @test b_fortran ≈ b_julia
+
+        g_fortran = read_fdt(joinpath(fortran_with_newton, "g_after_iter1.bin"); ncols=2 * N, T=Float64)'[:, 1:N]'
+        g_julia = read_fdt(joinpath(julia_with_newton, "g.bin"); ncols=N, T=Float64)
+        @test g_fortran ≈ g_julia
 
         y_fortran = read_3d_fdt(joinpath(fortran_with_newton, "y.bin"); ncols=2 * N, nslabs=3, T=Float64)[1:N, :, :]
         y_julia = read_3d_fdt(joinpath(julia_with_newton, "y.bin"); ncols=N, nslabs=3, T=Float64)
@@ -143,6 +150,8 @@ try
 
         lambda = read_fdt(joinpath(fortran_with_newton, "lambda_after_iter1.bin"); ncols=71, T=Float64)
         @test myAmica.newton_lambda ≈ lambda
+        sigma2 = read_fdt(joinpath(fortran_with_newton, "sigma2_after_iter1.bin"); ncols=71, T=Float64)
+        @test myAmica.newton_sigma2 ≈ sigma2[:, 1]
 
         alpha = read_fdt(joinpath(fortran_with_newton, "alpha_1.bin"); ncols=3, T=Float64)'
         @test myAmica.proportions ≈ alpha

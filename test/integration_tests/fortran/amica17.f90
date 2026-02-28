@@ -847,8 +847,6 @@ if (seg_rank == 0) then
                comp_list(i,h) = (h-1) * nw + i
             end do
 
-            call write_matrix("A_init", A(:, :))
-
          end if
       end do
    end if
@@ -1018,8 +1016,6 @@ do
       end if
    end if
 
-
-   call write_scalar("Dsum", Dsum(1))
    
    call MPI_BCAST(Dsum,num_models,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)
 
@@ -1194,8 +1190,6 @@ do
    call write_matrix("rho_1", rho)
    call write_matrix("mu_1", mu)
    call write_matrix("alpha_1", alpha)
-   call write_vector("fp", fp)
-
    call write_matrix("lambda_after_iter1", lambda)
 
    call write_matrix("g_after_iter1", g(:, :))
