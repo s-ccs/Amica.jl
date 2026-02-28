@@ -16,8 +16,11 @@ abstract type AbstractAmica end
 
 include("object_pool.jl")
 include("types.jl")
-include("helper.jl")
-include("parameters.jl")
+include("learning_rate.jl")
+include("numerics.jl")
+include("preprocessing.jl")
+include("block_processing.jl")
+include("parameter_updates.jl")
 include("mixing.jl")
 include("main.jl")
 
