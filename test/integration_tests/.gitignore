@@ -2,3 +2,4 @@ fortran/amica
 fortran/*.mod
 amicaout
 datadumps*
+dumps/

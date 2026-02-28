@@ -5,7 +5,8 @@
     W::AbstractMatrix{T},
     newton_active::Bool,
     tid::Int,
-    num_blocks::Int
+    num_blocks::Int;
+    dump_dir::Union{Nothing,String}=nothing
 ) where {T<:Real}
     N, n, m = myAmica.dims
 
@@ -151,6 +152,10 @@
             pool_release!("scratch2", pool, scratch)
         end
 
+        if !isnothing(dump_dir)
+            write_binary(joinpath(dump_dir, "source_signals.bin"), source_signals)
+        end
+
         pool_release!("source_signals", pool, source_signals)
 
         # sum(z)
@@ -204,6 +209,12 @@
 
             dlambda_numer_t .+= sum(scratch, dims=1)[1, :, :]
             pool_release!("scratch", pool, scratch)
+        end
+
+
+        if !isnothing(dump_dir)
+            write_binary(joinpath(dump_dir, "z.bin"), z)
+            write_binary(joinpath(dump_dir, "y.bin"), y)
         end
 
         pool_release!("z", pool, z)

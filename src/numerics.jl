@@ -65,20 +65,11 @@ function check_nan(myAmica::SingleModelAmica)
     if any(isnan, myAmica.shape)
         @warn "NaN in myAmica.shape"
     end
-    if any(isnan, myAmica.y)
-        @warn "NaN in myAmica.y"
-    end
-    if any(isnan, myAmica.y_rho)
-        @warn "NaN in myAmica.y_rho"
-    end
     if any(isnan, myAmica.dA)
         @warn "NaN in myAmica.dA"
     end
     if any(isnan, myAmica.Lt)
         @warn "NaN in myAmica.Lt"
-    end
-    if any(isnan, myAmica.z)
-        @warn "NaN in myAmica.z"
     end
     if any(isnan, myAmica.proportions)
         @warn "NaN in myAmica.proportions"
@@ -94,14 +85,5 @@ function check_nan(myAmica::SingleModelAmica)
     end
     if any(isnan, myAmica.scale)
         @warn "NaN in myAmica.scale"
-    end
-    if any(isnan, myAmica.shape)
-        @warn "NaN in myAmica.shape"
-    end
-    if any(isnan, myAmica.source_signals)
-        @warn "NaN in myAmica.source_signals"
-    end
-    if any(isnan, myAmica.y)
-        @warn "NaN in myAmica.y"
     end
 end

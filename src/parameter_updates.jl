@@ -15,7 +15,7 @@ function initialize_shape_parameter!(myAmica::SingleModelAmica, lrate::LearningR
 end
 
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
-@views function update_parameters!(myAmica::SingleModelAmica{T}, data, lrate::LearningRate, upd_shape::Bool, newton_active::Bool) where {T<:Real}
+@views function update_parameters!(myAmica::SingleModelAmica{T}, data, lrate::LearningRate, upd_shape::Bool, newton_active::Bool; dump_dir::Union{Nothing,String}=nothing) where {T<:Real}
     N, n, m = myAmica.dims
     num_blocks = cld(N, myAmica.block_size)
 
@@ -32,11 +32,11 @@ end
 
     if myAmica.num_threads == 1
         # Single-threaded path
-        process_blocks!(myAmica, data, W, newton_active, 1, num_blocks)
+        process_blocks!(myAmica, data, W, newton_active, 1, num_blocks; dump_dir)
     else
         # Multi-threaded path: divide blocks among threads
         Threads.@threads for tid in 1:min(myAmica.num_threads, num_blocks)
-            process_blocks!(myAmica, data, W, newton_active, tid, num_blocks)
+            process_blocks!(myAmica, data, W, newton_active, tid, num_blocks; dump_dir)
         end
     end
 

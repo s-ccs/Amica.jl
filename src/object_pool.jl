@@ -74,7 +74,7 @@ matrix = pool_acquire!(pool, (50, 20))  # Returns a 50x20 view (1000 elements)
             return reshape(flat_view, dims)
         end
     end
-    error("ObjectPool exhausted: all $(pool.max_arrays) arrays are currently in use")
+    error("ObjectPool exhausted by $(who): all $(pool.max_arrays) arrays are currently in use")
 end
 
 """
@@ -100,7 +100,7 @@ function pool_release!(who, pool::ObjectPool{T,A}, arr::AbstractArray{T}) where 
     for i in 1:pool.max_arrays
         if pool.arrays[i] === parent_arr || pointer(pool.arrays[i]) == pointer(arr)
             if pool.available[i]
-                @warn "Array at index $i was already released"
+                @warn "Double release by $(who): Array at index $i was already released"
             end
 
             # Poison the data to detect use-after-release

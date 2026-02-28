@@ -2,9 +2,9 @@
 Main AMICA algorithm
 """
 
-function fit(amicaType::Type{AmicaKind}, data::Array{T,2}; m=3, maxiter=500, location=nothing, scale=nothing, A=nothing, ArrayType::Type{<:DenseArray}=Array, kwargs...) where {AmicaKind<:AbstractAmica,T<:Real}
+function fit(amicaType::Type{AmicaKind}, data::Array{T,2}; m=3, maxiter=500, location=nothing, scale=nothing, A=nothing, ArrayType::Type{<:DenseArray}=Array, block_size=10_000, num_threads=1, kwargs...) where {AmicaKind<:AbstractAmica,T<:Real}
     (N, n) = size(data)
-    amica = AmicaKind(T, m=m, ncomps=n, nsamples=N, location=location, scale=scale, A=A, ArrayType=ArrayType)
+    amica = AmicaKind(T, m=m, ncomps=n, nsamples=N, location=location, scale=scale, A=A, ArrayType=ArrayType, block_size=block_size, num_threads=num_threads)
     fit!(amica, data; maxiter=maxiter, kwargs...)
     return amica
 end
@@ -23,7 +23,8 @@ function amica!(myAmica::AbstractAmica,
     newt_start_iter::Int=50,
     iterwin::Int=10,
     update_shape::Bool=true,
-    mindll::T=T(1e-8)) where {T<:Real}
+    mindll::T=T(1e-8),
+    dump_dir::Union{Nothing,String}=nothing) where {T<:Real}
 
 
     amica_start = time()
@@ -81,7 +82,7 @@ function amica!(myAmica::AbstractAmica,
         # end
 
         @timeit to "update_parameters" begin
-            update_parameters!(myAmica, data, lrate, update_shape, do_newton && iter >= newt_start_iter)
+            update_parameters!(myAmica, data, lrate, update_shape, do_newton && iter >= newt_start_iter; dump_dir)
         end
 
         @timeit to "calculate_DLL" begin

@@ -19,6 +19,7 @@ include("types.jl")
 include("learning_rate.jl")
 include("numerics.jl")
 include("preprocessing.jl")
+include("diagnostics.jl")
 include("block_processing.jl")
 include("parameter_updates.jl")
 include("mixing.jl")
@@ -48,7 +49,7 @@ function Base.show(io::Core.IO, m::SingleModelAmica)
         io,
         """
 $(typeof(m)) with:
-    - signal-size: $(size(m.source_signals))
+    - dims (N, n, m): $(m.dims)
     - likelihood: $(like)
 """
     )
