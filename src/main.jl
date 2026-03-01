@@ -65,22 +65,6 @@ function amica!(myAmica::AbstractAmica,
         niter += 1
         iter_time_start = time()
 
-        # @timeit to "update_sources" begin
-        #     update_sources!(myAmica, data)
-        # end
-
-        # @timeit to "calculate_y" begin
-        #     calculate_y!(myAmica)
-        # end
-
-        # @timeit to "update_y_rho" begin
-        #     calculate_y_rho!(myAmica)
-        # end
-
-        # @timeit to "calculate_u_and_Lt" begin
-        #     calculate_u_and_Lt!(myAmica)
-        # end
-
         @timeit to "update_parameters" begin
             update_parameters!(myAmica, data, lrate, update_shape, do_newton && iter >= newt_start_iter; dump_dir)
         end
