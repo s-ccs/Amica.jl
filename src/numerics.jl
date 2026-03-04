@@ -1,4 +1,4 @@
-function notzero(val::T) where T<:Real
+@views function notzero(val::T) where T<:Real
     epsilon = T(1e-16)
     if val < epsilon && val > -epsilon
         # Don't use sign(val) because sign(0) = 0, which gives 0 * epsilon = 0
@@ -9,20 +9,20 @@ function notzero(val::T) where T<:Real
 end
 
 "Calculate difference in loglikelihood between iterations"
-function calculate_DLL!(dLL, myAmica::SingleModelAmica, iter)
+@views function calculate_DLL!(dLL, myAmica::SingleModelAmica, iter)
     if iter > 1
         dLL[iter] = myAmica.LL[iter] - myAmica.LL[iter-1]
     end
 end
 
 "add a unit dimension in front to be able to e.g. broadcast a (1000, 12, 3) with a (12, 3) array, transforms a from (12, 3) to (1, 12, 3)"
-function push_dimension(a::AbstractArray)
+@views function push_dimension(a::AbstractArray)
     reshape(a, 1, size(a)...)
 end
 
 
 # copied from specialfunctions but adapted to use Base.Math._evalpoly instead of the macro which won't run on the gpu
-function gpuDigamma(z::T) where T<:Real
+@views function gpuDigamma(z::T) where T<:Real
     # Based on eq. (12), without looking at the accompanying source
     # code, of: K. S. Kölbig, "Programs for computing the logarithm of
     # the gamma function, and the digamma function, for complex

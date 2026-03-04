@@ -9,8 +9,9 @@
     dump_dir::Union{Nothing,String}=nothing
 ) where {T<:Real}
     N, n, m = myAmica.dims
-
-    lto = TimerOutput()
+    if Amica.timeit_debug_enabled()
+        lto = TimerOutput()
+    end
 
     blocks_per_thread = cld(num_blocks, myAmica.num_threads)
     start_block = (tid - 1) * blocks_per_thread + 1
@@ -38,9 +39,9 @@
 
         source_signals = pool_acquire!("source_signals", pool, (n_samples, n))
         # update sources
-        @timeit lto "source_signals" mul!(source_signals, data[full_range, :], W')
+        @timeit_debug lto "source_signals" mul!(source_signals, data[full_range, :], W')
 
-        @timeit lto "y" begin
+        @timeit_debug lto "y" begin
             y = pool_acquire!("y", pool, (n_samples, n, m))
 
             # calculate y
@@ -49,7 +50,7 @@
             end
         end
 
-        @timeit lto "y_rho" begin
+        @timeit_debug lto "y_rho" begin
             y_rho = pool_acquire!("y_rho", pool, (n_samples, n, m))
 
             # calculate y_rho
@@ -61,28 +62,28 @@
         begin
             # Q = qconst * abs(y)^rho
             # Q = qconst * abs(y)^(rho - 1) * abs(y)
-            @timeit lto "qconst" QConst = .-log(T(2)) .- (loggamma.(T(1) .+ T(1) ./ myAmica.shape)) .+ log.(myAmica.proportions) .+ log.(myAmica.scale)
+            @timeit_debug lto "qconst" QConst = .-log(T(2)) .- (loggamma.(T(1) .+ T(1) ./ myAmica.shape)) .+ log.(myAmica.proportions) .+ log.(myAmica.scale)
 
             Q = pool_acquire!("Q", pool, (n_samples, n, m))
 
-            @timeit lto "Q" Q .= push_dimension(QConst) .- (y_rho .* abs.(y))
+            @timeit_debug lto "Q" Q .= push_dimension(QConst) .- (y_rho .* abs.(y))
 
             # compute logexp(Q)
             begin
                 # Find max for numerical stability (over mixture components, dim 3)
                 Qmax = pool_acquire!("Qmax", pool, (n_samples, n, 1))
-                @timeit lto "Qmax" maximum!(Qmax, Q)
+                @timeit_debug lto "Qmax" maximum!(Qmax, Q)
                 # Compute logsumexp: Qmax + log(sum(exp(Q - Qmax)))
                 expQ = pool_acquire!("expQ", pool, (n_samples, n, m))
 
-                @timeit lto "expQ" expQ .= exp.(Q .- Qmax)
+                @timeit_debug lto "expQ" expQ .= exp.(Q .- Qmax)
 
                 logexp = pool_acquire!("logexp", pool, (n_samples, n, 1))
 
-                @timeit lto "sum" sum!(logexp, expQ)
+                @timeit_debug lto "sum" sum!(logexp, expQ)
                 pool_release!("expQ", pool, expQ)
 
-                @timeit lto "calc" begin
+                @timeit_debug lto "calc" begin
                     logexp .= log.(logexp) .+ Qmax
                 end
                 pool_release!("Qmax", pool, Qmax)
@@ -91,11 +92,11 @@
             # Compute z = exp(Q - logsumexp) + epsilon
             z = pool_acquire!("z", pool, (n_samples, n, m))
 
-            @timeit lto "z" z .= exp.(Q .- logexp) .+ T(1e-15)
+            @timeit_debug lto "z" z .= exp.(Q .- logexp) .+ T(1e-15)
             pool_release!("Q", pool, Q)
 
             # Accumulate Lt: sum logsumexp over channels (dim 2)
-            @timeit lto "Lt" begin
+            @timeit_debug lto "Lt" begin
                 sum_logexp = pool_acquire!("sum_logexp", pool, (n_samples, 1, 1))
 
                 sum!(sum_logexp, logexp)
@@ -106,7 +107,7 @@
             end
 
             # Normalize z so that sum over mixtures = 1
-            @timeit lto "z_norm" begin
+            @timeit_debug lto "z_norm" begin
                 zsum = pool_acquire!("zsum", pool, (n_samples, n, 1))
                 sum!(zsum, z)
                 z ./= zsum
@@ -114,28 +115,28 @@
             end
         end
 
-        @timeit lto "fp" begin
+        @timeit_debug lto "fp" begin
             fp = pool_acquire!("fp", pool, (n_samples, n, m))
             fp .= y_rho .* sign.(y) .* push_dimension(myAmica.shape)
         end
 
         # sum(z * log(y_rho * abs(y)) * y_rho * abs(y))
-        @timeit lto "drho_numer" begin
+        @timeit_debug lto "drho_numer" begin
             scratch = pool_acquire!("scratch", pool, (n_samples, n, m))
-            scratch .= y_rho .* abs.(y)
-            scratch .= ifelse.(
+            @timeit_debug lto "abs" scratch .= y_rho .* abs.(y)
+            @timeit_debug lto "log" scratch .= ifelse.(
                 scratch .>= T(1.0e-16),
                 z .* log.(scratch) .* scratch,
                 T(0.0)
             )
-            drho_numer_t .+= sum(scratch, dims=1)[1, :, :]
+            @timeit_debug lto "sum" drho_numer_t .+= sum(scratch, dims=1)[1, :, :]
             pool_release!("scratch", pool, scratch)
         end
         pool_release!("y_rho", pool, y_rho)
 
         # g = sum(scale * z * fp, dims=3)
         # accumulate g' * source_signals
-        @timeit lto "dA" begin
+        @timeit_debug lto "dA" begin
             g_block = pool_acquire!("g_block", pool, (n_samples, n, m))
             g_block_sum = pool_acquire!("g_block_sum", pool, (n_samples, n, 1))
 
@@ -149,7 +150,7 @@
             pool_release!("g_block_sum", pool, g_block_sum)
         end
 
-        @timeit lto "newton_sigma2" if newton_active
+        @timeit_debug lto "newton_sigma2" if newton_active
             scratch = pool_acquire!("scratch2", pool, (n_samples, n))
             scratch .= source_signals .^ 2
             newton_sigma2_t .+= sum(scratch, dims=1)[1, :] ./ N
@@ -163,12 +164,12 @@
         pool_release!("source_signals", pool, source_signals)
 
         # sum(z)
-        @timeit lto "sum_z" begin
+        @timeit_debug lto "sum_z" begin
             sum_z_t .+= sum(z, dims=1)[1, :, :]
         end
 
         # sum(z * fp)
-        @timeit lto "dmu_numer" begin
+        @timeit_debug lto "dmu_numer" begin
             scratch = pool_acquire!("scratch", pool, (n_samples, n, m))
             scratch .= fp .* z
             dmu_numer_t .+= sum(scratch, dims=1)[1, :, :]
@@ -176,7 +177,7 @@
         end
 
         # sum(z * fp * fp)
-        @timeit lto "kp" begin
+        @timeit_debug lto "kp" begin
             scratch = pool_acquire!("scratch", pool, (n_samples, n, m))
             scratch .= fp .* z .* fp
             kp_t .+= sum(scratch, dims=1)[1, :, :]
@@ -185,7 +186,7 @@
         end
 
         # rho <= 2 ? sum(z * fp / y) : sum(z * fp * fp)
-        @timeit lto "dmu_denom" begin
+        @timeit_debug lto "dmu_denom" begin
             scratch = pool_acquire!("scratch", pool, (n_samples, n, m))
             scratch .= ifelse.(
                 push_dimension(myAmica.shape) .<= T(2),
@@ -198,7 +199,7 @@
         end
 
         # rho <= 2.0 ? sum(z * fp * y) : 0
-        @timeit lto "dbeta_denom" begin
+        @timeit_debug lto "dbeta_denom" begin
             scratch = pool_acquire!("scratch", pool, (n_samples, n, m))
             scratch .= ifelse.(push_dimension(myAmica.shape) .<= T(2), fp .* z .* y, T(0))
             dbeta_denom_t .+= sum(scratch, dims=1)[1, :, :]
@@ -206,7 +207,7 @@
         end
 
         # sum(z * (fp * y - 1)^2)
-        @timeit lto "dlambda_numer" begin
+        @timeit_debug lto "dlambda_numer" begin
             scratch = pool_acquire!("scratch", pool, (n_samples, n, m))
             scratch .= z .* (fp .* y .- T(1.0)) .^ 2
             pool_release!("fp", pool, fp)
@@ -226,5 +227,7 @@
     end
 
 
-    merge!(to, lto, tree_point=["update_parameters"])
+    if Amica.timeit_debug_enabled()
+        merge!(to, lto, tree_point=["update_parameters"])
+    end
 end

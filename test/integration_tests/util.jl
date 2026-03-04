@@ -47,18 +47,27 @@ function run_fortran(config::String, out_path::String)
     run(setenv(cmd, "OUT_PATH" => resolved_out_path, "OMPI_MCA_plm" => "isolated"))
 end
 
-function read_fdt(path::String; ncols::Int, T::Type=Float32)::Array{T,2}
+@views function read_fdt(path::String; ncols::Int, T::Type=Float32, transpose=false, OutType=Float64)::Array{OutType,2}
     file_size = Base.filesize(path)
     nvals = file_size ÷ sizeof(T)
     nrows = nvals ÷ ncols
     data = reinterpret(T, read(path))
-    return reshape(data, ncols, nrows)
+    data = reshape(data, ncols, nrows)
+    if transpose
+        data = data'
+    end
+    return OutType.(data)
 end
 
-function read_3d_fdt(path::String; ncols::Int, nslabs::Int, T::Type=Float32)::Array{T,3}
+function read_3d_fdt(path::String; ncols::Int, nslabs::Int, T::Type=Float32, transpose=false, OutType=Float64)::Array{OutType,3}
     file_size = Base.filesize(path)
     nvals = file_size ÷ sizeof(T)
     nrows = nvals ÷ (ncols * nslabs)
     data = reinterpret(T, read(path))
-    return reshape(data, ncols, nrows, nslabs)
+    data = reshape(data, ncols, nrows, nslabs)
+
+    if transpose
+        data = data'
+    end
+    return OutType.(data)
 end

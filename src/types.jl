@@ -10,12 +10,10 @@ mutable struct BlockAccumulators{T,Array2<:DenseArray{T,2},Array3<:DenseArray{T,
     drho_numer::Array3           # (n, m, num_threads)
     newton_sigma2::Array2        # (n, num_threads)
     Lt_accum::Array2             # (N, num_threads)
-
-
 end
 
 "Reset all accumulators to zero"
-function reset!(acc::BlockAccumulators{T}) where {T<:Real}
+@views function reset!(acc::BlockAccumulators{T}) where {T<:Real}
     acc.g_times_sources .= zero(T)
     acc.sum_z .= zero(T)
     acc.kp .= zero(T)
@@ -62,7 +60,7 @@ mutable struct SingleModelAmica{
 end
 
 "Data type for AMICA with just one ICA model."
-function SingleModelAmica(T::Type{<:Real}=Float64;
+@views function SingleModelAmica(T::Type{<:Real}=Float64;
     nsamples::Int,
     ncomps::Int,
     m=3,
@@ -82,7 +80,7 @@ function SingleModelAmica(T::Type{<:Real}=Float64;
     Array3 = ArrayType{T,3}
 
     #initialize parameters
-    @timeit to "init A" if isnothing(A)
+    @timeit_debug to "init A" if isnothing(A)
         # Initialize A to match Fortran: small random ±0.005, diagonal = 1.0, then normalize
         Wtmp = rand(T, n, n)
         A = T(0.01) .* (T(0.5) .- Wtmp)  # Random values in range [-0.005, 0.005]
@@ -94,12 +92,12 @@ function SingleModelAmica(T::Type{<:Real}=Float64;
         A = A |> Array2
     end
 
-    @timeit to "init proportions" begin
+    @timeit_debug to "init proportions" begin
         proportions = Array2(undef, n, m)
         proportions .= one(T) * (1 / m)
     end
 
-    @timeit to "init location" if isnothing(location)
+    @timeit_debug to "init location" if isnothing(location)
         # Initialize location to match Fortran: mu(j,k) = j - 1 - (m-1)/2
         # This creates centered values around 0 (e.g., -1, 0, 1 for m=3)
         location = zeros(T, n, m)
@@ -110,23 +108,23 @@ function SingleModelAmica(T::Type{<:Real}=Float64;
         location .+= T(0.05) .* (T(1.0) .- T(2.0) .* rand(T, n, m))
     end
 
-    @timeit to "init scale" if isnothing(scale)
+    @timeit_debug to "init scale" if isnothing(scale)
         # Initialize scale to match Fortran: 1.0 + 0.1*(0.5 - random[0,1])
         # This gives values in range [0.95, 1.05]
         scale = ones(T, n, m) .+ T(0.1) .* (T(0.5) .- rand(T, n, m))
     end
 
 
-    @timeit to "init pools" pools = [ObjectPool{T,Array1}(block_size * n * m, 7) for _ in 1:num_threads]
+    @timeit_debug to "init pools" pools = [ObjectPool{T,Array1}(block_size * n * m, 7) for _ in 1:num_threads]
 
     return SingleModelAmica{T,Array1,Array2,Array3}(
         (N, n, m),
         block_size,
         num_threads,
-        proportions |> Array2,                       # proportions
-        scale |> Array2,                             # scale
-        location |> Array2,                          # location
-        ones(T, n, m) |> Array2,                     # shape
+        Adapt.adapt(ArrayType, proportions),                       # proportions
+        Adapt.adapt(ArrayType, scale),                             # scale
+        Adapt.adapt(ArrayType, location),                          # location
+        Adapt.adapt(ArrayType, ones(T, n, m)),                     # shape
         A,                                           # A
         Array2(undef, n, n),                         # S
         zero(T),                                     # LLdetS

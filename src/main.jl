@@ -12,7 +12,7 @@ function fit!(amica::AbstractAmica, data; kwargs...)
     amica!(amica, data; kwargs...)
 end
 
-function amica!(myAmica::AbstractAmica,
+@views function amica!(myAmica::AbstractAmica,
     data::AbstractMatrix{T};
     lrate::LearningRate{T}=LearningRate{T}(),
     remove_mean::Bool=true,
@@ -24,19 +24,23 @@ function amica!(myAmica::AbstractAmica,
     iterwin::Int=10,
     update_shape::Bool=true,
     mindll::T=T(1e-8),
-    dump_dir::Union{Nothing,String}=nothing) where {T<:Real}
+    dump_dir::Union{Nothing,String}=nothing,
+    enable_timing=false) where {T<:Real}
 
+    if enable_timing
+        TimerOutputs.enable_debug_timings(Amica)
+    end
 
     amica_start = time()
 
-    @timeit to "initialize_shape_parameter!" initialize_shape_parameter!(myAmica, lrate)
+    @timeit_debug to "initialize_shape_parameter!" initialize_shape_parameter!(myAmica, lrate)
 
     #Prepares data by removing means and/or sphering
     if remove_mean
-        @timeit to "removeMean" removed_mean = removeMean!(data)
+        @timeit_debug to "removeMean" removed_mean = removeMean!(data)
     end
 
-    @timeit to "sphering" if do_sphering
+    @timeit_debug to "sphering" if do_sphering
         S = sphering!(data)
         myAmica.S = S
         myAmica.LLdetS = logabsdet(S |> Array)[1]
@@ -47,11 +51,12 @@ function amica!(myAmica::AbstractAmica,
 
     dLL = zeros(1, maxiter)
 
-    # TODO make previous operations run on gpu as well
-    # move to gpu
 
-    @timeit to "movetogpu" if typeof(myAmica.A) != typeof(data)
-        data = data |> typeof(myAmica.A)
+    target_backend = KernelAbstractions.get_backend(myAmica.A)
+    data_backend = KernelAbstractions.get_backend(data)
+
+    @timeit_debug to "movetogpu" if data_backend !== target_backend
+        data = Adapt.adapt(typeof(myAmica.A), data)
     end
 
     if show_progress
@@ -65,19 +70,19 @@ function amica!(myAmica::AbstractAmica,
         niter += 1
         iter_time_start = time()
 
-        @timeit to "update_parameters" begin
+        @timeit_debug to "update_parameters" begin
             update_parameters!(myAmica, data, lrate, update_shape, do_newton && iter >= newt_start_iter; dump_dir)
         end
 
-        @timeit to "calculate_DLL" begin
+        @timeit_debug to "calculate_DLL" begin
             calculate_DLL!(dLL, myAmica, iter)
         end
 
-        @timeit to "update_mixing" begin
+        @timeit_debug to "update_mixing" begin
             update_mixing!(myAmica, iter, do_newton, newt_start_iter, lrate)
         end
 
-        @timeit to "reparameterize" begin
+        @timeit_debug to "reparameterize" begin
             reparameterize!(myAmica)
         end
 
@@ -102,11 +107,6 @@ function amica!(myAmica::AbstractAmica,
         end
 
 
-        # TODO remove
-        if iter == 1 && maxiter > 1
-            reset_timer!(to)
-        end
-
         if NAN_CHECK_ACTIVE
             check_nan(myAmica)
         end
@@ -120,8 +120,10 @@ function amica!(myAmica::AbstractAmica,
         end
     end
 
-    if show_progress
+    if enable_timing
         print_timer(to)
+    end
+    if show_progress
         # Log average iteration time
         avg_iter_time = (time() - loop_start) / niter
         println("\nAverage iteration time: $(round(avg_iter_time, digits=3)) s (over $(niter) iterations)")

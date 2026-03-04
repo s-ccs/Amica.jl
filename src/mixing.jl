@@ -1,14 +1,14 @@
 "Updates the mixing matrix"
-function update_mixing!(myAmica::SingleModelAmica{T}, iter::Int, do_newton::Bool, newt_start_iter::Int, lrate::LearningRate) where {T<:Real}
+@views function update_mixing!(myAmica::SingleModelAmica{T}, iter::Int, do_newton::Bool, newt_start_iter::Int, lrate::LearningRate) where {T<:Real}
     if (do_newton && iter >= newt_start_iter)
         if iter == newt_start_iter
             println("Starting Newton ... setting numdecs to 0")
             lrate.numdecs = 0
         end
 
-        @timeit to "do_newton!" do_newton!(myAmica, lrate)
+        @timeit_debug to "do_newton!" do_newton!(myAmica, lrate)
     else
-        @timeit to "update A" begin
+        @timeit_debug to "update A" begin
             # Use natural gradient (Fortran line 2077)
             # Still ramp up learning rate but cap at lrate0
             lrate.lrate = min(lrate.lrate0, lrate.lrate + min(T(1.0) / T(lrate.newt_ramp), lrate.lrate))
@@ -18,7 +18,7 @@ function update_mixing!(myAmica::SingleModelAmica{T}, iter::Int, do_newton::Bool
 end
 
 "Perform the newton method"
-function do_newton!(myAmica::SingleModelAmica{T}, lrate::LearningRate) where {T<:Real}
+@views function do_newton!(myAmica::SingleModelAmica{T}, lrate::LearningRate) where {T<:Real}
     N, n = myAmica.dims
 
     # Build the Newton update matrix B
@@ -28,7 +28,7 @@ function do_newton!(myAmica::SingleModelAmica{T}, lrate::LearningRate) where {T<
     backend = KernelAbstractions.get_backend(myAmica.A)
     kernel! = calc_b_kernel(backend)
 
-    @timeit to "kernel" kernel!(B, posdef, myAmica.newton_kappa, myAmica.newton_lambda, myAmica.newton_sigma2, myAmica.dA, ndrange=(n, n))
+    @timeit_debug to "kernel" kernel!(B, posdef, myAmica.newton_kappa, myAmica.newton_lambda, myAmica.newton_sigma2, myAmica.dA, ndrange=(n, n))
 
     # Apply update if Hessian is positive definite
     if posdef
