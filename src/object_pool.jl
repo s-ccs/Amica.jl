@@ -29,7 +29,7 @@ mutable struct ObjectPool{T,A<:DenseArray{T,1}}
     available::Vector{Bool}
 
     function ObjectPool{T,A}(base_size::Int, max_arrays::Int) where {T,A<:DenseArray{T,1}}
-        arrays = Vector[A(undef, base_size) for _ in 1:max_arrays]
+        arrays = [A(undef, base_size) for _ in 1:max_arrays]
         available = fill(true, max_arrays)
         new{T,A}(base_size, max_arrays, arrays, available)
     end
