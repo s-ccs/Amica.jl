@@ -47,16 +47,38 @@ function run_fortran(config::String, out_path::String)
     run(setenv(cmd, "OUT_PATH" => resolved_out_path, "OMPI_MCA_plm" => "isolated"))
 end
 
-@views function read_fdt(path::String; ncols::Int, T::Type=Float32, transpose=false, OutType=Float64)::Array{OutType,2}
+function read_fdt(path::String; ncols::Int, T::Type=Float32, transpose=false, OutType=Float64)::Array{OutType,2}
     file_size = Base.filesize(path)
+    file_size % sizeof(T) == 0 || error("File size is not divisible by element size")
+
     nvals = file_size ÷ sizeof(T)
+    nvals % ncols == 0 || error("Number of values is not divisible by ncols")
     nrows = nvals ÷ ncols
-    data = reinterpret(T, read(path))
-    data = reshape(data, ncols, nrows)
-    if transpose
-        data = data'
+
+    out = transpose ? Matrix{OutType}(undef, nrows, ncols) : Matrix{OutType}(undef, ncols, nrows)
+
+    open(path, "r") do io
+        if !transpose && OutType === T
+            read!(io, vec(out))
+            return out
+        end
+
+        rowbuf = Vector{T}(undef, ncols)
+        for row in 1:nrows
+            read!(io, rowbuf)
+            if transpose
+                @inbounds @simd for col in 1:ncols
+                    out[row, col] = OutType(rowbuf[col])
+                end
+            else
+                @inbounds @simd for col in 1:ncols
+                    out[col, row] = OutType(rowbuf[col])
+                end
+            end
+        end
     end
-    return OutType.(data)
+
+    return out
 end
 
 function read_3d_fdt(path::String; ncols::Int, nslabs::Int, T::Type=Float32, transpose=false, OutType=Float64)::Array{OutType,3}
