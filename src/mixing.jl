@@ -19,16 +19,19 @@ end
 
 "Perform the newton method"
 @views function do_newton!(myAmica::SingleModelAmica{T}, lrate::LearningRate) where {T<:Real}
-    N, n = myAmica.dims
+    _, n, _ = myAmica.dims
 
     # Build the Newton update matrix B
     B = similar(myAmica.dA)
-    posdef = true
+    posdef_flag = similar(myAmica.newton_kappa, UInt8, 1)
+    fill!(posdef_flag, UInt8(1))
 
     backend = KernelAbstractions.get_backend(myAmica.A)
     kernel! = calc_b_kernel(backend)
 
-    @timeit_debug to "kernel" kernel!(B, posdef, myAmica.newton_kappa, myAmica.newton_lambda, myAmica.newton_sigma2, myAmica.dA, ndrange=(n, n))
+    @timeit_debug to "kernel" kernel!(B, posdef_flag, myAmica.newton_kappa, myAmica.newton_lambda, myAmica.newton_sigma2, myAmica.dA, ndrange=(n, n))
+
+    posdef = Array(posdef_flag)[1] == UInt8(1)
 
     # Apply update if Hessian is positive definite
     if posdef
@@ -46,7 +49,7 @@ end
 
 @kernel inbounds = true unsafe_indices = true function calc_b_kernel(
     B::DenseArray{T,2},
-    posdef::Bool,
+    posdef_flag::DenseArray{UInt8,1},
     @Const(newton_kappa::DenseArray{T,1}),
     @Const(newton_lambda::DenseArray{T,1}),
     @Const(newton_sigma2::DenseArray{T,1}),
@@ -56,16 +59,24 @@ end
 
     if i == k
         # Diagonal elements
-        B[i, k] = dA[i, k] / newton_lambda[i]
+        if isfinite(newton_lambda[i]) && abs(newton_lambda[i]) > eps(T)
+            B[i, k] = dA[i, k] / newton_lambda[i]
+        else
+            B[i, k] = zero(T)
+            posdef_flag[1] = UInt8(0)
+        end
     else
         # Off-diagonal elements
         sk1 = newton_sigma2[i] * newton_kappa[k]
         sk2 = newton_sigma2[k] * newton_kappa[i]
 
-        if sk1 * sk2 > T(1.0)
-            B[i, k] = (sk1 * dA[i, k] - dA[k, i]) / (sk1 * sk2 - T(1.0))
+        denom = sk1 * sk2 - one(T)
+
+        if isfinite(sk1) && isfinite(sk2) && isfinite(denom) && denom > eps(T)
+            B[i, k] = (sk1 * dA[i, k] - dA[k, i]) / denom
         else
-            posdef = false
+            B[i, k] = zero(T)
+            posdef_flag[1] = UInt8(0)
         end
     end
 end

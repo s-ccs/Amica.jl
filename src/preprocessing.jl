@@ -12,7 +12,12 @@ end
 @views function sphering!(x)
     (N, _) = size(x)
     F = svd(x' * x / N)
-    S = F.U * diagm(1 ./ sqrt.(F.S)) * F.U'
+
+    T = eltype(x)
+    mineig = T(1e-15)
+    safe_s = max.(F.S, mineig)
+    S = F.U * Diagonal(inv.(sqrt.(safe_s))) * F.U'
+
     x .= x * S
     return S
 end
