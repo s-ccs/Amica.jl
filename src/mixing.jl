@@ -1,6 +1,6 @@
 "Updates the mixing matrix"
 @views function update_mixing!(myAmica::SingleModelAmica{T}, iter::Int, do_newton::Bool, newt_start_iter::Int, lrate::LearningRate) where {T<:Real}
-    if (do_newton && iter >= newt_start_iter)
+    if (do_newton && !myAmica.no_newton && iter >= newt_start_iter)
         if iter == newt_start_iter
             println("Starting Newton ... setting numdecs to 0")
             lrate.numdecs = 0
@@ -40,6 +40,7 @@ end
     else
         # Fall back to natural gradient if not positive definite (Fortran line 2074-2079)
         println("Hessian not positive definite, using natural gradient")
+        myAmica.no_newton = true
 
         # Still ramp up learning rate but cap at lrate0 instead of maximum
         lrate.lrate = min(lrate.lrate0, lrate.lrate + min(T(1.0) / T(lrate.newt_ramp), lrate.lrate))
@@ -47,7 +48,7 @@ end
     end
 end
 
-@kernel inbounds = true unsafe_indices = true function calc_b_kernel(
+@kernel inbounds = true function calc_b_kernel(
     B::DenseArray{T,2},
     posdef_flag::DenseArray{UInt8,1},
     @Const(newton_kappa::DenseArray{T,1}),

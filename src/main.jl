@@ -34,6 +34,7 @@ end
     amica_start = time()
 
     @timeit_debug to "initialize_shape_parameter!" initialize_shape_parameter!(myAmica, lrate)
+    myAmica.no_newton = false
 
     #Prepares data by removing means and/or sphering
     if remove_mean

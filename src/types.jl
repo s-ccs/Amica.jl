@@ -54,6 +54,7 @@ mutable struct SingleModelAmica{
     newton_kappa::Array1
     newton_lambda::Array1
     newton_sigma2::Array1
+    no_newton::Bool
 
     pools::Vector{ObjectPool{T,Array1}}                         # one pool per thread
     acc::BlockAccumulators{T,Array2,Array3}
@@ -134,6 +135,7 @@ end
         Array1(undef, n),                            # newton_kappa
         Array1(undef, n),                            # newton_lambda
         Array1(undef, n),                            # newton_sigma2
+        false,                                       # no_newton
         pools,
         BlockAccumulators{T,Array2,Array3}(
             Array3(undef, n, n, num_threads),           # g_times_sources
