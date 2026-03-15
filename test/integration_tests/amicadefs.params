@@ -1,10 +1,10 @@
-files input/Memorize.fdt
+files input/small.fdt
 outdir amicaout
-data_dim 71
-field_dim 319500
-pcakeep 71
+data_dim 19
+field_dim 172704
+pcakeep 19
 max_threads 1
-block_size 319500
+block_size 172704
 do_opt_block 0
 blk_min 256
 blk_max 1024

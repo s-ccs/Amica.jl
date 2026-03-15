@@ -12,15 +12,8 @@ include("util.jl")
 
     # myAmica = fit(Float32, SingleModelAmica, data; maxiter=5, do_sphering=true, remove_mean=true, m=3,)
     lrate = Amica.LearningRate{Float64}(newtrate=Float64(1.0))
-    myAmica = SingleModelAmica(Float64, ncomps=n, nsamples=N, m=3, num_threads=64, block_size=2000)
-    Amica.amica!(myAmica, data, maxiter=40, newt_start_iter=0, lrate=lrate)
+    myAmica = SingleModelAmica(Float64, ncomps=n, nsamples=N, m=3, num_threads=1, block_size=2000)
+    Amica.amica!(myAmica, data, maxiter=5, newt_start_iter=0, lrate=lrate, show_timing=true)
 
 
-    using Plots
-    gr()   # Backend aktivieren
-
-    p = plot(1:40, LL[1:40, :], label="Expected LL", marker=:circle)
-    plot!(p, 1:40, myAmica.LL[1:40], label="Amica LL", marker=:circle)
-    savefig(p, "out.png")
-    # @info myAmica.LL
 end

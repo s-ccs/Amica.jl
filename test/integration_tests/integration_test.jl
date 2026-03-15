@@ -19,16 +19,16 @@ try
     run_fortran("amicadefs.params", fortran_without_newton)
 
     @testset "basic tests" begin
-        data = read_fdt(integration_test_path("input", "Memorize.fdt"); ncols=71, T=Float32, transpose=true, OutType=Float64)
-        raw = read_fdt(joinpath(fortran_without_newton, "raw_data_seg_1.bin"); ncols=71, T=Float64, transpose=true)
+        data = read_fdt(integration_test_path("input", "small.fdt"); ncols=19, T=Float32, transpose=true, OutType=Float64)
+        raw = read_fdt(joinpath(fortran_without_newton, "raw_data_seg_1.bin"); ncols=19, T=Float64, transpose=true)
         @test raw ≈ data
 
         Amica.removeMean!(data)
 
-        without_mean = read_fdt(joinpath(fortran_without_newton, "mean_data_seg_1.bin"); ncols=71, T=Float64, transpose=true)
+        without_mean = read_fdt(joinpath(fortran_without_newton, "mean_data_seg_1.bin"); ncols=19, T=Float64, transpose=true)
         @test without_mean ≈ data
 
-        sphered = read_fdt(joinpath(fortran_without_newton, "sphere_data_seg_1.bin"); ncols=71, T=Float64, transpose=true)
+        sphered = read_fdt(joinpath(fortran_without_newton, "sphere_data_seg_1.bin"); ncols=19, T=Float64, transpose=true)
 
         Amica.sphering!(data)
         @test sphered ≈ data
@@ -36,14 +36,14 @@ try
 
 
     @testset "compare without newton" begin
-        A = read_fdt(joinpath(fortran_without_newton, "A.bin"); ncols=71, T=Float64)
-        W = read_fdt(joinpath(fortran_without_newton, "W.bin"); ncols=71, T=Float64)
+        A = read_fdt(joinpath(fortran_without_newton, "A.bin"); ncols=19, T=Float64)
+        W = read_fdt(joinpath(fortran_without_newton, "W.bin"); ncols=19, T=Float64)
 
         sbeta = read_fdt(joinpath(fortran_without_newton, "sbeta.bin"); ncols=3, T=Float64, transpose=true)
         rho = read_fdt(joinpath(fortran_without_newton, "rho.bin"); ncols=3, T=Float64, transpose=true)
         mu = read_fdt(joinpath(fortran_without_newton, "mu.bin"); ncols=3, T=Float64, transpose=true)
 
-        data = read_fdt(integration_test_path("input", "Memorize.fdt"); ncols=71, T=Float32, transpose=true, OutType=Float64)
+        data = read_fdt(integration_test_path("input", "small.fdt"); ncols=19, T=Float32, transpose=true, OutType=Float64)
 
         (N, n) = size(data)
 
@@ -83,7 +83,7 @@ try
         rho_1 = read_fdt(joinpath(fortran_without_newton, "rho_1.bin"); ncols=3, T=Float64, transpose=true)
         @test myAmica.shape ≈ rho_1
 
-        A_1 = read_fdt(joinpath(fortran_without_newton, "a_after_iter1.bin"); ncols=71, T=Float64)
+        A_1 = read_fdt(joinpath(fortran_without_newton, "a_after_iter1.bin"); ncols=19, T=Float64)
         @test myAmica.A ≈ A_1
 
 
@@ -94,8 +94,8 @@ try
     run_fortran("amicadefs_newton.params", fortran_with_newton)
 
     @testset "compare with newton" begin
-        A = read_fdt(joinpath(fortran_with_newton, "A.bin"); ncols=71, T=Float64)
-        W = read_fdt(joinpath(fortran_with_newton, "W.bin"); ncols=71, T=Float64)
+        A = read_fdt(joinpath(fortran_with_newton, "A.bin"); ncols=19, T=Float64)
+        W = read_fdt(joinpath(fortran_with_newton, "W.bin"); ncols=19, T=Float64)
         @test W ≈ inv(A)
 
 
@@ -103,7 +103,7 @@ try
         rho = read_fdt(joinpath(fortran_with_newton, "rho.bin"); ncols=3, T=Float64, transpose=true)
         mu = read_fdt(joinpath(fortran_with_newton, "mu.bin"); ncols=3, T=Float64, transpose=true)
 
-        data = read_fdt(integration_test_path("input", "Memorize.fdt"); ncols=71, T=Float32, transpose=true, OutType=Float64)
+        data = read_fdt(integration_test_path("input", "small.fdt"); ncols=19, T=Float32, transpose=true, OutType=Float64)
 
         (N, n) = size(data)
 
@@ -143,15 +143,15 @@ try
         rho_1 = read_fdt(joinpath(fortran_with_newton, "rho_1.bin"); ncols=3, T=Float64, transpose=true)
         @test myAmica.shape ≈ rho_1
 
-        A_1 = read_fdt(joinpath(fortran_with_newton, "a_after_iter1.bin"); ncols=71, T=Float64)
+        A_1 = read_fdt(joinpath(fortran_with_newton, "a_after_iter1.bin"); ncols=19, T=Float64)
         @test myAmica.A ≈ A_1
 
-        kappa = read_fdt(joinpath(fortran_with_newton, "kappa_after_iter1.bin"); ncols=71, T=Float64)
+        kappa = read_fdt(joinpath(fortran_with_newton, "kappa_after_iter1.bin"); ncols=19, T=Float64)
         @test myAmica.newton_kappa ≈ kappa
 
-        lambda = read_fdt(joinpath(fortran_with_newton, "lambda_after_iter1.bin"); ncols=71, T=Float64)
+        lambda = read_fdt(joinpath(fortran_with_newton, "lambda_after_iter1.bin"); ncols=19, T=Float64)
         @test myAmica.newton_lambda ≈ lambda
-        sigma2 = read_fdt(joinpath(fortran_with_newton, "sigma2_after_iter1.bin"); ncols=71, T=Float64)
+        sigma2 = read_fdt(joinpath(fortran_with_newton, "sigma2_after_iter1.bin"); ncols=19, T=Float64)
         @test myAmica.newton_sigma2 ≈ sigma2[:, 1]
 
         alpha = read_fdt(joinpath(fortran_with_newton, "alpha_1.bin"); ncols=3, T=Float64, transpose=true)

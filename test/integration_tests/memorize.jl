@@ -17,11 +17,4 @@ include("util.jl")
     Amica.amica!(myAmica, data, maxiter=40, newt_start_iter=0, lrate=lrate)
 
 
-    using Plots
-    gr()   # Backend aktivieren
-
-    p = plot(1:40, LL[1:40, :], label="Expected LL", marker=:circle)
-    plot!(p, 1:40, myAmica.LL[1:40], label="Amica LL", marker=:circle)
-    savefig(p, "out.png")
-    # @info myAmica.LL
 end
