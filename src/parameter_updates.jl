@@ -30,7 +30,7 @@ end
     # Reset accumulator for this iteration
     reset!(myAmica.acc)
 
-    if myAmica.num_threads == 1
+    @timeit_debug to "process_blocks" if myAmica.num_threads == 1
         # Single-threaded path
         process_blocks!(myAmica, data, W, newton_active, 1, num_blocks; dump_dir)
     else

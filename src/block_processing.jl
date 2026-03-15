@@ -228,6 +228,6 @@
 
 
     if Amica.timeit_debug_enabled()
-        merge!(to, lto, tree_point=["update_parameters"])
+        merge!(to, lto, tree_point=["update_parameters", "process_blocks"])
     end
 end
