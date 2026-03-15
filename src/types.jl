@@ -122,10 +122,10 @@ end
         (N, n, m),
         block_size,
         num_threads,
-        Adapt.adapt(ArrayType, proportions),                       # proportions
-        Adapt.adapt(ArrayType, scale),                             # scale
-        Adapt.adapt(ArrayType, location),                          # location
-        Adapt.adapt(ArrayType, ones(T, n, m)),                     # shape
+        Array2(proportions),                       # proportions
+        Array2(scale),                             # scale
+        Array2(location),                          # location
+        Array2(ones(T, n, m)),                     # shape
         A,                                           # A
         Array2(undef, n, n),                         # S
         zero(T),                                     # LLdetS

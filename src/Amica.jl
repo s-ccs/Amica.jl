@@ -7,7 +7,6 @@ using TimerOutputs
 using Statistics
 using KernelAbstractions
 using PrecompileTools: @setup_workload, @compile_workload
-using Adapt
 
 const to = TimerOutput()
 const NAN_CHECK_ACTIVE = false

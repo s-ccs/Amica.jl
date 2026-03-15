@@ -2,6 +2,8 @@
 Main AMICA algorithm
 """
 
+# TimerOutputs.enable_debug_timings(Amica)
+
 function fit(amicaType::Type{AmicaKind}, data::Array{T,2}; m=3, maxiter=500, location=nothing, scale=nothing, A=nothing, ArrayType::Type{<:DenseArray}=Array, block_size=10_000, num_threads=1, kwargs...) where {AmicaKind<:AbstractAmica,T<:Real}
     (N, n) = size(data)
     amica = AmicaKind(T, m=m, ncomps=n, nsamples=N, location=location, scale=scale, A=A, ArrayType=ArrayType, block_size=block_size, num_threads=num_threads)
@@ -10,6 +12,19 @@ function fit(amicaType::Type{AmicaKind}, data::Array{T,2}; m=3, maxiter=500, loc
 end
 function fit!(amica::AbstractAmica, data; kwargs...)
     amica!(amica, data; kwargs...)
+end
+
+function materialize_data_like(target::AbstractMatrix{T}, data::AbstractMatrix{T}) where {T<:Real}
+    if data isa typeof(target)
+        return copy(data)
+    end
+
+    host_data = Matrix{T}(undef, size(data)...)
+    copyto!(host_data, data)
+
+    out = similar(target, size(data))
+    copyto!(out, host_data)
+    return out
 end
 
 @views function amica!(myAmica::AbstractAmica,
@@ -25,11 +40,7 @@ end
     update_shape::Bool=true,
     mindll::T=T(1e-8),
     dump_dir::Union{Nothing,String}=nothing,
-    enable_timing=false) where {T<:Real}
-
-    if enable_timing
-        TimerOutputs.enable_debug_timings(Amica)
-    end
+    show_timing=false) where {T<:Real}
 
     amica_start = time()
 
@@ -52,13 +63,7 @@ end
 
     dLL = zeros(1, maxiter)
 
-
-    target_backend = KernelAbstractions.get_backend(myAmica.A)
-    data_backend = KernelAbstractions.get_backend(data)
-
-    @timeit_debug to "movetogpu" if data_backend !== target_backend
-        data = Adapt.adapt(typeof(myAmica.A), data)
-    end
+    @timeit_debug to "materialize_data" data = materialize_data_like(myAmica.A, data)
 
     if show_progress
         preparation_time = time() - amica_start
@@ -121,7 +126,7 @@ end
         end
     end
 
-    if enable_timing
+    if show_timing
         print_timer(to)
     end
     if show_progress
