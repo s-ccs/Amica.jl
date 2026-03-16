@@ -14,6 +14,7 @@ fortran_without_newton = integration_dump_dir(:fortran, :without_newton)
 fortran_with_newton = integration_dump_dir(:fortran, :with_newton)
 julia_without_newton = integration_dump_dir(:julia, :without_newton)
 julia_with_newton = integration_dump_dir(:julia, :with_newton)
+fortran_output_dir = integration_test_path("amicaout")
 
 try
     run_fortran("amicadefs.params", fortran_without_newton)
@@ -44,13 +45,14 @@ try
         mu = read_fdt(joinpath(fortran_without_newton, "mu.bin"); ncols=3, T=Float64, transpose=true)
 
         data = read_fdt(integration_test_path("input", "small.fdt"); ncols=19, T=Float32, transpose=true, OutType=Float64)
+        data_before = copy(data)
 
         (N, n) = size(data)
 
         myAmica = SingleModelAmica(Float64, ncomps=n, nsamples=N, m=3, A=A, scale=sbeta, location=mu, block_size=N)
 
         lrate = Amica.LearningRate{Float64}()
-        Amica.amica!(myAmica, data, maxiter=1, lrate=lrate, newt_start_iter=50; dump_dir=julia_without_newton)
+        Amica.amica!(myAmica, data, maxiter=1, lrate=lrate, newt_start_iter=50, data_inplace=false; dump_dir=julia_without_newton)
 
         b_fortran = read_fdt(joinpath(fortran_without_newton, "b.bin"); ncols=2 * N, T=Float64, transpose=true)[:, 1:N]'
         b_julia = read_fdt(joinpath(julia_without_newton, "source_signals.bin"); ncols=N, T=Float64)
@@ -89,6 +91,7 @@ try
 
         alpha = read_fdt(joinpath(fortran_without_newton, "alpha_1.bin"); ncols=3, T=Float64, transpose=true)
         @test myAmica.proportions ≈ alpha
+        @test isapprox(data, data_before; atol=1e-4, rtol=0)
     end
 
     run_fortran("amicadefs_newton.params", fortran_with_newton)
@@ -104,13 +107,14 @@ try
         mu = read_fdt(joinpath(fortran_with_newton, "mu.bin"); ncols=3, T=Float64, transpose=true)
 
         data = read_fdt(integration_test_path("input", "small.fdt"); ncols=19, T=Float32, transpose=true, OutType=Float64)
+        data_before = copy(data)
 
         (N, n) = size(data)
 
         myAmica = SingleModelAmica(Float64, ncomps=n, nsamples=N, m=3, A=A, scale=sbeta, location=mu, block_size=N)
 
         lrate = Amica.LearningRate{Float64}()
-        Amica.amica!(myAmica, data, maxiter=1, lrate=lrate, newt_start_iter=0; dump_dir=julia_with_newton)
+        Amica.amica!(myAmica, data, maxiter=1, lrate=lrate, newt_start_iter=0, data_inplace=false; dump_dir=julia_with_newton)
 
         b_fortran = read_fdt(joinpath(fortran_with_newton, "b.bin"); ncols=2 * N, T=Float64, transpose=true)[:, 1:N]'
         b_julia = read_fdt(joinpath(julia_with_newton, "source_signals.bin"); ncols=N, T=Float64)
@@ -156,6 +160,67 @@ try
 
         alpha = read_fdt(joinpath(fortran_with_newton, "alpha_1.bin"); ncols=3, T=Float64, transpose=true)
         @test myAmica.proportions ≈ alpha
+        @test isapprox(data, data_before; atol=1e-4, rtol=0)
+    end
+
+    @testset "full run" begin
+        fortran_full_run = integration_test_path("dumps", "fortran", "full_run")
+
+        run_fortran("amicadefs_fullrun.params", fortran_full_run)
+
+        data = read_fdt(integration_test_path("input", "small.fdt"); ncols=19, T=Float32, transpose=true, OutType=Float64)
+        data_before = copy(data)
+        (N, n) = size(data)
+
+        A_init = read_fdt(joinpath(fortran_full_run, "A.bin"); ncols=n, T=Float64)
+        sbeta_init = read_fdt(joinpath(fortran_full_run, "sbeta.bin"); ncols=3, T=Float64, transpose=true)
+        mu_init = read_fdt(joinpath(fortran_full_run, "mu.bin"); ncols=3, T=Float64, transpose=true)
+
+        myAmica = SingleModelAmica(
+            Float64,
+            ncomps=n,
+            nsamples=N,
+            m=3,
+            A=A_init,
+            scale=sbeta_init,
+            location=mu_init,
+            block_size=N,
+            num_threads=1,
+        )
+
+        lrate = Amica.LearningRate{Float64}(
+            0.1,
+            0.05;
+            shapelratefact=0.5,
+            min=1.0e-8,
+            newtrate=1.0,
+            newt_ramp=10,
+            minrho=1.0,
+            maxrho=2.0,
+        )
+
+        Amica.amica!(
+            myAmica,
+            data;
+            maxiter=40,
+            lrate=lrate,
+            remove_mean=true,
+            do_sphering=true,
+            show_progress=false,
+            do_newton=true,
+            newt_start_iter=50,
+            iterwin=1,
+            data_inplace=false,
+            mindll=1.0e-9,
+        )
+
+        fortran_LL = vec(read_fdt(joinpath(fortran_output_dir, "LL"); ncols=1, T=Float64))
+
+        fortran_A = read_fdt(joinpath(fortran_output_dir, "A"); ncols=n, T=Float64)
+        @test myAmica.A ≈ fortran_A
+        @test isapprox(myAmica.A, fortran_A; atol=1e-4, rtol=0)
+        @test isapprox(myAmica.LL, fortran_LL; atol=1e-4, rtol=0)
+        @test isapprox(data, data_before; atol=1e-4, rtol=0)
     end
 finally
     cleanup_integration_dumps!()
