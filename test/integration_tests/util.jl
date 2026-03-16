@@ -6,6 +6,10 @@ function integration_test_path(parts...)
     return joinpath(integration_test_dir(), parts...)
 end
 
+function integration_input_path(parts...)
+    return integration_test_path("input", parts...)
+end
+
 function integration_dump_dir(tool::Symbol, mode::Symbol)
     mode_name = mode === :without_newton ? "without_newton" : mode === :with_newton ? "with_newton" : error("Unsupported mode: $mode")
     tool_name = tool === :fortran ? "fortran" : tool === :julia ? "julia" : error("Unsupported tool: $tool")
@@ -38,7 +42,7 @@ end
 function run_fortran(config::String, out_path::String)
     script_dir = integration_test_dir()
     amica_exe = integration_test_path("fortran", "amica")
-    full_filename = integration_test_path(config)
+    full_filename = integration_input_path(config)
     resolved_out_path = isabspath(out_path) ? out_path : integration_test_path(out_path)
     mkpath(resolved_out_path)
 
