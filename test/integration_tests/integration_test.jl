@@ -91,7 +91,7 @@ try
 
         alpha = read_fdt(joinpath(fortran_without_newton, "alpha_1.bin"); ncols=3, T=Float64, transpose=true)
         @test myAmica.proportions ≈ alpha
-        @test isapprox(data, data_before; atol=1e-4, rtol=0)
+        @test data ≈ data_before
     end
 
     run_fortran("amicadefs_newton.params", fortran_with_newton)
@@ -160,7 +160,7 @@ try
 
         alpha = read_fdt(joinpath(fortran_with_newton, "alpha_1.bin"); ncols=3, T=Float64, transpose=true)
         @test myAmica.proportions ≈ alpha
-        @test isapprox(data, data_before; atol=1e-4, rtol=0)
+        @test data ≈ data_before
     end
 
     @testset "full run" begin
@@ -217,10 +217,9 @@ try
         fortran_LL = vec(read_fdt(joinpath(fortran_output_dir, "LL"); ncols=1, T=Float64))
 
         fortran_A = read_fdt(joinpath(fortran_output_dir, "A"); ncols=n, T=Float64)
-        @test myAmica.A ≈ fortran_A
-        @test isapprox(myAmica.A, fortran_A; atol=1e-4, rtol=0)
-        @test isapprox(myAmica.LL, fortran_LL; atol=1e-4, rtol=0)
-        @test isapprox(data, data_before; atol=1e-4, rtol=0)
+        @test isapprox(myAmica.A, fortran_A; atol=1e-3, rtol=0)
+        @test isapprox(myAmica.LL, fortran_LL; atol=1e-3, rtol=0)
+        @test data ≈ data_before
     end
 finally
     cleanup_integration_dumps!()

@@ -38,22 +38,24 @@ end
     newt_start_iter::Int=50,
     iterwin::Int=10,
     update_shape::Bool=true,
+    data_inplace::Bool=true,
     mindll::T=T(1e-8),
     dump_dir::Union{Nothing,String}=nothing,
     show_timing=false) where {T<:Real}
 
     amica_start = time()
+    working_data = data_inplace ? data : copy(data)
 
     @timeit_debug to "initialize_shape_parameter!" initialize_shape_parameter!(myAmica, lrate)
     myAmica.no_newton = false
 
     #Prepares data by removing means and/or sphering
     if remove_mean
-        @timeit_debug to "removeMean" removed_mean = removeMean!(data)
+        @timeit_debug to "removeMean" removed_mean = removeMean!(working_data)
     end
 
     @timeit_debug to "sphering" if do_sphering
-        S = sphering!(data)
+        S = sphering!(working_data)
         myAmica.S = S
         myAmica.LLdetS = logabsdet(S |> Array)[1]
     else
@@ -63,7 +65,7 @@ end
 
     dLL = zeros(1, maxiter)
 
-    @timeit_debug to "materialize_data" data = materialize_data_like(myAmica.A, data)
+    @timeit_debug to "materialize_data" data = materialize_data_like(myAmica.A, working_data)
 
     if show_progress
         preparation_time = time() - amica_start
