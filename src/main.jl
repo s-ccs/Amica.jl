@@ -38,7 +38,7 @@ end
     newt_start_iter::Int=50,
     iterwin::Int=10,
     update_shape::Bool=true,
-    data_inplace::Bool=true,
+    data_inplace::Bool=false,
     mindll::T=T(1e-8),
     dump_dir::Union{Nothing,String}=nothing,
     show_timing=false) where {T<:Real}
@@ -138,4 +138,10 @@ end
     end
 
     return myAmica
+end
+
+
+@views function recover_sources(data, myAmica::SingleModelAmica)
+    W = inv(myAmica.A)
+    return data * myAmica.S * W'
 end
