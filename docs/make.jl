@@ -22,4 +22,5 @@ makedocs(;
 deploydocs(;
     repo="github.com/s-ccs/Amica.jl",
     devbranch="main",
+    push_preview = true,
 )
