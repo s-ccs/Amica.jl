@@ -58,4 +58,4 @@ jobs:
       - name: Run integration test
 
         run: |
-          julia --project=. test/integration_tests/integration_test.jl
+          julia --project=. test/integration_test.jl
