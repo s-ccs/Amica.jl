@@ -35,6 +35,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+      - name: Install Fortran/MPI/BLAS toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gfortran make openmpi-bin libopenmpi-dev libopenblas-dev
+          
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ inputs.version }}
