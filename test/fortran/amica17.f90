@@ -327,7 +327,7 @@ if (myrank == 0) then
 end if
 
 do seg = 1,numsegs
-   fnum = dataseg(seg)%filenum         
+   fnum = dataseg(seg)%filenum
    fieldsize = dataseg(seg)%lastdim
 
    num_blocks = fieldsize /  blk_size(seg)
@@ -419,7 +419,7 @@ allocate(eigv(nx))
 
 if (load_sphere) then
 
-   if (seg_rank == 0) then         
+   if (seg_rank == 0) then
       print *, myrank+1, ': reading S from: ', trim(adjustl(indirparam))//'/'//'S'; call flush(6)
       open(unit=15,file=trim(adjustl(indirparam))//'/'//'S',access='direct',recl=2*nbyte*nx*nx)
       read(15,rec=1) S
@@ -497,7 +497,7 @@ else
             if (do_approx_sphere) then
                call DGEMM('T','N',nx,nx,nx,dble(1.0),Stmp,nx,Stmp2,nx,dble(1.0),S,nx)
             else
-               call DCOPY(nx*nx,Stmp2,1,S,1)       
+               call DCOPY(nx*nx,Stmp2,1,S,1)
             endif
          else
             if (do_approx_sphere) then
@@ -509,7 +509,7 @@ else
                call DSCAL(nx*nx,dble(0.0),S,1)
                call DGEMM('N','N',numeigs,nx,numeigs,dble(1.0),Stmp3,numeigs,Stmp2,nx,dble(1.0),S,nx)
             else
-               call DCOPY(nx*nx,Stmp2,1,S,1)       
+               call DCOPY(nx*nx,Stmp2,1,S,1)
             end if
          end if
       end if
@@ -588,7 +588,7 @@ if (seg_rank == 0 .and. print_debug) then
 end if
 
 call flush(6)
-call MPI_BARRIER(seg_comm,ierr)   
+call MPI_BARRIER(seg_comm,ierr)
 
 call write_data('sphere_')
 
@@ -600,7 +600,7 @@ if (num_comps .eq. -1) then
    num_comps = nw * num_models
 end if
 
-print *, myrank + 1, ': Allocating variables ...'; call flush(6) 
+print *, myrank + 1, ': Allocating variables ...'; call flush(6)
 
 allocate( Dtemp (num_models),stat=ierr); call tststat(ierr); Dtemp = dble(0.0)
 allocate( Dsum (num_models),stat=ierr); call tststat(ierr); Dsum = dble(0.0)
@@ -825,7 +825,7 @@ if (seg_rank == 0) then
       do h = 1,num_models
          do i = 1,nw
             comp_list(i,h) = (h-1) * nw + i
-         end do            
+         end do
       end do
    else
       !print *, myrank+1, ': Ainit is identity'; call flush(6)
@@ -1016,7 +1016,7 @@ do
       end if
    end if
 
-   
+
    call MPI_BCAST(Dsum,num_models,MPI_DOUBLE_PRECISION,0,seg_comm,ierr)
 
    !----- get updates: gm, alpha, mu, sbeta, rho, W
@@ -1221,7 +1221,7 @@ contains
 !----------------------------------------------------------------------
 
 subroutine write_data(prefix)
- 
+
    character(len=*), intent(in) :: prefix
    integer :: seg, u, ldim
    character(len=256) :: fname
@@ -1466,7 +1466,7 @@ subroutine get_updates_and_likelihood
                     tmpvec(bstrt:bstp) = log(abs(y(bstrt:bstp,i,j,h)))
                     ! call vrda_exp(tblksize,rho(j,comp_list(i,h))*tmpvec(bstrt:bstp),tmpvec2(bstrt:bstp))
                     tmpvec2(bstrt:bstp) = exp(rho(j,comp_list(i,h))*tmpvec(bstrt:bstp))
-                    
+
 #endif
                     !call vrda_exp(tblksize,-tmpvec2(bstrt:bstp),tmpvec(bstrt:bstp))
                     z0(bstrt:bstp,j) = log(alpha(j,comp_list(i,h))) + log(sbeta(j,comp_list(i,h))) - tmpvec2(bstrt:bstp) &

@@ -21,29 +21,45 @@ mutable struct LearningRate{T}
     maxrho::T
 end
 
-function LearningRate{T}(lrate::T=T(0.1), shapelrate::T=T(0.05);
-    shape0::T=T(1.5),
-    lratefact::T=T(0.5),
-    shapelratefact::T=T(0.1),
-    min::T=T(1.0e-12),
-    maxdecs::T=T(3),
-    max_incs::Int=5,
-    use_min_dll::Bool=true,
-    min_dll::T=T(1e-9),
-    min_nd::T=T(1e-7),
-    numdecs::Int=0,
-    numincs::Int=0,
-    newtrate::T=T(0.5),
-    newt_ramp::Int=10,
-    minrho::T=T(1.0),
-    maxrho::T=T(2.0)
+function LearningRate{T}(
+    lrate::T = T(0.1),
+    shapelrate::T = T(0.05);
+    shape0::T = T(1.5),
+    lratefact::T = T(0.5),
+    shapelratefact::T = T(0.1),
+    min::T = T(1.0e-12),
+    maxdecs::T = T(3),
+    max_incs::Int = 5,
+    use_min_dll::Bool = true,
+    min_dll::T = T(1e-9),
+    min_nd::T = T(1e-7),
+    numdecs::Int = 0,
+    numincs::Int = 0,
+    newtrate::T = T(0.5),
+    newt_ramp::Int = 10,
+    minrho::T = T(1.0),
+    maxrho::T = T(2.0),
 ) where {T<:Real}
-    LearningRate{T}(lrate, copy(lrate), shapelrate,
-        copy(shapelrate), shape0, lratefact,
-        shapelratefact, min, maxdecs, max_incs,
-        use_min_dll, min_dll, min_nd,
-        numdecs, numincs, newtrate, newt_ramp,
-        minrho, maxrho
+    LearningRate{T}(
+        lrate,
+        copy(lrate),
+        shapelrate,
+        copy(shapelrate),
+        shape0,
+        lratefact,
+        shapelratefact,
+        min,
+        maxdecs,
+        max_incs,
+        use_min_dll,
+        min_dll,
+        min_nd,
+        numdecs,
+        numincs,
+        newtrate,
+        newt_ramp,
+        minrho,
+        maxrho,
     )
 end
 

@@ -1,4 +1,4 @@
-@views function notzero(val::T) where T<:Real
+@views function notzero(val::T) where {T<:Real}
     epsilon = T(1e-16)
     if val < epsilon && val > -epsilon
         # Don't use sign(val) because sign(0) = 0, which gives 0 * epsilon = 0
@@ -22,7 +22,7 @@ end
 
 
 # copied from specialfunctions but adapted to use Base.Math._evalpoly instead of the macro which won't run on the gpu
-@views function gpuDigamma(z::T) where T<:Real
+@views function gpuDigamma(z::T) where {T<:Real}
     # Based on eq. (12), without looking at the accompanying source
     # code, of: K. S. Kölbig, "Programs for computing the logarithm of
     # the gamma function, and the digamma function, for complex
@@ -49,14 +49,16 @@ end
     ψ += log(z) - T(0.5) * t
     t *= t # 1/z^2
     # the coefficients here are Float64(bernoulli[2:9] .// (2*(1:8)))
-    c = (T(0.08333333333333333),
+    c = (
+        T(0.08333333333333333),
         T(-0.008333333333333333),
         T(0.003968253968253968),
         T(-0.004166666666666667),
         T(0.007575757575757576),
         T(-0.021092796092796094),
         T(0.08333333333333333),
-        T(-0.4432598039215686))
+        T(-0.4432598039215686),
+    )
     ψ -= t * Base.Math._evalpoly(t, c)
 end
 

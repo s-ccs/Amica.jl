@@ -11,8 +11,12 @@ function integration_input_path(parts...)
 end
 
 function integration_dump_dir(tool::Symbol, mode::Symbol)
-    mode_name = mode === :without_newton ? "without_newton" : mode === :with_newton ? "with_newton" : error("Unsupported mode: $mode")
-    tool_name = tool === :fortran ? "fortran" : tool === :julia ? "julia" : error("Unsupported tool: $tool")
+    mode_name =
+        mode === :without_newton ? "without_newton" :
+        mode === :with_newton ? "with_newton" : error("Unsupported mode: $mode")
+    tool_name =
+        tool === :fortran ? "fortran" :
+        tool === :julia ? "julia" : error("Unsupported tool: $tool")
     return integration_test_path("dumps", tool_name, mode_name)
 end
 
@@ -28,7 +32,7 @@ function cleanup_integration_dumps!()
     for rel_path in ("dumps", "datadumps", "datadumps_newton")
         path = integration_test_path(rel_path)
         if ispath(path)
-            rm(path; force=true, recursive=true)
+            rm(path; force = true, recursive = true)
         end
     end
     return nothing
@@ -47,11 +51,17 @@ function run_fortran(config::String, out_path::String)
     mkpath(resolved_out_path)
 
     base_cmd = `$amica_exe $full_filename`
-    cmd = Cmd(base_cmd; dir=script_dir)
+    cmd = Cmd(base_cmd; dir = script_dir)
     run(setenv(cmd, "OUT_PATH" => resolved_out_path, "OMPI_MCA_plm" => "isolated"))
 end
 
-function read_fdt(path::String; ncols::Int, T::Type=Float32, transpose=false, OutType=Float64)::Array{OutType,2}
+function read_fdt(
+    path::String;
+    ncols::Int,
+    T::Type = Float32,
+    transpose = false,
+    OutType = Float64,
+)::Array{OutType,2}
     file_size = Base.filesize(path)
     file_size % sizeof(T) == 0 || error("File size is not divisible by element size")
 
@@ -59,7 +69,9 @@ function read_fdt(path::String; ncols::Int, T::Type=Float32, transpose=false, Ou
     nvals % ncols == 0 || error("Number of values is not divisible by ncols")
     nrows = nvals ÷ ncols
 
-    out = transpose ? Matrix{OutType}(undef, nrows, ncols) : Matrix{OutType}(undef, ncols, nrows)
+    out =
+        transpose ? Matrix{OutType}(undef, nrows, ncols) :
+        Matrix{OutType}(undef, ncols, nrows)
 
     open(path, "r") do io
         if !transpose && OutType === T
@@ -68,14 +80,14 @@ function read_fdt(path::String; ncols::Int, T::Type=Float32, transpose=false, Ou
         end
 
         rowbuf = Vector{T}(undef, ncols)
-        for row in 1:nrows
+        for row = 1:nrows
             read!(io, rowbuf)
             if transpose
-                @inbounds @simd for col in 1:ncols
+                @inbounds @simd for col = 1:ncols
                     out[row, col] = OutType(rowbuf[col])
                 end
             else
-                @inbounds @simd for col in 1:ncols
+                @inbounds @simd for col = 1:ncols
                     out[col, row] = OutType(rowbuf[col])
                 end
             end
@@ -85,7 +97,14 @@ function read_fdt(path::String; ncols::Int, T::Type=Float32, transpose=false, Ou
     return out
 end
 
-function read_3d_fdt(path::String; ncols::Int, nslabs::Int, T::Type=Float32, transpose=false, OutType=Float64)::Array{OutType,3}
+function read_3d_fdt(
+    path::String;
+    ncols::Int,
+    nslabs::Int,
+    T::Type = Float32,
+    transpose = false,
+    OutType = Float64,
+)::Array{OutType,3}
     file_size = Base.filesize(path)
     nvals = file_size ÷ sizeof(T)
     nrows = nvals ÷ (ncols * nslabs)

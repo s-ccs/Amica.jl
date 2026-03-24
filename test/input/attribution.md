@@ -21,4 +21,4 @@ write("small.fdt", data)
 # Memorize.fdt
 
 71 channel Sternberg dataset from Onton and Makeig 2006
-Obtained from https://sccn.ucsd.edu/~jason/amica_web.html
+Obtained from <https://sccn.ucsd.edu/~jason/amica_web.html>
