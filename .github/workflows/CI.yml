@@ -1,60 +1,61 @@
 name: CI
 on:
   push:
-    branches:
-      - main
-    tags: ['*']
   pull_request:
+  workflow_dispatch:
 concurrency:
   # Skip intermediate builds: always.
   # Cancel intermediate builds: only if it is a pull request build.
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
 jobs:
-  test:
-    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        version:
-          #- '1.0'
-          - 'nightly'
-        os:
-          - ubuntu-latest
-        arch:
-          - x64
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      statuses: write
     steps:
       - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@v1
         with:
-          version: ${{ matrix.version }}
-          arch: ${{ matrix.arch }}
-      - uses: julia-actions/cache@v1
+          version: "1"
       - uses: julia-actions/julia-buildpkg@v1
-      - uses: julia-actions/julia-runtest@v1
-      - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v2
+      - uses: julia-actions/julia-docdeploy@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER }}
+      - run: |
+          julia --project=docs -e '
+            using Documenter: DocMeta, doctest
+            using Amica
+            DocMeta.setdocmeta!(Amica, :DocTestSetup, :(using Amica); recursive=true)
+            doctest(Amica)'
+  integration-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Julia
+        uses: julia-actions/setup-julia@v1
         with:
-          files: lcov.info
-  #docs:
-  #  name: Documentation
-  #  runs-on: ubuntu-latest
-  #  permissions:
-  #    contents: write
-  #    statuses: write
-  #  steps:
-  #    - uses: actions/checkout@v2
-  #    - uses: julia-actions/setup-julia@v1
-  #      with:
-  #        version: '1'
-  #    - uses: julia-actions/julia-buildpkg@v1
-  #    - uses: julia-actions/julia-docdeploy@v1
-  #      env:
-  #        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #    - run: |
-  #        julia --project=docs -e '
-  #          using Documenter: DocMeta, doctest
-  #          using Amica
-  #          DocMeta.setdocmeta!(Amica, :DocTestSetup, :(using Amica); recursive=true)
-  #          doctest(Amica)'
+          version: "1.12"
+
+      - name: Install Fortran/MPI/BLAS toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gfortran make openmpi-bin libopenmpi-dev libopenblas-dev
+
+      - name: Cache Julia artifacts
+        uses: julia-actions/cache@v1
+
+      - name: Instantiate project
+        run: julia --project=. -e 'using Pkg; Pkg.instantiate()'
+
+      - name: Run integration test
+
+        run: |
+          julia --project=. test/integration_test.jl

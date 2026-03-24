@@ -1,104 +1,157 @@
 """
-Main AMICA algorithm
+    fit(amicaType, data; m=3, maxiter=500, location=nothing, scale=nothing,
+        A=nothing, ArrayType=Array, block_size=10_000, num_threads=1, kwargs...)
+
+Fit AMICA to `data` and return the fitted model.
+"""
+function fit(amicaType::Type{AmicaKind}, data::Array{T,2}; m=3, maxiter=500, location=nothing, scale=nothing, A=nothing, ArrayType::Type{<:DenseArray}=Array, block_size=10_000, num_threads=1, kwargs...) where {AmicaKind<:AbstractAmica,T<:Real}
+    (N, n) = size(data)
+    amica = AmicaKind(T, m=m, ncomps=n, nsamples=N, location=location, scale=scale, A=A, ArrayType=ArrayType, block_size=block_size, num_threads=num_threads)
+    amica!(amica, data; maxiter=maxiter, kwargs...)
+    return amica
+end
+
+function materialize_data_like(target::AbstractMatrix{T}, data::AbstractMatrix{T}) where {T<:Real}
+    if data isa typeof(target)
+        return copy(data)
+    end
+
+    host_data = Matrix{T}(undef, size(data)...)
+    copyto!(host_data, data)
+
+    out = similar(target, size(data))
+    copyto!(out, host_data)
+    return out
+end
 
 """
+    amica!(myAmica, data; lrate=LearningRate(), remove_mean=true, do_sphering=true,
+           show_progress=true, maxiter=50, do_newton=true, newt_start_iter=50,
+           iterwin=10, update_shape=true, data_inplace=false, mindll=1e-8,
+           dump_dir=nothing, show_timing=false)
 
-function fit(amicaType::Type{T}, data; m = 3, maxiter = 500, location = nothing, scale = nothing, A = nothing, kwargs...) where {T<:AbstractAmica}
-	amica = T(data; m = m, maxiter = maxiter, location = location, scale = scale, A = A)
-	fit!(amica, data; kwargs...)
-	return amica
+Fit `myAmica` on `data` and return the model.
+"""
+@views function amica!(myAmica::AbstractAmica,
+    data::AbstractMatrix{T};
+    lrate::LearningRate{T}=LearningRate{T}(),
+    remove_mean::Bool=true,
+    do_sphering::Bool=true,
+    show_progress::Bool=true,
+    maxiter::Int=50,
+    do_newton::Bool=true,
+    newt_start_iter::Int=50,
+    iterwin::Int=10,
+    update_shape::Bool=true,
+    data_inplace::Bool=false,
+    mindll::T=T(1e-8),
+    dump_dir::Union{Nothing,String}=nothing,
+    show_timing=false) where {T<:Real}
+
+    amica_start = time()
+    working_data = data_inplace ? data : copy(data)
+
+    @timeit_debug to "initialize_shape_parameter!" initialize_shape_parameter!(myAmica, lrate)
+    myAmica.no_newton = false
+
+    #Prepares data by removing means and/or sphering
+    if remove_mean
+        @timeit_debug to "removeMean" removed_mean = removeMean!(working_data)
+    end
+
+    @timeit_debug to "sphering" if do_sphering
+        S = sphering!(working_data)
+        myAmica.S = S
+        myAmica.LLdetS = logabsdet(S |> Array)[1]
+    else
+        myAmica.S = I
+        myAmica.LLdetS = 0
+    end
+
+    dLL = zeros(1, maxiter)
+
+    @timeit_debug to "materialize_data" data = materialize_data_like(myAmica.A, working_data)
+
+    if show_progress
+        preparation_time = time() - amica_start
+        println("\nPreparation completed, starting main loop ($(round(preparation_time, digits=3)) s)")
+    end
+    niter = 0
+    loop_start = time()
+
+    for iter in 1:maxiter
+        niter += 1
+        iter_time_start = time()
+
+        @timeit_debug to "update_parameters" begin
+            update_parameters!(myAmica, data, lrate, update_shape, do_newton && iter >= newt_start_iter; dump_dir)
+        end
+
+        @timeit_debug to "calculate_DLL" begin
+            calculate_DLL!(dLL, myAmica, iter)
+        end
+
+        @timeit_debug to "update_mixing" begin
+            update_mixing!(myAmica, iter, do_newton, newt_start_iter, lrate)
+        end
+
+        @timeit_debug to "reparameterize" begin
+            reparameterize!(myAmica)
+        end
+
+        if iter > 1
+            # Check for NaN
+            if isnan(myAmica.LL[iter])
+                println("Got NaN! Exiting ...")
+                break
+            end
+
+            if calculate_lrate!(myAmica, iter, newt_start_iter, do_newton, lrate)
+                break
+            end
+
+            # Checks termination criterion
+            if iter > iterwin
+                sdll = sum(dLL[iter-iterwin+1:iter]) / iterwin
+                if (sdll > 0) && (sdll < mindll)
+                    break
+                end
+            end
+        end
+
+
+        if NAN_CHECK_ACTIVE
+            check_nan(myAmica)
+        end
+
+        # Calculate iteration time
+        iter_time = time() - iter_time_start
+
+        # Formatted output matching Fortran AMICA
+        if show_progress
+            println(" iter $(lpad(iter, 5)) lrate = $(lpad(string(round(lrate.lrate, digits=10)), 13)) LL = $(lpad(string(round(myAmica.LL[iter], digits=10)), 14))  ($(lpad(string(round(iter_time, digits=2)), 6)) s)")
+        end
+    end
+
+    if show_timing
+        print_timer(to)
+    end
+    if show_progress
+        # Log average iteration time
+        avg_iter_time = (time() - loop_start) / niter
+        println("\nAverage iteration time: $(round(avg_iter_time, digits=3)) s (over $(niter) iterations)")
+    end
+
+    return myAmica
 end
-function fit!(amica::AbstractAmica, data; kwargs...)
-	amica!(amica, data; kwargs...)
-end
 
-function amica!(myAmica::AbstractAmica,
-	data;
-	lrate = LearningRate(),
-	shapelrate = LearningRate(;lrate = 0.1,minimum=0.5,maximum=5,init=1.5),
-	remove_mean = true,
-	do_sphering = true,
-	show_progress = true,
-	maxiter = myAmica.maxiter,
-	do_newton = 1,
-	newt_start_iter = 25,
-	iterwin = 10,
-	update_shape = 1,
-	mindll = 1e-8,
 
-	kwargs...)
-	
-	initialize_shape_parameter(myAmica,shapelrate)
+"""
+    recover_sources(data, myAmica)
 
-	(n, N) = size(data)
-	m = myAmica.m
-
-	#Prepares data by removing means and/or sphering
-	if remove_mean
-		removed_mean = removeMean!(data)
-	end
-	if do_sphering
-		data = sphering(data)
-	end
-	
-	dLL = zeros(1, maxiter)
-	fp = zeros(m ,N)
-
-	#todo put them into object
-	lambda = zeros(n, 1)
-	kappa = zeros(n, 1)
-	sigma2 = zeros(n, 1)
-
-    prog = ProgressUnknown("Minimizing"; showspeed=true)
-
-	for iter in 1:maxiter
-		#E-step
-		update_sources!(myAmica, data)
-		calculate_ldet!(myAmica)
-		initialize_Lt!(myAmica)
-		calculate_y!(myAmica)
-		loopiloop(myAmica) #Updates y and Lt. Todo: Rename
-		calculate_LL!(myAmica)
-		@debug (:LL,myAmica.LL)
-		#Calculate difference in loglikelihood between iterations
-		if iter > 1
-			dLL[iter] = myAmica.LL[iter] - myAmica.LL[iter-1]
-		end
-		if iter > iterwin +1
-			calculate_lrate!(dLL, lrate, iter,newt_start_iter, do_newton, iterwin)
-			#Calculates average likelihood change over multiple itertions
-			sdll = sum(dLL[iter-iterwin+1:iter])/iterwin
-			#Checks termination criterion
-			if (sdll > 0) && (sdll < mindll)
-				println("LL increase to low. Stop at iteration ", iter)
-				break
-			end
-		end
-		
-		#M-step
-		try
-			#Updates parameters and mixing matrix
-			update_loop!(myAmica, fp, lambda, shapelrate, update_shape, iter, do_newton, newt_start_iter, lrate)
-		catch e
-			#Terminates if NaNs are detected in parameters
-			if isa(e,AmicaNaNException)
-				println("\nNaN detected. Better stop. Current iteration: ", iter)
-				@goto escape_from_NaN
-			else 
-				rethrow()
-			end
-		end
-		
-		reparameterize!(myAmica, data)
-		#Shows current progress
-		show_progress && ProgressMeter.next!(prog; showvalues=[(:LL, myAmica.LL[iter])])
- 
-	end
-	#If parameters contain NaNs, the algorithm skips the A update and terminates by jumping here
-    @label escape_from_NaN
-	#If means were removed, they are added back
-	if remove_mean
-		add_means_back!(myAmica, removed_mean)
-	end
-	return myAmica
+Recover sources from mixtures `data` using a fitted `SingleModelAmica`.
+"""
+@views function recover_sources(data, myAmica::SingleModelAmica)
+    W = inv(myAmica.A)
+    return data * myAmica.S * W'
 end

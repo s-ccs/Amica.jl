@@ -5,7 +5,7 @@ DocMeta.setdocmeta!(Amica, :DocTestSetup, :(using Amica); recursive=true)
 
 makedocs(;
     modules=[Amica],
-    authors="Alexander Lulkin, Benedikt V. Ehinger",
+    authors="Valentin Morlock, Alexander Lulkin, Benedikt V. Ehinger",
     repo="https://github.com/s-ccs/Amica.jl/blob/{commit}{path}#{line}",
     sitename="Amica.jl",
     format=Documenter.HTML(;
@@ -16,11 +16,15 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
+        "Introduction" => "introduction.md",
+        "Getting Started" => "getting_started.md",
+        "Configuration" => "configuration.md",
+        "Performance" => "performance.md",
     ],
 )
 
 deploydocs(;
     repo="github.com/s-ccs/Amica.jl",
     devbranch="main",
-    push_preview = true,
+    push_preview=true,
 )

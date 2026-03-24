@@ -1,162 +1,157 @@
-mutable struct GGParameters
-	proportions::AbstractArray{Float64} #source density mixture proportions
-	scale::AbstractArray{Float64} #source density inverse scale parameter
-	location::AbstractArray{Float64} #source density location parameter
-	shape::AbstractArray{Float64} #source density shape paramters
+"Temporary storage for block computation results used in update_parameters!"
+mutable struct BlockAccumulators{T,Array2<:DenseArray{T,2},Array3<:DenseArray{T,3}}
+    g_times_sources::Array3      # (n, n, num_threads)
+    sum_z::Array3                # (n, m, num_threads)
+    kp::Array3                   # (n, m, num_threads)
+    dmu_numer::Array3            # (n, m, num_threads)
+    dmu_denom::Array3            # (n, m, num_threads)
+    dbeta_denom::Array3          # (n, m, num_threads)
+    dlambda_numer::Array3        # (n, m, num_threads)
+    drho_numer::Array3           # (n, m, num_threads)
+    newton_sigma2::Array2        # (n, num_threads)
+    Lt_accum::Array2             # (N, num_threads)
 end
 
-abstract type AbstractAmica end
-
-mutable struct SingleModelAmica <:AbstractAmica
-	source_signals					   #Unmixed signals
-	learnedParameters::GGParameters	   #Parameters of the Gaussian mixtures
-	m::Union{Integer, Nothing} 		   #Number of gaussians
-    A::AbstractArray 				   #Mixing matrix
-	z::AbstractArray				   #Densities for each sample per Gaussian (normalized)
-	y::AbstractArray				   #Source signals (scaled and shifted with scale and location parameter)
-	centers::AbstractArray 			   #Model centers
-	Lt::AbstractVector 				   #Log likelihood of time point for each model ( M x N )
-	LL::Union{AbstractVector, Nothing} #Log-Likelihood
-	ldet::Float64					   #log determinant of A
-	maxiter::Union{Int, Nothing} 	   #maximum number of iterations, can be nothing because it's not needed for multimodel
+"Reset all accumulators to zero"
+@views function reset!(acc::BlockAccumulators{T}) where {T<:Real}
+    acc.g_times_sources .= zero(T)
+    acc.sum_z .= zero(T)
+    acc.kp .= zero(T)
+    acc.dmu_numer .= zero(T)
+    acc.dmu_denom .= zero(T)
+    acc.dbeta_denom .= zero(T)
+    acc.dlambda_numer .= zero(T)
+    acc.drho_numer .= zero(T)
+    acc.newton_sigma2 .= zero(T)
+    acc.Lt_accum .= zero(T)
 end
 
-mutable struct MultiModelAmica <:AbstractAmica
-	models::Array{SingleModelAmica} #Array of SingleModelAmicas
-	normalized_ica_weights 			#Model weights (normalized)
-	ica_weights_per_sample 			#Model weight for each sample
-	ica_weights						#Model weight for all samples
-	maxiter::Int					#Number of iterations
-	m::Int 							#Number of Gaussians
-	LL::AbstractVector				#Log-Likelihood
+mutable struct SingleModelAmica{
+    T,
+    Array1<:DenseArray{T,1},
+    Array2<:DenseArray{T,2},
+    Array3<:DenseArray{T,3}
+} <: AbstractAmica
+    dims::NTuple{3,Int}
+    block_size::Int
+    num_threads::Int
+    proportions::Array2                                         # source density mixture proportions
+    scale::Array2                                               # source density inverse scale parameter
+    location::Array2                                            # source density location parameter
+    shape::Array2                                               # source density shape paramters
+
+    A::Array2                                                   # unmixing matrix
+    S::Array2                                                   # sphering matrix
+    LLdetS::T                                                   # logabsdet(S)
+    Lt::Array1                                                  # log likelihood of time point for each model ( M x N )
+    LL::Array{T,1}                                              # log likelihood over iterations
+
+    # --- intermediary values
+
+    dA::Array2
+
+    # Pre-computed values for Newton method
+    newton_kappa::Array1
+    newton_lambda::Array1
+    newton_sigma2::Array1
+    no_newton::Bool
+
+    pools::Vector{ObjectPool{T,Array1}}                         # one pool per thread
+    acc::BlockAccumulators{T,Array2,Array3}
 end
 
-#Structure for Learning Rate type with initial value, minumum, maximum etc. Used for learning rate and shape lrate
-using Parameters
-@with_kw mutable struct LearningRate
-	lrate::Real = 0.1
-	init::Float64 = 0.1
-	minimum::Float64 = 0.
-	maximum::Float64 = 1.0
-	natural_rate::Float64 = 0.1
-	decreaseFactor::Float64 = 0.5
-end
+"""
+    SingleModelAmica([T=Float64]; nsamples, ncomps, m=3, A=nothing, location=nothing,
+                     scale=nothing, block_size=10_000, num_threads=1, ArrayType=Array)
 
-#Data type for AMICA with just one ICA model. todo: rename gg parameters
-function SingleModelAmica(data::AbstractArray{T}; m=3, maxiter=500, A=nothing, location=nothing, scale=nothing, kwargs...) where {T<:Real}
-	(n, N) = size(data)
-	#initialize parameters
-	
-	centers = zeros(n)
-	eye = Matrix(I, n, n)
-	if isnothing(A)
-		A = zeros(n,n)
-		A[:,:] = eye[n] .+ 0.1*rand(n,n)
-		for i in 1:n
-			A[:,i] = A[:,i] / norm(A[:,i])
-		end
-	end
+Create a single-model AMICA object.
+"""
+@views function SingleModelAmica(T::Type{<:Real}=Float64;
+    nsamples::Int,
+    ncomps::Int,
+    m=3,
+    A=nothing,
+    location=nothing,
+    scale=nothing,
+    block_size=10_000,
+    num_threads=1,
+    ArrayType::Type{<:DenseArray}=Array
+)
+    N = nsamples
+    n = ncomps
 
-	proportions = (1/m) * ones(m,n)
-	if isnothing(location)
-		if m > 1
-			location = 0.1 * randn(m, n)
-		else
-			location = zeros(m, n)
-		end
-	end
-	if isnothing(scale)
-		scale = ones(m, n) + 0.1 * randn(m, n)
-	end
-	shape = ones(m, n)
+    # Extract array type parameters
+    Array1 = ArrayType{T,1}
+    Array2 = ArrayType{T,2}
+    Array3 = ArrayType{T,3}
 
-	y = zeros(n,N,m)
-	
-	Lt = zeros(N)
-	z = ones(n,N,m)/N
+    #initialize parameters
+    @timeit_debug to "init A" if isnothing(A)
+        # Initialize A to match Fortran: small random ±0.005, diagonal = 1.0, then normalize
+        Wtmp = rand(T, n, n)
+        A = T(0.01) .* (T(0.5) .- Wtmp)  # Random values in range [-0.005, 0.005]
+        for i in 1:n
+            A[i, i] = T(1.0)  # Set diagonal to 1.0
+            A[:, i] = A[:, i] / norm(A[:, i])  # Normalize each column
+        end
 
-	#Sets some parameters to nothing if used my MultiModel to only have them once
-	if isnothing(maxiter)
-		LL = nothing
-		m = nothing
-	else
-		LL = Float64[]
-	end
-	ldet = 0.0
-	source_signals = zeros(n,N)
+        A = A |> Array2
+    end
 
-	return SingleModelAmica(source_signals,GGParameters(proportions,scale,location,shape),m,A,z,y,#=Q,=#centers,Lt,LL,ldet,maxiter)
-end
+    @timeit_debug to "init proportions" begin
+        proportions = Array2(undef, n, m)
+        proportions .= one(T) * (1 / m)
+    end
 
-#Data type for AMICA with multiple ICA models
-function MultiModelAmica(data::Array; m=3, M=2, maxiter=500, A=nothing, location=nothing, scale=nothing, kwargs...)
-	models = Array{SingleModelAmica}(undef, M) #Array of SingleModelAmica opjects
-	normalized_ica_weights = (1/M) * ones(M,1)
-	(n, N) = size(data)
-	ica_weights_per_sample = ones(M,N)
-	ica_weights = zeros(M)
-	LL = Float64[]
+    @timeit_debug to "init location" if isnothing(location)
+        # Initialize location to match Fortran: mu(j,k) = j - 1 - (m-1)/2
+        # This creates centered values around 0 (e.g., -1, 0, 1 for m=3)
+        location = zeros(T, n, m)
+        for j in 1:m
+            location[:, j] .= T(j - 1 - (m - 1) / 2)
+        end
+        # Add small random perturbation: ±0.05
+        location .+= T(0.05) .* (T(1.0) .- T(2.0) .* rand(T, n, m))
+    end
 
-	#This part only exists to allow for initial values to be set by the user. They are still required to have the old format (something x something x M)
-	eye = Matrix(I, n, n)
-	if isnothing(A)
-		A = zeros(n,n,M)
-		for h in 1:M
-			A[:,:,h] = eye[n] .+ 0.1*rand(n,n)
-			for i in 1:n
-				A[:,i,h] = A[:,i,h] / norm(A[:,i,h])
-			end
-		end
-	end
-
-	if isnothing(location)
-		if m > 1
-			location = 0.1 * randn(m, n, M)
-		else
-			location = zeros(m, n, M)
-		end
-	end
-
-	if isnothing(scale)
-		scale = ones(m, n, M) + 0.1 * randn(m, n, M)
-	end
-
-	for h in 1:M
-		models[h] = SingleModelAmica(data; m, maxiter=nothing, A=A[:,:,h], location=location[:,:,h], scale=scale[:,:,h], kwargs...)
-	end
-	return MultiModelAmica(models,normalized_ica_weights,ica_weights_per_sample,ica_weights,maxiter,m,LL#=,Q=#)
-end
+    @timeit_debug to "init scale" if isnothing(scale)
+        # Initialize scale to match Fortran: 1.0 + 0.1*(0.5 - random[0,1])
+        # This gives values in range [0.95, 1.05]
+        scale = ones(T, n, m) .+ T(0.1) .* (T(0.5) .- rand(T, n, m))
+    end
 
 
-# import Base.getproperty
-#  Base.getproperty(x::AbstractAmica, s::Symbol) = Base.getproperty(x, Val(s))
-#  Base.getproperty(x::AbstractAmica, ::Val{s}) where s = getfield(x, s)
+    @timeit_debug to "init pools" pools = [ObjectPool{T,Array1}(block_size * n * m, 7) for _ in 1:num_threads]
 
-#  Base.getproperty(m::AbstractAmica, ::Val{:N}) = size(m.Lt,1)
-#  Base.getproperty(m::AbstractAmica, ::Val{:n}) = size(m.A,1)
-#  Base.getproperty(m::MultiModelAmica, ::Val{:M}) = length(m.models)
-#  Base.getproperty(m::SingleModelAmica, ::Val{:M}) = 1
-
-
-# function Base.getproperty(multiModel::MultiModelAmica, prop::Symbol)
-#     if prop in fieldnames(SingleModelAmica) && !(prop in fieldnames(MultiModelAmica))
-#         return getfield(multiModel.singleModel, prop)
-#     else
-#         return getfield(multiModel, prop)
-#     end
-# end
-
-#currently not necessary
-# function Base.getproperty(multiModel::MultiModelAmica, prop::Symbol)
-#     if prop in fieldnames(SingleModelAmica) && !(prop in fieldnames(MultiModelAmica))
-#         return getfield(multiModel.models[1], prop)
-#     else
-#         return getfield(multiModel, prop)
-#     end
-# end
-
-struct AmicaProportionsZeroException <: Exception
-end
-
-struct AmicaNaNException <: Exception
+    return SingleModelAmica{T,Array1,Array2,Array3}(
+        (N, n, m),
+        block_size,
+        num_threads,
+        Array2(proportions),                       # proportions
+        Array2(scale),                             # scale
+        Array2(location),                          # location
+        Array2(ones(T, n, m)),                     # shape
+        A,                                           # A
+        Array2(undef, n, n),                         # S
+        zero(T),                                     # LLdetS
+        Array1(undef, N),                            # Lt
+        Array1(undef, 0),                            # LL
+        Array2(undef, n, n),                         # dA
+        Array1(undef, n),                            # newton_kappa
+        Array1(undef, n),                            # newton_lambda
+        Array1(undef, n),                            # newton_sigma2
+        false,                                       # no_newton
+        pools,
+        BlockAccumulators{T,Array2,Array3}(
+            Array3(undef, n, n, num_threads),           # g_times_sources
+            Array3(undef, n, m, num_threads),           # sum_z
+            Array3(undef, n, m, num_threads),           # kp
+            Array3(undef, n, m, num_threads),           # dmu_numer
+            Array3(undef, n, m, num_threads),           # dmu_denom
+            Array3(undef, n, m, num_threads),           # dbeta_denom
+            Array3(undef, n, m, num_threads),           # dlambda_numer
+            Array3(undef, n, m, num_threads),           # drho_numer
+            Array2(undef, n, num_threads),              # newton_sigma2
+            Array2(undef, N, num_threads)               # Lt_accum
+        ))
 end
