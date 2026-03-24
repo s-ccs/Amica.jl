@@ -20,6 +20,12 @@ makedocs(;
         "Getting Started" => "getting_started.md",
         "Configuration" => "configuration.md",
         "Performance" => "performance.md",
+        "Contribution?" =>[
+
+        "90-contributing.md" => "Contribution!",
+        "91-developer.md" => "Developer docs",
+        ],
+        "95-reference.md" => "Reference docs / API",
     ],
 )
 

@@ -1,0 +1,41 @@
+# Changes here will be overwritten by Copier
+AddAllcontributors: true
+AddCitationCFF: false
+AddCodeOfConduct: true
+AddContributionDocs: true
+AddCopierCI: true
+AddDocs: true
+AddDocsCI: true
+AddFormatterAndLinterConfigFiles: true
+AddGitHubPRTemplate: true
+AddGitHubTemplates: true
+AddLintCI: true
+AddLychee: false
+AddMacToCI: false
+AddPrecommit: true
+AddPrecommitUpdateCI: true
+AddTagBotCI: true
+AddTestCI: true
+AddWinToCI: false
+Authors: Valentin Morlock,Alexander Lulkin,Benedikt V. Ehinger
+CheckExplicitImports: false
+CodeOfConductContact: Benedikt V. Ehinger
+ConfigIndentation: 2
+GitHubActionVersionAutoUpdate: dependabot
+JuliaCompatAutoUpdate: dependabot
+JuliaIndentation: 4
+JuliaMinCIVersion: '1'
+JuliaMinVersion: '1'
+License: MIT
+LicenseCopyrightHolders: Valentin Morlock, Alexander Lulkin, Benedikt V. Ehinger
+MarkdownIndentation: 2
+PackageName: Amica
+PackageOwner: s-ccs
+PackageUUID: 5c2eb853-6fc5-4f26-86bb-b4eb873bb098
+RunJuliaNightlyOnCI: false
+StrategyConfirmIncluded: true
+StrategyLevel: 1
+StrategyReviewExcluded: true
+TestingStrategy: basic_auto_discover
+UseCirrusCI: false
+_src_path: /home/behinger/.julia/packages/BestieTemplate/fOzc4
