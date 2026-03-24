@@ -1,17 +1,14 @@
 """
-Main AMICA algorithm
+    fit(amicaType, data; m=3, maxiter=500, location=nothing, scale=nothing,
+        A=nothing, ArrayType=Array, block_size=10_000, num_threads=1, kwargs...)
+
+Fit AMICA to `data` and return the fitted model.
 """
-
-# TimerOutputs.enable_debug_timings(Amica)
-
 function fit(amicaType::Type{AmicaKind}, data::Array{T,2}; m=3, maxiter=500, location=nothing, scale=nothing, A=nothing, ArrayType::Type{<:DenseArray}=Array, block_size=10_000, num_threads=1, kwargs...) where {AmicaKind<:AbstractAmica,T<:Real}
     (N, n) = size(data)
     amica = AmicaKind(T, m=m, ncomps=n, nsamples=N, location=location, scale=scale, A=A, ArrayType=ArrayType, block_size=block_size, num_threads=num_threads)
-    fit!(amica, data; maxiter=maxiter, kwargs...)
+    amica!(amica, data; maxiter=maxiter, kwargs...)
     return amica
-end
-function fit!(amica::AbstractAmica, data; kwargs...)
-    amica!(amica, data; kwargs...)
 end
 
 function materialize_data_like(target::AbstractMatrix{T}, data::AbstractMatrix{T}) where {T<:Real}
@@ -27,6 +24,14 @@ function materialize_data_like(target::AbstractMatrix{T}, data::AbstractMatrix{T
     return out
 end
 
+"""
+    amica!(myAmica, data; lrate=LearningRate(), remove_mean=true, do_sphering=true,
+           show_progress=true, maxiter=50, do_newton=true, newt_start_iter=50,
+           iterwin=10, update_shape=true, data_inplace=false, mindll=1e-8,
+           dump_dir=nothing, show_timing=false)
+
+Fit `myAmica` on `data` and return the model.
+"""
 @views function amica!(myAmica::AbstractAmica,
     data::AbstractMatrix{T};
     lrate::LearningRate{T}=LearningRate{T}(),
@@ -141,6 +146,11 @@ end
 end
 
 
+"""
+    recover_sources(data, myAmica)
+
+Recover sources from mixtures `data` using a fitted `SingleModelAmica`.
+"""
 @views function recover_sources(data, myAmica::SingleModelAmica)
     W = inv(myAmica.A)
     return data * myAmica.S * W'

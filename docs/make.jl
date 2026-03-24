@@ -16,11 +16,15 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
+        "Introduction" => "introduction.md",
+        "Getting Started" => "getting_started.md",
+        "Configuration" => "configuration.md",
+        "Performance" => "performance.md",
     ],
 )
 
 deploydocs(;
     repo="github.com/s-ccs/Amica.jl",
     devbranch="main",
-    push_preview = true,
+    push_preview=true,
 )

@@ -55,12 +55,12 @@ t_f64 = @elapsed run(`/scratch/projects/fapra_amica/fortran/amica15test julia.pa
 
 # Julia run
 am32 = SingleModelAmica(Float32.(x); maxiter=maxiter, A=deepcopy(i_A), location=deepcopy(i_location), scale=deepcopy(i_scale))
-t_am32 = @elapsed fit!(am32, Float32.(x))
+t_am32 = @elapsed amica!(am32, Float32.(x))
 
 am64 = SingleModelAmica(Float64.(x); maxiter=maxiter, A=deepcopy(i_A), location=deepcopy(i_location), scale=deepcopy(i_scale))
-t_am64 = @elapsed fit!(am64, Float64.(x))
+t_am64 = @elapsed amica!(am64, Float64.(x))
 #am = SingleModelAmica(Float16.(x);maxiter=maxiter,A=i_A,location=i_location,scale=i_scale)
-#@time fit!(am,x)
+#@time amica!(am,x)
 #vcat(@mget(mLL),am.LL')
 
 #---
@@ -109,7 +109,7 @@ f
 
 #----
 am32 = SingleModelAmica(Float32.(x); maxiter=10)#,A=deepcopy(i_A),location=deepcopy(i_location),scale=deepcopy(i_scale))
-@profview fit!(am32, Float32.(x))
+@profview amica!(am32, Float32.(x))
 
 fortran_setup(Float32.(x); max_threads=1, max_iter=5)
 t_f32 = @elapsed run(`/scratch/projects/fapra_amica/fortran/amica15test julia.param`)

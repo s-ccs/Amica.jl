@@ -11,6 +11,7 @@ using PrecompileTools: @setup_workload, @compile_workload
 const to = TimerOutput()
 const NAN_CHECK_ACTIVE = false
 
+"""Abstract type to be implemented by AMICA model variants."""
 abstract type AbstractAmica end
 
 include("object_pool.jl")
@@ -25,7 +26,8 @@ include("mixing.jl")
 include("main.jl")
 
 export amica!
-export fit, fit!
+export fit
+export recover_sources
 export AbstractAmica, SingleModelAmica
 
 # precompilation

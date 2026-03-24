@@ -60,7 +60,12 @@ mutable struct SingleModelAmica{
     acc::BlockAccumulators{T,Array2,Array3}
 end
 
-"Data type for AMICA with just one ICA model."
+"""
+    SingleModelAmica([T=Float64]; nsamples, ncomps, m=3, A=nothing, location=nothing,
+                     scale=nothing, block_size=10_000, num_threads=1, ArrayType=Array)
+
+Create a single-model AMICA object.
+"""
 @views function SingleModelAmica(T::Type{<:Real}=Float64;
     nsamples::Int,
     ncomps::Int,
