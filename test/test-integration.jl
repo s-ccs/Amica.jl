@@ -35,7 +35,7 @@ try
         )
         @test raw ≈ data
 
-        Amica.removeMean!(data)
+        Amica.remove_mean!(data)
 
         without_mean = read_fdt(
             joinpath(fortran_without_newton, "mean_data_seg_1.bin");
