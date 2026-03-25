@@ -32,8 +32,22 @@ export AbstractAmica, SingleModelAmica
 
 # precompilation
 @compile_workload begin
-    Amica.fit(SingleModelAmica, zeros(Float32, 3_000, 24), m=3, maxiter=1, newt_start_iter=0, show_progress=false)
-    Amica.fit(SingleModelAmica, zeros(Float64, 3_000, 24), m=3, maxiter=1, newt_start_iter=0, show_progress=false)
+    Amica.fit(
+        SingleModelAmica,
+        zeros(Float32, 3_000, 24),
+        m = 3,
+        maxiter = 1,
+        newt_start_iter = 0,
+        show_progress = false,
+    )
+    Amica.fit(
+        SingleModelAmica,
+        zeros(Float64, 3_000, 24),
+        m = 3,
+        maxiter = 1,
+        newt_start_iter = 0,
+        show_progress = false,
+    )
 end
 
 import Base.show
@@ -52,7 +66,7 @@ function Base.show(io::Core.IO, m::SingleModelAmica)
 $(typeof(m)) with:
     - dims (N, n, m): $(m.dims)
     - likelihood: $(like)
-"""
+""",
     )
 end
 

@@ -30,7 +30,7 @@ mutable struct SingleModelAmica{
     T,
     Array1<:DenseArray{T,1},
     Array2<:DenseArray{T,2},
-    Array3<:DenseArray{T,3}
+    Array3<:DenseArray{T,3},
 } <: AbstractAmica
     dims::NTuple{3,Int}
     block_size::Int
@@ -66,16 +66,17 @@ end
 
 Create a single-model AMICA object.
 """
-@views function SingleModelAmica(T::Type{<:Real}=Float64;
+@views function SingleModelAmica(
+    T::Type{<:Real} = Float64;
     nsamples::Int,
     ncomps::Int,
-    m=3,
-    A=nothing,
-    location=nothing,
-    scale=nothing,
-    block_size=10_000,
-    num_threads=1,
-    ArrayType::Type{<:DenseArray}=Array
+    m = 3,
+    A = nothing,
+    location = nothing,
+    scale = nothing,
+    block_size = 10_000,
+    num_threads = 1,
+    ArrayType::Type{<:DenseArray} = Array,
 )
     N = nsamples
     n = ncomps
@@ -90,7 +91,7 @@ Create a single-model AMICA object.
         # Initialize A to match Fortran: small random ±0.005, diagonal = 1.0, then normalize
         Wtmp = rand(T, n, n)
         A = T(0.01) .* (T(0.5) .- Wtmp)  # Random values in range [-0.005, 0.005]
-        for i in 1:n
+        for i = 1:n
             A[i, i] = T(1.0)  # Set diagonal to 1.0
             A[:, i] = A[:, i] / norm(A[:, i])  # Normalize each column
         end
@@ -107,7 +108,7 @@ Create a single-model AMICA object.
         # Initialize location to match Fortran: mu(j,k) = j - 1 - (m-1)/2
         # This creates centered values around 0 (e.g., -1, 0, 1 for m=3)
         location = zeros(T, n, m)
-        for j in 1:m
+        for j = 1:m
             location[:, j] .= T(j - 1 - (m - 1) / 2)
         end
         # Add small random perturbation: ±0.05
@@ -121,7 +122,8 @@ Create a single-model AMICA object.
     end
 
 
-    @timeit_debug to "init pools" pools = [ObjectPool{T,Array1}(block_size * n * m, 7) for _ in 1:num_threads]
+    @timeit_debug to "init pools" pools =
+        [ObjectPool{T,Array1}(block_size * n * m, 7) for _ = 1:num_threads]
 
     return SingleModelAmica{T,Array1,Array2,Array3}(
         (N, n, m),
@@ -152,6 +154,7 @@ Create a single-model AMICA object.
             Array3(undef, n, m, num_threads),           # dlambda_numer
             Array3(undef, n, m, num_threads),           # drho_numer
             Array2(undef, n, num_threads),              # newton_sigma2
-            Array2(undef, N, num_threads)               # Lt_accum
-        ))
+            Array2(undef, N, num_threads),               # Lt_accum
+        ),
+    )
 end

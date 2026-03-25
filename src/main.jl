@@ -4,14 +4,40 @@
 
 Fit AMICA to `data` and return the fitted model.
 """
-function fit(amicaType::Type{AmicaKind}, data::Array{T,2}; m=3, maxiter=500, location=nothing, scale=nothing, A=nothing, ArrayType::Type{<:DenseArray}=Array, block_size=10_000, num_threads=1, kwargs...) where {AmicaKind<:AbstractAmica,T<:Real}
+function fit(
+    amicaType::Type{AmicaKind},
+    data::Array{T,2};
+    m = 3,
+    maxiter = 500,
+    location = nothing,
+    scale = nothing,
+    A = nothing,
+    ArrayType::Type{<:DenseArray} = Array,
+    block_size = 10_000,
+    num_threads = 1,
+    kwargs...,
+) where {AmicaKind<:AbstractAmica,T<:Real}
     (N, n) = size(data)
-    amica = AmicaKind(T, m=m, ncomps=n, nsamples=N, location=location, scale=scale, A=A, ArrayType=ArrayType, block_size=block_size, num_threads=num_threads)
-    amica!(amica, data; maxiter=maxiter, kwargs...)
+    amica = AmicaKind(
+        T,
+        m = m,
+        ncomps = n,
+        nsamples = N,
+        location = location,
+        scale = scale,
+        A = A,
+        ArrayType = ArrayType,
+        block_size = block_size,
+        num_threads = num_threads,
+    )
+    amica!(amica, data; maxiter = maxiter, kwargs...)
     return amica
 end
 
-function materialize_data_like(target::AbstractMatrix{T}, data::AbstractMatrix{T}) where {T<:Real}
+function materialize_data_like(
+    target::AbstractMatrix{T},
+    data::AbstractMatrix{T},
+) where {T<:Real}
     if data isa typeof(target)
         return copy(data)
     end
@@ -32,26 +58,31 @@ end
 
 Fit `myAmica` on `data` and return the model.
 """
-@views function amica!(myAmica::AbstractAmica,
+@views function amica!(
+    myAmica::AbstractAmica,
     data::AbstractMatrix{T};
-    lrate::LearningRate{T}=LearningRate{T}(),
-    remove_mean::Bool=true,
-    do_sphering::Bool=true,
-    show_progress::Bool=true,
-    maxiter::Int=50,
-    do_newton::Bool=true,
-    newt_start_iter::Int=50,
-    iterwin::Int=10,
-    update_shape::Bool=true,
-    data_inplace::Bool=false,
-    mindll::T=T(1e-8),
-    dump_dir::Union{Nothing,String}=nothing,
-    show_timing=false) where {T<:Real}
+    lrate::LearningRate{T} = LearningRate{T}(),
+    remove_mean::Bool = true,
+    do_sphering::Bool = true,
+    show_progress::Bool = true,
+    maxiter::Int = 50,
+    do_newton::Bool = true,
+    newt_start_iter::Int = 50,
+    iterwin::Int = 10,
+    update_shape::Bool = true,
+    data_inplace::Bool = false,
+    mindll::T = T(1e-8),
+    dump_dir::Union{Nothing,String} = nothing,
+    show_timing = false,
+) where {T<:Real}
 
     amica_start = time()
     working_data = data_inplace ? data : copy(data)
 
-    @timeit_debug to "initialize_shape_parameter!" initialize_shape_parameter!(myAmica, lrate)
+    @timeit_debug to "initialize_shape_parameter!" initialize_shape_parameter!(
+        myAmica,
+        lrate,
+    )
     myAmica.no_newton = false
 
     #Prepares data by removing means and/or sphering
@@ -70,21 +101,31 @@ Fit `myAmica` on `data` and return the model.
 
     dLL = zeros(1, maxiter)
 
-    @timeit_debug to "materialize_data" data = materialize_data_like(myAmica.A, working_data)
+    @timeit_debug to "materialize_data" data =
+        materialize_data_like(myAmica.A, working_data)
 
     if show_progress
         preparation_time = time() - amica_start
-        println("\nPreparation completed, starting main loop ($(round(preparation_time, digits=3)) s)")
+        println(
+            "\nPreparation completed, starting main loop ($(round(preparation_time, digits=3)) s)",
+        )
     end
     niter = 0
     loop_start = time()
 
-    for iter in 1:maxiter
+    for iter = 1:maxiter
         niter += 1
         iter_time_start = time()
 
         @timeit_debug to "update_parameters" begin
-            update_parameters!(myAmica, data, lrate, update_shape, do_newton && iter >= newt_start_iter; dump_dir)
+            update_parameters!(
+                myAmica,
+                data,
+                lrate,
+                update_shape,
+                do_newton && iter >= newt_start_iter;
+                dump_dir,
+            )
         end
 
         @timeit_debug to "calculate_DLL" begin
@@ -129,7 +170,9 @@ Fit `myAmica` on `data` and return the model.
 
         # Formatted output matching Fortran AMICA
         if show_progress
-            println(" iter $(lpad(iter, 5)) lrate = $(lpad(string(round(lrate.lrate, digits=10)), 13)) LL = $(lpad(string(round(myAmica.LL[iter], digits=10)), 14))  ($(lpad(string(round(iter_time, digits=2)), 6)) s)")
+            println(
+                " iter $(lpad(iter, 5)) lrate = $(lpad(string(round(lrate.lrate, digits=10)), 13)) LL = $(lpad(string(round(myAmica.LL[iter], digits=10)), 14))  ($(lpad(string(round(iter_time, digits=2)), 6)) s)",
+            )
         end
     end
 
@@ -139,7 +182,9 @@ Fit `myAmica` on `data` and return the model.
     if show_progress
         # Log average iteration time
         avg_iter_time = (time() - loop_start) / niter
-        println("\nAverage iteration time: $(round(avg_iter_time, digits=3)) s (over $(niter) iterations)")
+        println(
+            "\nAverage iteration time: $(round(avg_iter_time, digits=3)) s (over $(niter) iterations)",
+        )
     end
 
     return myAmica

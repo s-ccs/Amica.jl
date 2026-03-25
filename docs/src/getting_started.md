@@ -93,7 +93,7 @@ save_sources_and_mixtures_plot(sources, mixtures, "synthetic_sources_and_mixture
 nothing
 ```
 
-![](synthetic_sources_and_mixtures.svg)
+![plot of mixed and unmixed sources](synthetic_sources_and_mixtures.svg)
 
 ## Fitting AMICA
 
@@ -129,4 +129,4 @@ nothing # hide
 
 A plot of the unmixed sources looks as follows and clearly shows that the original sources were successfully recovered, even though they might differ in order, sign and scale.
 
-![](recovered_sources.svg)
+![plot of unmixed sources](recovered_sources.svg)

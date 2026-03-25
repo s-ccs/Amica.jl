@@ -11,7 +11,7 @@ In general, the algorithm's runtime is independent of the block size. However, t
 
 Using multithreading and a GPU backend should be avoided, the GPU already parallelizes the computation so adding multithreading on top will bring no benefit but might introduce additional overhead.
 
-![](runtime_vs_blocksize.svg)
+![barplot of runtime vs. blocksize](runtime_vs_blocksize.svg)
 
 (the chart omits configurations with less blocks than threads)
 

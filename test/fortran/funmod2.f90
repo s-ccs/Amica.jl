@@ -33,11 +33,11 @@ subroutine bytes_in_rec( bytes )
      if (ierr == 0) then
            bytes = i
            exit
-     end if 
+     end if
      !open(unit=16,file='/home/jason/tmpbytetst2',access='direct',recl=i)
      !write(16,rec=1,iostat=ierr) d
      !close(16, status='delete')
-     !print *, 'i = ', i, ' double ierr = ', ierr 
+     !print *, 'i = ', i, ' double ierr = ', ierr
   end do
   print *, 'bytes in real = ', bytes
   !open( 10, status = 'scratch', access = 'direct', recl = 1 )
@@ -50,7 +50,7 @@ subroutine bytes_in_rec( bytes )
   !   bytes = i
   !end do
   !close( 10, status = 'delete' )
-  
+
 end subroutine bytes_in_rec
 
 

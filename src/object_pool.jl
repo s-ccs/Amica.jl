@@ -1,4 +1,4 @@
-const Dims{N} = NTuple{N,Integer} where N
+const Dims{N} = NTuple{N,Integer} where {N}
 
 # Set to true to detect use-after-release bugs (fills released arrays with NaN)
 const DEBUG_POOL = false
@@ -29,7 +29,7 @@ mutable struct ObjectPool{T,A<:DenseArray{T,1}}
     available::Vector{Bool}
 
     function ObjectPool{T,A}(base_size::Int, max_arrays::Int) where {T,A<:DenseArray{T,1}}
-        arrays = [A(undef, base_size) for _ in 1:max_arrays]
+        arrays = [A(undef, base_size) for _ = 1:max_arrays]
         available = fill(true, max_arrays)
         new{T,A}(base_size, max_arrays, arrays, available)
     end
@@ -39,7 +39,7 @@ end
 """
     pool_acquire!(pool::ObjectPool{T,A}, dims::Dims{N}) -> AbstractArray{T,N}
 
-Obtain an array from the pool with the specified dimensions. 
+Obtain an array from the pool with the specified dimensions.
 The pool stores flat arrays internally but returns a reshaped view.
 Throws an error if all arrays are currently in use.
 
@@ -64,17 +64,23 @@ matrix = pool_acquire!(pool, (50, 20))  # Returns a 50x20 view (1000 elements)
 @views function pool_acquire!(who, pool::ObjectPool{T,A}, dims::Dims{N}) where {T,A,N}
     total_size = prod(dims)
     if total_size > pool.base_size
-        throw(ArgumentError("Requested size $total_size (dims=$dims) exceeds pool base_size $(pool.base_size)"))
+        throw(
+            ArgumentError(
+                "Requested size $total_size (dims=$dims) exceeds pool base_size $(pool.base_size)",
+            ),
+        )
     end
 
-    for i in 1:pool.max_arrays
+    for i = 1:pool.max_arrays
         if pool.available[i]
             pool.available[i] = false
             flat_view = pool.arrays[i][1:total_size]
             return reshape(flat_view, dims)
         end
     end
-    error("ObjectPool exhausted by $(who): all $(pool.max_arrays) arrays are currently in use")
+    error(
+        "ObjectPool exhausted by $(who): all $(pool.max_arrays) arrays are currently in use",
+    )
 end
 
 """
@@ -97,7 +103,7 @@ function pool_release!(who, pool::ObjectPool{T,A}, arr::AbstractArray{T}) where 
         parent_arr = parent(parent_arr)
     end
 
-    for i in 1:pool.max_arrays
+    for i = 1:pool.max_arrays
         if pool.arrays[i] === parent_arr || pointer(pool.arrays[i]) == pointer(arr)
             if pool.available[i]
                 @warn "Double release by $(who): Array at index $i was already released"

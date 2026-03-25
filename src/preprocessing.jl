@@ -1,8 +1,8 @@
 #removes mean from nxN float matrix
 @views function removeMean!(input)
-    mn = mean(input, dims=1)
+    mn = mean(input, dims = 1)
     (_, n) = size(input)
-    for i in 1:n
+    for i = 1:n
         input[:, i] .= input[:, i] .- mn[i]
     end
     return mn
