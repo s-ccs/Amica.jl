@@ -1,5 +1,25 @@
 {
-  "projectName": "Amica",
+  "projectName": "Amica.jl",
   "projectOwner": "s-ccs",
-  "files": ["README.md", "docs/src/index.md"]
+  "files": [
+    "README.md",
+    "docs/src/index.md"
+  ],
+  "commitType": "docs",
+  "commitConvention": "angular",
+  "contributorsPerLine": 7,
+  "contributors": [
+    {
+      "login": "v-morlock",
+      "name": "Valentin Morlock",
+      "avatar_url": "https://avatars.githubusercontent.com/u/18666999?v=4",
+      "profile": "https://github.com/v-morlock",
+      "contributions": [
+        "code",
+        "doc",
+        "bug",
+        "infra"
+      ]
+    }
+  ]
 }
