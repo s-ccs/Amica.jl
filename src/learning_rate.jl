@@ -1,3 +1,43 @@
+"""
+    LearningRate{T} <: Real
+
+Structure holding learning rate parameters and state for AMICA optimization.
+
+Maintains both the current learning rates for the mixing matrix and shape parameters,
+as well as their base values and associated schedule parameters. Also tracks statistics
+like the number of decreases and increases for adaptive learning rate adjustment.
+
+# Fields
+- `lrate::T`: Current learning rate for mixing matrix updates (A and B parameters).
+- `lrate0::T`: Base learning rate for mixing matrix (used when resetting).
+- `shapelrate::T`: Current learning rate for shape parameters.
+- `shapelrate0::T`: Base learning rate for shape parameters.
+- `shape0::T`: Initial scaling factor for shape parameters.
+- `lratefact::T`: Factor by which to multiply learning rates when decreasing (e.g., 0.5).
+- `shapelratefact::T`: Factor for shape learning rate decrease (e.g., 0.1).
+- `min::T`: Minimum learning rate threshold below which optimization stops.
+- `maxdecs::T`: Maximum number of consecutive decreases before resetting base rate.
+- `max_incs::Int`: Maximum number of consecutive increases allowed.
+- `use_min_dll::Bool`: Whether to use minimum change in log-likelihood threshold.
+- `min_dll::T`: Minimum required change in log-likelihood per iteration.
+- `min_nd::T`: Minimum numerical deviation threshold.
+- `numdecs::Int`: Counter for consecutive learning rate decreases.
+- `numincs::Int`: Counter for consecutive learning rate increases.
+- `newtrate::T`: Learning rate for Newton's method updates.
+- `newt_ramp::Int`: Number of iterations over which to ramp up Newton learning rate.
+- `minrho::T`: Minimum value for shape parameter (default 1.0).
+- `maxrho::T`: Maximum value for shape parameter (default 2.0).
+
+# Examples
+```julia-repl
+julia> lrate = LearningRate{Float64}(lrate=0.1, shapelrate=0.05)
+julia> lrate.lrate
+0.1
+```
+
+# See also
+[`calculate_lrate!`](@ref)
+"""
 #Structure for Learning Rate type with initial value, minumum, maximum etc. Used for learning rate and shape lrate
 mutable struct LearningRate{T}
     lrate::T
@@ -21,6 +61,51 @@ mutable struct LearningRate{T}
     maxrho::T
 end
 
+"""
+    LearningRate{T}(lrate::T=0.1, shapelrate::T=0.05; shape0::T=1.5, lratefact::T=0.5,
+                    shapelratefact::T=0.1, min::T=1.0e-12, maxdecs::T=3,
+                    max_incs::Int=5, use_min_dll::Bool=true, min_dll::T=1e-9,
+                    min_nd::T=1e-7, numdecs::Int=0, numincs::Int=0, newtrate::T=0.5,
+                    newt_ramp::Int=10, minrho::T=1.0, maxrho::T=2.0)
+
+Create and initialize a learning rate configuration object.
+
+Constructs a `LearningRate` structure with default or user-specified parameters for
+controlling the learning rates and adaptation schedule during AMICA optimization.
+
+# Arguments
+- `lrate::T = 0.1`: Initial learning rate for mixing matrix.
+- `shapelrate::T = 0.05`: Initial learning rate for shape parameters.
+
+# Keyword Arguments
+- `shape0::T = 1.5`: Initial scaling factor for shape parameters.
+- `lratefact::T = 0.5`: Multiplication factor when decreasing learning rate.
+- `shapelratefact::T = 0.1`: Multiplication factor for shape learning rate decrease.
+- `min::T = 1.0e-12`: Minimum learning rate threshold.
+- `maxdecs::T = 3`: Maximum allowed learning rate decreases.
+- `max_incs::Int = 5`: Maximum consecutive learning rate increases.
+- `use_min_dll::Bool = true`: Whether to use minimum change in log-likelihood criterion.
+- `min_dll::T = 1e-9`: Minimum required log-likelihood change per iteration.
+- `min_nd::T = 1e-7`: Minimum numerical deviation threshold.
+- `numdecs::Int = 0`: Initial count of decreases (usually 0).
+- `numincs::Int = 0`: Initial count of increases (usually 0).
+- `newtrate::T = 0.5`: Learning rate for Newton's method.
+- `newt_ramp::Int = 10`: Iterations to ramp up Newton learning rate.
+- `minrho::T = 1.0`: Minimum shape parameter value.
+- `maxrho::T = 2.0`: Maximum shape parameter value.
+
+# Returns
+- `LearningRate{T}`: Initialized learning rate configuration object.
+
+# Examples
+```julia-repl
+julia> lrate = LearningRate{Float64}(lrate=0.1, shape0=1.5)
+julia> lrate.lrate
+0.1
+
+julia> lrate = LearningRate{Float32}()  # Use all defaults
+```
+"""
 function LearningRate{T}(
     lrate::T = T(0.1),
     shapelrate::T = T(0.05);
@@ -63,6 +148,39 @@ function LearningRate{T}(
     )
 end
 
+"""
+    calculate_lrate!(myAmica::SingleModelAmica{T}, iter::Int, newt_start_iter::Int,
+                     do_newton::Bool, lrate::LearningRate{T})::Bool where T<:Real
+
+Adjust learning rates based on log-likelihood improvement.
+
+Monitors the log-likelihood change between iterations and adaptively adjusts learning rates.
+If likelihood decreases, the learning rates are multiplied by a factor less than 1 to slow
+convergence. If the learning rate falls below the minimum threshold, returns `true` indicating
+optimization should stop.
+
+# Arguments
+- `myAmica::SingleModelAmica{T}`: The AMICA model containing log-likelihood history (modified as needed).
+- `iter::Int`: Current iteration number.
+- `newt_start_iter::Int`: Iteration at which Newton's method starts.
+- `do_newton::Bool`: Whether Newton's method is enabled.
+- `lrate::LearningRate{T}`: Learning rate configuration and state (modified in-place).
+
+# Returns
+- `should_stop::Bool`: Returns `true` if learning rate has decreased to minimum and optimization should stop,
+  `false` otherwise.
+
+# Examples
+```julia-repl
+julia> should_stop = calculate_lrate!(myAmica, 50, 50, true, lrate)
+julia> if should_stop
+           println("Stopping optimization")
+       end
+```
+
+# See also
+[`update_mixing!`](@ref), [`LearningRate`](@ref)
+"""
 #Adjusts learning rate depending on log-likelihood growth during past iterations. How many depends on iterwin. Uses LearningRate type from types.jl
 function calculate_lrate!(
     myAmica::SingleModelAmica{T},

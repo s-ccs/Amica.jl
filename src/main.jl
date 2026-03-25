@@ -1,10 +1,45 @@
 """
-    fit(amicaType, data; m=3, maxiter=500, location=nothing, scale=nothing,
-        A=nothing, ArrayType=Array, block_size=10_000, num_threads=1, kwargs...)
+    fit(amicaType::Type{AmicaKind}, data::Array{T,2}; m=3, maxiter=500, location=nothing,
+        scale=nothing, A=nothing, ArrayType=Array, block_size=10_000, num_threads=1, kwargs...)
 
-Fit AMICA to `data` and return the fitted model.
+Fit AMICA model to data and return the fitted model.
+
+Performs Independent Component Analysis using the Adaptive Mixture ICA (AMICA) algorithm.
+Creates an AMICA model of the specified type, initializes it with the provided or default parameters,
+and fits it to the input data using the `amica!()` function.
+
+# Arguments
+- `amicaType::Type{AmicaKind}`: The type of AMICA model to create (e.g., `SingleModelAmica`).
+- `data::Array{T,2}`: Input data matrix of shape (num_samples, num_channels).
+
+# Keyword Arguments
+- `m::Int = 3`: Number of mixture components in the generalized Gaussian model.
+- `maxiter::Int = 500`: Maximum number of iterations.
+- `location::Union{Nothing, Array} = nothing`: Initial location parameters. If `nothing`, initialized automatically.
+- `scale::Union{Nothing, Array} = nothing`: Initial scale parameters. If `nothing`, initialized automatically.
+- `A::Union{Nothing, Array} = nothing`: Initial unmixing matrix. If `nothing`, initialized as random near-identity.
+- `ArrayType::Type{<:DenseArray} = Array`: Array type to use (e.g., `Array` for CPU, `CuArray` for GPU).
+- `block_size::Int = 10_000`: Number of samples to process in each block for memory efficiency.
+- `num_threads::Int = 1`: Number of threads for parallel block processing.
+- `kwargs...`: Additional keyword arguments passed to `amica!()` (e.g., `lrate`, `do_sphering`, `remove_mean`).
+
+# Returns
+- `model::AmicaKind`: Fitted AMICA model object with learned parameters.
+
+# Examples
+```julia-repl
+julia> data = randn(10000, 32)  # 10000 samples, 32 components
+julia> model = fit(SingleModelAmica, data; m=3, maxiter=100)
+julia> typeof(model)
+SingleModelAmica{Float64, Vector{Float64}, Matrix{Float64}, Array{Float64, 3}}
+
+julia> model = fit(SingleModelAmica, data; m=4, maxiter=200, num_threads=4)
+```
+
+# See also
+[`amica!`](@ref), [`SingleModelAmica`](@ref), [`recover_sources`](@ref)
 """
-function fit(
+function StatsAPI.fit(
     amicaType::Type{AmicaKind},
     data::Array{T,2};
     m = 3,
@@ -34,6 +69,32 @@ function fit(
     return amica
 end
 
+"""
+    materialize_data_like(target::AbstractMatrix{T}, data::AbstractMatrix{T})::AbstractMatrix{T}
+    where T<:Real
+
+Convert data format to match target array type (e.g., CPU to GPU array).
+
+This function replicates the structure and type of the `target` array for the `data` array,
+making it useful for converting between different array backends (e.g., from regular CPU arrays
+to GPU arrays or vice versa) while preserving data type and dimensions.
+
+# Arguments
+- `target::AbstractMatrix{T}`: A matrix of the target type to match (determines array backend).
+- `data::AbstractMatrix{T}`: A matrix containing the data to convert, with same element type as target.
+
+# Returns
+- `result::AbstractMatrix{T}`: A new matrix with data copied to the target array type/backend.
+
+# Examples
+```julia-repl
+julia> cpu_data = [1.0 2.0; 3.0 4.0]
+julia> gpu_target = CUDA.CuArray([0.0 0.0; 0.0 0.0])
+julia> gpu_data = materialize_data_like(gpu_target, cpu_data)
+julia> typeof(gpu_data)
+CUDA.CuArray{Float64, 2}
+```
+"""
 function materialize_data_like(
     target::AbstractMatrix{T},
     data::AbstractMatrix{T},
@@ -87,7 +148,7 @@ Fit `myAmica` on `data` and return the model.
 
     #Prepares data by removing means and/or sphering
     if remove_mean
-        @timeit_debug to "removeMean" removed_mean = removeMean!(working_data)
+        @timeit_debug to "removeMean" removed_mean = remove_mean!(working_data)
     end
 
     @timeit_debug to "sphering" if do_sphering

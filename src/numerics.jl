@@ -1,3 +1,30 @@
+"""
+    notzero(val::T)::T where T<:Real
+
+Return value or epsilon with preserved sign to avoid division by zero.
+
+Returns the input value if it is not near zero, otherwise returns a small positive or
+negative epsilon value matching the sign of the input. This is useful for safe division
+operations or logarithm calculations that should not receive exactly zero values.
+
+# Arguments
+- `val::T`: A real number to check.
+
+# Returns
+- `result::T`: Either `val` if it is not near zero, or ±epsilon ("1e-16) matching the sign of `val`.
+
+# Examples
+```julia-repl
+julia> notzero(1.0)
+1.0
+
+julia> notzero(0.0)
+1.0e-16
+
+julia> notzero(-1e-20)
+-1.0e-16
+```
+"""
 @views function notzero(val::T) where {T<:Real}
     epsilon = T(1e-16)
     if val < epsilon && val > -epsilon
@@ -21,7 +48,30 @@ end
 end
 
 
-# copied from specialfunctions but adapted to use Base.Math._evalpoly instead of the macro which won't run on the gpu
+"""
+    gpuDigamma(z::T)::T where T<:Real
+
+Compute the digamma function (logarithmic derivative of gamma function), GPU-compatible.
+
+This is an implementation of the digamma function adapted from SpecialFunctions.jl that
+uses Base.Math._evalpoly instead of macros, making it GPU-compatible for use with GPU arrays.
+The digamma function is the logarithmic derivative of the gamma function, i.e., ψ(z) = d(ln Γ(z))/dz.
+
+# Arguments
+- `z::T`: Input value (complex or real).
+
+# Returns
+- `result::T`: The digamma value at z.
+
+# Examples
+```julia-repl
+julia> gpuDigamma(1.0)  # digamma(1) = -0.5772...
+-0.5772156649015328
+
+julia> gpuDigamma(2.0)  # digamma(2) = 0.4227...
+0.422784335098467
+```
+"""
 @views function gpuDigamma(z::T) where {T<:Real}
     # Based on eq. (12), without looking at the accompanying source
     # code, of: K. S. Kölbig, "Programs for computing the logarithm of
@@ -63,6 +113,22 @@ end
 end
 
 
+"""
+    check_nan(myAmica::SingleModelAmica)
+
+Check for NaN values in AMICA model parameters and warn if found.
+
+Detects NaN values in all major model parameter arrays and issues warnings for debugging.
+Useful for diagnosing convergence issues or numerical problems during model fitting.
+
+# Arguments
+- `myAmica::SingleModelAmica`: The AMICA model to check.
+
+# Examples
+```julia-repl
+julia> check_nan(myAmica)  # Issues warnings if NaN values are found
+```
+"""
 function check_nan(myAmica::SingleModelAmica)
     if any(isnan, myAmica.shape)
         @warn "NaN in myAmica.shape"

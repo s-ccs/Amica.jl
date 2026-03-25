@@ -1,4 +1,4 @@
-"Temporary storage for block computation results used in update_parameters!"
+"""Temporary storage for block computation results used in update_parameters!"""
 mutable struct BlockAccumulators{T,Array2<:DenseArray{T,2},Array3<:DenseArray{T,3}}
     g_times_sources::Array3      # (n, n, num_threads)
     sum_z::Array3                # (n, m, num_threads)
@@ -12,7 +12,11 @@ mutable struct BlockAccumulators{T,Array2<:DenseArray{T,2},Array3<:DenseArray{T,
     Lt_accum::Array2             # (N, num_threads)
 end
 
-"Reset all accumulators to zero"
+"""
+    reset!(acc::BlockAccumulators{T}) where T<:Real
+
+Reset all accumulator arrays in the block accumulators to zero.
+"""
 @views function reset!(acc::BlockAccumulators{T}) where {T<:Real}
     acc.g_times_sources .= zero(T)
     acc.sum_z .= zero(T)
@@ -26,6 +30,37 @@ end
     acc.Lt_accum .= zero(T)
 end
 
+"""
+    SingleModelAmica{T,Array1,Array2,Array3} <: AbstractAmica
+
+Main AMICA model struct storing parameters, state, and intermediate values for single-model ICA.
+
+This is the core data structure for AMICA (Adaptive Mixture ICA), which performs independent
+component analysis by decomposing multivariate data into statistically independent sources. It maintains
+parameters describing the source densities (proportions, location, scale, shape), the unmixing
+matrix, and temporary scratch arrays
+
+# Fields
+- `dims::NTuple{3,Int}`: Tuple of (num_samples, num_components, num_mixture_components)
+- `block_size::Int`: Number of samples to process in each block
+- `num_threads::Int`: Number of threads for parallel processing
+- `proportions::Array2`: Mixture component proportions, shape (n, m)
+- `scale::Array2`: Source density scale parameters for generalized Gaussians, shape (n, m)
+- `location::Array2`: Source density location parameters for generalized Gaussians, shape (n, m)
+- `shape::Array2`: Source density shape parameters for generalized Gaussians, shape (n, m)
+- `A::Array2`: Unmixing matrix, shape (n, n)
+- `S::Array2`: Sphering transformation matrix, shape (n, n)
+- `LLdetS::T`: Log absolute determinant of sphering matrix
+- `Lt::Array1`: Log-likelihood contribution of each time point, shape (N,)
+- `LL::Array{T,1}`: Log-likelihood over iterations
+- `dA::Array2`: Gradient of unmixing matrix, shape (n, n)
+- `newton_kappa::Array1`: Newton method parameter kappa, shape (n,)
+- `newton_lambda::Array1`: Newton method parameter lambda, shape (n,)
+- `newton_sigma2::Array1`: Newton method parameter sigma squared, shape (n,)
+- `no_newton::Bool`: Flag to disable Newton method when Hessian is not positive definite
+- `pools::Vector{ObjectPool{T,Array1}}`: Object pools for memory reuse, one per thread
+- `acc::BlockAccumulators{T,Array2,Array3}`: Accumulators for block computations
+"""
 mutable struct SingleModelAmica{
     T,
     Array1<:DenseArray{T,1},
