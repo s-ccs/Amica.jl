@@ -22,7 +22,7 @@ Adaptive Independent Component Analysis on GPU in pure Julia.
 ## Correctness
 We checked our implementation against the Fortran implementation from Jason Palmer. This check is also implemented as a continuous integration check for future versions.
 - Float32 did not impact performance in our three tested datasets
-<img width="700" height="390" alt="grafik" src="https://github.com/user-attachments/assets/26327794-9fa8-4810-9b53-3c80692b8c14" />
+<img width="700" height="390" alt="grafik" src="https://github.com/user-attachments/assets/285afb31-3bae-4b5e-b747-f47a658aa469" />
 
 ## GPU Support
 In theory, GPU support should work on Nvidia, AMD, Apple-Metal, and Intel as well. In practice, we only could test Nvidia and Apple-Metal so far. The support hinges on KernelAbstractions.jl to support more backends. Please raise an issue if you run into problems, we can surely figure it out!
