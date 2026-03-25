@@ -21,7 +21,7 @@ and fits it to the input data using the `amica!()` function.
 - `ArrayType::Type{<:DenseArray} = Array`: Array type to use (e.g., `Array` for CPU, `CuArray` for GPU).
 - `block_size::Int = 10_000`: Number of samples to process in each block for memory efficiency.
 - `num_threads::Int = 1`: Number of threads for parallel block processing.
-- `kwargs...`: Additional keyword arguments passed to `amica!()` (e.g., `lrate`, `do_sphering`, `remove_mean`).
+- `kwargs...`: Additional keyword arguments passed to `amica!()` (e.g., `lrate`, `do_sphering`, `remove_mean`,`show_progress`,`show_timing``).
 
 # Returns
 - `model::AmicaKind`: Fitted AMICA model object with learned parameters.
@@ -137,7 +137,6 @@ Fit `myAmica` on `data` and return the model.
     show_timing = false,
 ) where {T<:Real}
 
-    amica_start = time()
     working_data = data_inplace ? data : copy(data)
 
     @timeit_debug to "initialize_shape_parameter!" initialize_shape_parameter!(
@@ -165,18 +164,14 @@ Fit `myAmica` on `data` and return the model.
     @timeit_debug to "materialize_data" data =
         materialize_data_like(myAmica.A, working_data)
 
-    if show_progress
-        preparation_time = time() - amica_start
-        println(
-            "\nPreparation completed, starting main loop ($(round(preparation_time, digits=3)) s)",
-        )
-    end
+
     niter = 0
-    loop_start = time()
+
+
+    p = ProgressUnknown(; enabled = show_progress, showspeed = true, spinner = true)
 
     for iter = 1:maxiter
         niter += 1
-        iter_time_start = time()
 
         @timeit_debug to "update_parameters" begin
             update_parameters!(
@@ -204,7 +199,7 @@ Fit `myAmica` on `data` and return the model.
         if iter > 1
             # Check for NaN
             if isnan(myAmica.LL[iter])
-                println("Got NaN! Exiting ...")
+                @warn("Got NaN! Exiting ...")
                 break
             end
 
@@ -226,27 +221,19 @@ Fit `myAmica` on `data` and return the model.
             check_nan(myAmica)
         end
 
-        # Calculate iteration time
-        iter_time = time() - iter_time_start
 
-        # Formatted output matching Fortran AMICA
-        if show_progress
-            println(
-                " iter $(lpad(iter, 5)) lrate = $(lpad(string(round(lrate.lrate, digits=10)), 13)) LL = $(lpad(string(round(myAmica.LL[iter], digits=10)), 14))  ($(lpad(string(round(iter_time, digits=2)), 6)) s)",
-            )
-        end
+
+        next!(
+            p,
+            showvalues = [("iter", iter), ("LL", myAmica.LL[iter]), ("lrate", lrate.lrate)],
+        )
+
     end
 
     if show_timing
         print_timer(to)
     end
-    if show_progress
-        # Log average iteration time
-        avg_iter_time = (time() - loop_start) / niter
-        println(
-            "\nAverage iteration time: $(round(avg_iter_time, digits=3)) s (over $(niter) iterations)",
-        )
-    end
+    finish!(p)
 
     return myAmica
 end

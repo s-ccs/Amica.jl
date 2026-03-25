@@ -29,6 +29,7 @@ Documentation for [AMICA.jl](https://github.com/s-ccs/Amica.jl) - a well perform
 ```
 
 ## LLM Usage
+
 - LLM's were used to understand the original Fortran Code better
 - LLM's autocompletion function was used from time to time
 - LLM's were used to generate docstrings, they were proof-read by a maintainer

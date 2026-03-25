@@ -33,7 +33,7 @@ julia> update_mixing!(myAmica, 100, true, 50, lrate)
 ) where {T<:Real}
     if (do_newton && !myAmica.no_newton && iter >= newt_start_iter)
         if iter == newt_start_iter
-            println("Starting Newton ... setting numdecs to 0")
+            @info("Starting Newton ... setting numdecs to 0")
             lrate.numdecs = 0
         end
 
@@ -105,7 +105,7 @@ julia> do_newton!(myAmica, lrate)
         myAmica.A -= lrate.lrate * myAmica.A * B
     else
         # Fall back to natural gradient if not positive definite (Fortran line 2074-2079)
-        println("Hessian not positive definite, using natural gradient")
+        @info("Hessian not positive definite, using natural gradient")
         myAmica.no_newton = true
 
         # Still ramp up learning rate but cap at lrate0 instead of maximum

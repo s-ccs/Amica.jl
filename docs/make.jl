@@ -21,8 +21,8 @@ makedocs(;
         "Configuration" => "configuration.md",
         "Performance" => "performance.md",
         "Contribution?" => [
-            "Contribution!"=> "90-contributing.md",
-            "Developer Docs"=>"91-developer.md",
+            "Contribution!" => "90-contributing.md",
+            "Developer Docs" => "91-developer.md",
         ],
         "API/Reference" => "95-reference.md",
     ],
