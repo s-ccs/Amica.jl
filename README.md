@@ -11,20 +11,25 @@
 [![BestieTemplate](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JuliaBesties/BestieTemplate.jl/main/docs/src/assets/badge.json)](https://github.com/JuliaBesties/BestieTemplate.jl)
 
 ## AMICA.jl
+
 Adaptive Independent Component Analysis on GPU in pure Julia.
 
 ## Speed
+
 - Single CPU performance is slightly faster than the fortran implementation
 - GPU is fastest
 - 64 core multi-threading CPU is faster for Fortran, this difference appears at utilizing ~8 cores in our testing
 <img width="700" height="320" alt="grafik" src="https://github.com/user-attachments/assets/2ead53ff-d2c9-46f0-bbb6-bde9e789582e" />
 
 ## Correctness
+
 We checked our implementation against the Fortran implementation from Jason Palmer. This check is also implemented as a continuous integration check for future versions.
+
 - Float32 did not impact performance in our three tested datasets
 <img width="700" height="390" alt="grafik" src="https://github.com/user-attachments/assets/285afb31-3bae-4b5e-b747-f47a658aa469" />
 
 ## GPU Support
+
 In theory, GPU support should work on Nvidia, AMD, Apple-Metal, and Intel as well. In practice, we only could test Nvidia and Apple-Metal so far. The support hinges on KernelAbstractions.jl to support more backends. Please raise an issue if you run into problems, we can surely figure it out!
 
 ## Contributing
