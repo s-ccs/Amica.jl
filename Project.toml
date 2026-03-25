@@ -22,6 +22,7 @@ MetalExt = ["Metal"]
 [compat]
 KernelAbstractions = "0.9"
 PrecompileTools = "1.3"
+SpecialFunctions = "2.7.1"
 Statistics = "1"
 TimerOutputs = "0.5"
 julia = "1"
