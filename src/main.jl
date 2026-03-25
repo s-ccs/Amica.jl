@@ -21,7 +21,7 @@ and fits it to the input data using the `amica!()` function.
 - `ArrayType::Type{<:DenseArray} = Array`: Array type to use (e.g., `Array` for CPU, `CuArray` for GPU).
 - `block_size::Int = 10_000`: Number of samples to process in each block for memory efficiency.
 - `num_threads::Int = 1`: Number of threads for parallel block processing.
-- `kwargs...`: Additional keyword arguments passed to `amica!()` (e.g., `lrate`, `do_sphering`, `remove_mean`).
+- `kwargs...`: Additional keyword arguments passed to `amica!()` (e.g., `lrate`, `do_sphering`, `remove_mean`,`show_progress`,`show_timing``).
 
 # Returns
 - `model::AmicaKind`: Fitted AMICA model object with learned parameters.
@@ -174,9 +174,10 @@ Fit `myAmica` on `data` and return the model.
     niter = 0
     loop_start = time()
 
+    p = Progress(maxiter; enabled = show_progress, showspeed = true)
+
     for iter = 1:maxiter
         niter += 1
-        iter_time_start = time()
 
         @timeit_debug to "update_parameters" begin
             update_parameters!(
@@ -226,26 +227,22 @@ Fit `myAmica` on `data` and return the model.
             check_nan(myAmica)
         end
 
-        # Calculate iteration time
-        iter_time = time() - iter_time_start
 
-        # Formatted output matching Fortran AMICA
-        if show_progress
-            println(
-                " iter $(lpad(iter, 5)) lrate = $(lpad(string(round(lrate.lrate, digits=10)), 13)) LL = $(lpad(string(round(myAmica.LL[iter], digits=10)), 14))  ($(lpad(string(round(iter_time, digits=2)), 6)) s)",
-            )
-        end
+
+        next!(
+            p,
+            showvalues = [("iter", iter), ("LL", myAmica.LL[iter]), ("lrate", lrate.lrate)],
+        )
+
     end
 
     if show_timing
         print_timer(to)
     end
-    if show_progress
+    if show_progress == :verbose
         # Log average iteration time
         avg_iter_time = (time() - loop_start) / niter
-        println(
-            "\nAverage iteration time: $(round(avg_iter_time, digits=3)) s (over $(niter) iterations)",
-        )
+        @info "\nAverage iteration time: $(round(avg_iter_time, digits=3)) s (over $(niter) iterations)"
     end
 
     return myAmica

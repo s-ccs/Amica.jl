@@ -8,6 +8,7 @@ using Statistics
 using StatsAPI
 import StatsAPI: fit
 using KernelAbstractions
+using ProgressMeter
 using PrecompileTools: @setup_workload, @compile_workload
 
 const to = TimerOutput()
