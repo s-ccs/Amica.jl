@@ -18,3 +18,5 @@ Using multithreading and a GPU backend should be avoided, the GPU already parall
 ## Choosing a Thread Count
 
 Increasing thread count effectively reduces runtime, given a sufficient number of CPU cores, but benchmarks have shown that results diminish around 16 threads. It might therefore be more efficient to choose a smaller number of threads and instead run multiple AMICAs in parallel.
+
+![barplot of runtime vs. thread count](runtime_vs_threadcount.svg)
