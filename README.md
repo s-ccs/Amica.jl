@@ -25,6 +25,8 @@ We checked our implementation against the Fortran implementation from Jason Palm
 - Float32 did not impact performance in our three tested datasets
 <img width="608" height="256" alt="grafik" src="https://github.com/user-attachments/assets/6358cb3e-1421-4a31-98ff-6f9a2ef2017d" />
 
+## GPU Support
+In theory, GPU support should work on Nvidia, AMD, Apple-Metal, and Intel as well. In practice, we only could test Nvidia and Apple-Metal so far. The support hinges on KernelAbstractions.jl to support more backends. Please raise an issue if you run into problems, we can surely figure it out!
 
 ## Contributing
 
