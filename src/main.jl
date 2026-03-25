@@ -137,7 +137,6 @@ Fit `myAmica` on `data` and return the model.
     show_timing = false,
 ) where {T<:Real}
 
-    amica_start = time()
     working_data = data_inplace ? data : copy(data)
 
     @timeit_debug to "initialize_shape_parameter!" initialize_shape_parameter!(
@@ -165,16 +164,11 @@ Fit `myAmica` on `data` and return the model.
     @timeit_debug to "materialize_data" data =
         materialize_data_like(myAmica.A, working_data)
 
-    if show_progress
-        preparation_time = time() - amica_start
-        println(
-            "\nPreparation completed, starting main loop ($(round(preparation_time, digits=3)) s)",
-        )
-    end
-    niter = 0
-    loop_start = time()
 
-    p = Progress(maxiter; enabled = show_progress, showspeed = true)
+    niter = 0
+
+
+    p = ProgressUnknown(; enabled = show_progress, showspeed = true, spinner = true)
 
     for iter = 1:maxiter
         niter += 1
@@ -205,7 +199,7 @@ Fit `myAmica` on `data` and return the model.
         if iter > 1
             # Check for NaN
             if isnan(myAmica.LL[iter])
-                println("Got NaN! Exiting ...")
+                @warn("Got NaN! Exiting ...")
                 break
             end
 
@@ -239,11 +233,7 @@ Fit `myAmica` on `data` and return the model.
     if show_timing
         print_timer(to)
     end
-    if show_progress == :verbose
-        # Log average iteration time
-        avg_iter_time = (time() - loop_start) / niter
-        @info "\nAverage iteration time: $(round(avg_iter_time, digits=3)) s (over $(niter) iterations)"
-    end
+    finish!(p)
 
     return myAmica
 end

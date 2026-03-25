@@ -173,9 +173,7 @@ optimization should stop.
 # Examples
 ```julia-repl
 julia> should_stop = calculate_lrate!(myAmica, 50, 50, true, lrate)
-julia> if should_stop
-           println("Stopping optimization")
-       end
+
 ```
 
 # See also
@@ -191,11 +189,11 @@ function calculate_lrate!(
 ) where {T<:Real}
     # Check if likelihood is decreasing
     if myAmica.LL[iter] < myAmica.LL[iter-1]
-        println("Likelihood decreasing!")
+        @info ("Likelihood decreasing!")
 
         # missing condition: .or. (ndtmpsum .le. min_nd)
         if lrate.lrate <= lrate.min
-            println("minimum change threshold met, exiting loop ...")
+            @info("minimum change threshold met, exiting loop ...")
             return true
         else
             # Decrease learning rates
@@ -209,7 +207,7 @@ function calculate_lrate!(
                     lrate.shapelrate0 *= lrate.shapelratefact
                 end
                 if do_newton && (iter > newt_start_iter)
-                    println("Reducing maximum Newton lrate")
+                    @info("Reducing maximum Newton lrate")
                     lrate.newtrate *= lrate.lratefact
                 end
                 lrate.numdecs = 0
