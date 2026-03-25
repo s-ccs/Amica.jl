@@ -12,6 +12,13 @@ Documentation for [AMICA.jl](https://github.com/s-ccs/Amica.jl) - a well perform
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
 <!-- prettier-ignore-start -->
 <!-- markdownlint-disable -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/v-morlock"><img src="https://avatars.githubusercontent.com/u/18666999?v=4?s=100" width="100px;" alt="Valentin Morlock"/><br /><sub><b>Valentin Morlock</b></sub></a><br /><a href="#code-v-morlock" title="Code">💻</a> <a href="#doc-v-morlock" title="Documentation">📖</a> <a href="#bug-v-morlock" title="Bug reports">🐛</a> <a href="#infra-v-morlock" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a></td>
+    </tr>
+  </tbody>
+</table>
 
 <!-- markdownlint-restore -->
 <!-- prettier-ignore-end -->
