@@ -1,4 +1,29 @@
-"Updates the mixing matrix"
+"""
+    update_mixing!(myAmica::SingleModelAmica{T}, iter::Int, do_newton::Bool, newt_start_iter::Int,
+                   lrate::LearningRate) where T<:Real
+
+Update the mixing (unmixing) matrix using natural gradient or Newton's method.
+
+Updates the unmixing matrix A using either the natural gradient method or Newton's method,
+depending on the iteration count and the positive-definiteness of the Newton Hessian.
+Newton's method is used after `newt_start_iter` iterations if `do_newton=true` and the Hessian
+is positive definite. Otherwise, the natural gradient method is used with adaptive learning rates.
+
+# Arguments
+- `myAmica::SingleModelAmica{T}`: The AMICA model to update (modified in-place).
+- `iter::Int`: Current iteration number.
+- `do_newton::Bool`: Whether to attempt Newton's method updates.
+- `newt_start_iter::Int`: Iteration at which to start using Newton's method.
+- `lrate::LearningRate`: Learning rate configuration and state (modified as needed).
+
+# Examples
+```julia-repl
+julia> update_mixing!(myAmica, 100, true, 50, lrate)
+```
+
+# See also
+[`do_newton!`](@ref), [`calculate_lrate!`](@ref)
+"""
 @views function update_mixing!(
     myAmica::SingleModelAmica{T},
     iter::Int,
@@ -26,7 +51,27 @@
     end
 end
 
-"Perform the newton method"
+"""
+    do_newton!(myAmica::SingleModelAmica{T}, lrate::LearningRate) where T<:Real
+
+Perform a single Newton's method update on the unmixing matrix.
+
+Computes the Newton Hessian matrix B and updates the unmixing matrix using Newton's method
+if the Hessian is positive definite. If the Hessian is not positive definite, falls back to
+the natural gradient method and sets `myAmica.no_newton = true` to avoid further Newton attempts.
+
+# Arguments
+- `myAmica::SingleModelAmica{T}`: The AMICA model to update (modified in-place).
+- `lrate::LearningRate`: Learning rate configuration specifying the Newton learning rate.
+
+# Examples
+```julia-repl
+julia> do_newton!(myAmica, lrate)
+```
+
+# See also
+[`update_mixing!`](@ref), [`calc_b_kernel`](@ref)
+"""
 @views function do_newton!(
     myAmica::SingleModelAmica{T},
     lrate::LearningRate,
@@ -70,6 +115,27 @@ end
     end
 end
 
+"""
+    calc_b_kernel(B, posdef_flag, newton_kappa, newton_lambda, newton_sigma2, dA; ndrange)
+
+GPU kernel to compute Newton Hessian matrix B and check positive-definiteness.
+
+Computes the Newton Hessian approximation matrix B element-wise. Diagonal elements are
+computed as dA[i,k] / newton_lambda[i], and off-diagonal elements use a formula combining
+newton_kappa and newton_sigma2 parameters. Sets `posdef_flag[1] = 0` if any finite conditions
+are violated, indicating the Hessian is not positive definite.
+
+# Arguments
+- `B::DenseArray{T,2}`: Output Hessian matrix, shape (n, n) (modified in-place).
+- `posdef_flag::DenseArray{UInt8,1}`: Single-element array flag for positive-definiteness (modified).
+- `newton_kappa::DenseArray{T,1}`: Newton method parameter kappa, shape (n,).
+- `newton_lambda::DenseArray{T,1}`: Newton method parameter lambda, shape (n,).
+- `newton_sigma2::DenseArray{T,1}`: Newton method parameter sigma squared, shape (n,).
+- `dA::DenseArray{T,2}`: Gradient of unmixing matrix, shape (n, n).
+
+# Keyword Arguments
+- `ndrange`: Kernel execution range (typically `(n, n)` for the matrix dimensions).
+"""
 @kernel inbounds = true function calc_b_kernel(
     B::DenseArray{T,2},
     posdef_flag::DenseArray{UInt8,1},

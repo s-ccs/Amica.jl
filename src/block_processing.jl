@@ -1,4 +1,32 @@
-"Process a range of blocks and accumulate results into acc for a specific thread"
+"""
+    process_blocks!(myAmica::SingleModelAmica{T}, data, W::AbstractMatrix{T}, newton_active::Bool,
+                    tid::Int, num_blocks::Int; dump_dir=nothing) where T<:Real
+
+Process a range of data blocks and accumulate parameter update statistics.
+
+Processes a thread-specific range of data blocks to compute likelihood contributions and
+accumulate statistics needed for parameter updates. Each thread processes its assigned blocks
+and accumulates results into thread-local views of the accumulators.
+
+# Arguments
+- `myAmica::SingleModelAmica{T}`: The AMICA model (modified to accumulate results).
+- `data`: Input data matrix of shape (num_samples, num_features).
+- `W::AbstractMatrix{T}`: Inverse of unmixing matrix, shape (num_components, num_components).
+- `newton_active::Bool`: Whether to compute Newton method statistics.
+- `tid::Int`: Thread ID (1-indexed) indicating which blocks this thread should process.
+- `num_blocks::Int`: Total number of blocks to process across all threads.
+
+# Keyword Arguments
+- `dump_dir::Union{Nothing,String} = nothing`: Optional directory for debugging output files.
+
+# Examples
+```julia-repl
+julia> process_blocks!(myAmica, data, W, true, 1, 10)  # Thread 1 processes its assigned blocks
+```
+
+# See also
+[`update_parameters!`](@ref), [`BlockAccumulators`](@ref)
+"""
 @views function process_blocks!(
     myAmica::SingleModelAmica{T},
     data,

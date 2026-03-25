@@ -1,4 +1,23 @@
-"Normalizes source density location parameter (mu), scale parameter (beta) and model centers"
+"""
+    reparameterize!(myAmica::SingleModelAmica{T}) where T<:Real
+
+Normalize mixing matrix columns and scale/location parameters accordingly.
+
+Normalizes each column of the unmixing matrix A to unit norm and rescales the associated
+scale and location parameters to maintain the same model representation. This reparameterization
+ensures numerical stability and prevents the unmixing matrix from becoming ill-conditioned.
+
+# Arguments
+- `myAmica::SingleModelAmica{T}`: The AMICA model to reparameterize (modified in-place).
+
+# Examples
+```julia-repl
+julia> reparameterize!(myAmica)
+```
+
+# See also
+[`update_mixing!`](@ref)
+"""
 @views function reparameterize!(myAmica::SingleModelAmica{T}) where {T<:Real}
     # Calculate norm of column k: Anrmk = sqrt(sum(A(:,k)*A(:,k)))
     tau = sqrt.(sum(myAmica.A .^ 2, dims = 1))[1, :]
@@ -9,11 +28,59 @@
     myAmica.scale .= ifelse.(mask, myAmica.scale ./ tau, myAmica.scale)
 end
 
+"""
+    initialize_shape_parameter!(myAmica::SingleModelAmica, lrate::LearningRate)
+
+Set initial shape parameters of generalized Gaussians for each component.
+
+Initializes the shape parameter (rho) of the generalized Gaussian mixture components
+by scaling the uniformly initialized shape values by the `shape0` factor from the learning rate.
+
+# Arguments
+- `myAmica::SingleModelAmica`: The AMICA model to initialize (modified in-place).
+- `lrate::LearningRate`: Learning rate configuration containing the `shape0` scaling factor.
+
+# Examples
+```julia-repl
+julia> initialize_shape_parameter!(myAmica, lrate)
+```
+
+# See also
+[`amica!`](@ref), [`LearningRate`](@ref)
+"""
 # Sets the initial value for the shape parameter of the GeneralizedGaussians for each Model
 @views function initialize_shape_parameter!(myAmica::SingleModelAmica, lrate::LearningRate)
     myAmica.shape .= lrate.shape0 .* myAmica.shape
 end
 
+"""
+    update_parameters!(myAmica::SingleModelAmica{T}, data, lrate::LearningRate, upd_shape::Bool,
+                       newton_active::Bool; dump_dir::Union{Nothing,String}=nothing) where T<:Real
+
+Update all AMICA parameters from the data.
+
+Processes the data in blocks to compute gradients and accumulators, then updates all model
+parameters: mixture proportions (alpha), source location (mu), scale (beta), and optionally shape (rho).
+Also updates Newton method parameters if Newton optimization is active.
+
+# Arguments
+- `myAmica::SingleModelAmica{T}`: The AMICA model to update (modified in-place).
+- `data`: The input data matrix of shape (num_samples, num_features).
+- `lrate::LearningRate`: Learning rate configuration.
+- `upd_shape::Bool`: Whether to update shape parameters.
+- `newton_active::Bool`: Whether Newton method parameters should be computed and updated.
+
+# Keyword Arguments
+- `dump_dir::Union{Nothing,String} = nothing`: Optional directory for debugging output.
+
+# Examples
+```julia-repl
+julia> update_parameters!(myAmica, data, lrate, true, true)
+```
+
+# See also
+[`process_blocks!`](@ref), [`update_mixing!`](@ref), [`reparameterize!`](@ref)
+"""
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
 @views function update_parameters!(
     myAmica::SingleModelAmica{T},

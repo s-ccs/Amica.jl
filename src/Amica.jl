@@ -5,6 +5,8 @@ using LinearAlgebra
 using SpecialFunctions
 using TimerOutputs
 using Statistics
+using StatsAPI
+import StatsAPI: fit
 using KernelAbstractions
 using PrecompileTools: @setup_workload, @compile_workload
 
