@@ -17,13 +17,12 @@ Adaptive Independent Component Analysis on GPU in pure Julia.
 - Single CPU performance is slightly faster than the fortran implementation
 - GPU is fastest
 - 64 core multi-threading CPU is faster for Fortran, this difference appears at utilizing ~8 cores in our testing
-<img width="1196" height="452" alt="grafik" src="https://github.com/user-attachments/assets/0e329796-a84e-48d9-84db-a8495a736155" />
-
+<img width="700" height="320" alt="grafik" src="https://github.com/user-attachments/assets/2ead53ff-d2c9-46f0-bbb6-bde9e789582e" />
 
 ## Correctness
 We checked our implementation against the Fortran implementation from Jason Palmer. This check is also implemented as a continuous integration check for future versions.
 - Float32 did not impact performance in our three tested datasets
-<img width="608" height="256" alt="grafik" src="https://github.com/user-attachments/assets/6358cb3e-1421-4a31-98ff-6f9a2ef2017d" />
+<img width="700" height="390" alt="grafik" src="https://github.com/user-attachments/assets/26327794-9fa8-4810-9b53-3c80692b8c14" />
 
 
 ## Contributing
