@@ -61,37 +61,31 @@ matrix, and temporary scratch arrays
 - `pools::Vector{ObjectPool{T,Array1}}`: Object pools for memory reuse, one per thread
 - `acc::BlockAccumulators{T,Array2,Array3}`: Accumulators for block computations
 """
-mutable struct SingleModelAmica{
-    T,
-    Array1<:DenseArray{T,1},
-    Array2<:DenseArray{T,2},
-    Array3<:DenseArray{T,3},
-} <: AbstractAmica
+mutable struct SingleModelAmica{T<:Real} <: AbstractAmica
     block_size::Int
-    num_threads::Int
-    proportions::Array2                                         # source density mixture proportions
-    scale::Array2                                               # source density inverse scale parameter
-    location::Array2                                            # source density location parameter
-    shape::Array2                                               # source density shape paramters
+    proportions::DenseArray{T,2}                                         # source density mixture proportions
+    scale::DenseArray{T,2}                                               # source density inverse scale parameter
+    location::DenseArray{T,2}                                            # source density location parameter
+    shape::DenseArray{T,2}                                               # source density shape paramters
 
-    A::Array2                                                   # unmixing matrix
-    S::Array2                                                   # sphering matrix
+    A::DenseArray{T,2}                                                   # unmixing matrix
+    S::DenseArray{T,2}                                                   # sphering matrix
     LLdetS::T                                                   # logabsdet(S)
-    Lt::Array1                                                  # log likelihood of time point for each model ( M x N )
-    LL::Array{T,1}                                              # log likelihood over iterations
+    Lt::DenseArray{T,1}                                                  # log likelihood of time point for each model ( M x N )
+    LL::Any                                              # log likelihood over iterations
 
     # --- intermediary values
 
-    dA::Array2
+    dA::DenseArray{T,2}
 
     # Pre-computed values for Newton method
-    newton_kappa::Array1
-    newton_lambda::Array1
-    newton_sigma2::Array1
+    newton_kappa::DenseArray{T,1}
+    newton_lambda::DenseArray{T,1}
+    newton_sigma2::DenseArray{T,1}
     no_newton::Bool
 
-    pools::Vector{ObjectPool{T,Array1}}                         # one pool per thread
-    acc::BlockAccumulators{T,Array2,Array3}
+    pools::Vector{ObjectPool}                         # one pool per thread
+    acc::BlockAccumulators#{T,DenseArray{T,2},DenseArray{T,3}}
 end
 
 # Computed `dims` property for SingleModelAmica
@@ -102,6 +96,8 @@ function Base.getproperty(m::SingleModelAmica, s::Symbol)
             size(getfield(m, :A), 2),
             size(getfield(m, :scale), 2),
         )
+    elseif s === :num_threads
+        return length(getfield(m, :pools))
     end
     return getfield(m, s)
 end
@@ -171,9 +167,8 @@ Create a single-model AMICA object.
     @timeit_debug to "init pools" pools =
         [ObjectPool{T,Array1}(block_size * n * m, 7) for _ = 1:num_threads]
 
-    return SingleModelAmica{T,Array1,Array2,Array3}(
+    return SingleModelAmica{T}(
         block_size,
-        num_threads,
         Array2(proportions),                       # proportions
         Array2(scale),                             # scale
         Array2(location),                          # location
@@ -182,7 +177,7 @@ Create a single-model AMICA object.
         Array2(undef, n, n),                         # S
         zero(T),                                     # LLdetS
         Array1(undef, N),                            # Lt
-        Array1(undef, 0),                            # LL
+        Vector(undef, 0),                            # LL
         Array2(undef, n, n),                         # dA
         Array1(undef, n),                            # newton_kappa
         Array1(undef, n),                            # newton_lambda

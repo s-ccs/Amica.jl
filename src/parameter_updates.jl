@@ -49,7 +49,7 @@ julia> initialize_shape_parameter!(myAmica, lrate)
 [`amica!`](@ref), [`LearningRate`](@ref)
 """
 # Sets the initial value for the shape parameter of the GeneralizedGaussians for each Model
-@views function initialize_shape_parameter!(myAmica::SingleModelAmica, lrate::LearningRate)
+@views function initialize_shape_parameter!(myAmica::AbstractAmica, lrate::LearningRate)
     myAmica.shape .= lrate.shape0 .* myAmica.shape
 end
 
@@ -83,14 +83,15 @@ julia> update_parameters!(myAmica, data, lrate, true, true)
 """
 #Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
 @views function update_parameters!(
-    myAmica::SingleModelAmica{T},
+    myAmica::AbstractAmica,
     data,
     lrate::LearningRate,
     upd_shape::Bool,
     newton_active::Bool;
     dump_dir::Union{Nothing,String} = nothing,
-) where {T<:Real}
+)
     N, n, m = myAmica.dims
+    T = first(typeof(myAmica).parameters)
     num_blocks = cld(N, myAmica.block_size)
 
     # Initialize Lt with base values
