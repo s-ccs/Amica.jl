@@ -30,7 +30,7 @@ include("main.jl")
 
 export amica!
 export fit
-export recover_sources
+export recover_sources, mixing, unmixing, sphering
 export AbstractAmica, SingleModelAmica
 
 # precompilation
