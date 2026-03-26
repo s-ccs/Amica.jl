@@ -38,7 +38,6 @@ julia> lrate.lrate
 # See also
 [`calculate_lrate!`](@ref)
 """
-#Structure for Learning Rate type with initial value, minumum, maximum etc. Used for learning rate and shape lrate
 mutable struct LearningRate{T}
     lrate::T
     lrate0::T
