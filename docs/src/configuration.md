@@ -35,7 +35,8 @@ model = SingleModelAmica(
 
 ## GPU Arrays
 
-For an additional speedup, `Amica.jl` can work with other array backends through `ArrayType`, but only CUDA is thoroughly tested at the moment.
+For an additional speedup, `Amica.jl` can work with other array backends. Only CUDA is thoroughly tested at the moment.
+Try other backends like `Metal.MtlArray` (Apple), `AMDGPU.ROCArray` (AMD) and share with us your experience!
 
 ```julia
 using Amica
@@ -45,8 +46,7 @@ data = rand(Float32, 10_000, 32)
 
 model = fit(
     SingleModelAmica,
-    data;
-    ArrayType=CuArray,
+    cu(data); # move data to nvidia-GPU
     m=3,
     maxiter=50,
     block_size=10_000,

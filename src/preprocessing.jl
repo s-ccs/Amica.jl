@@ -13,10 +13,7 @@ Subtracts the mean of each column from the column in-place. I.e. mean across dim
 """
 @views function remove_mean!(input)
     mn = mean(input, dims = 1)
-    (_, n) = size(input)
-    for i = 1:n
-        input[:, i] .= input[:, i] .- mn[i]
-    end
+    input .= input .- mn
     return mn
 end
 

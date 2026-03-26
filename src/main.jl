@@ -22,6 +22,7 @@ and fits it to the input data using the `amica!()` function.
 - `block_size::Int = 10_000`: Number of samples to process in each block for memory efficiency.
 - `num_threads::Int = 1`: Number of threads for parallel block processing.
 - `do_fit::Bool = true`: Whether to perform fitting immediately. If `false`, returns uninitialized model. Use amica!(myAmica,data) to fit
+- `sort_by_variance::Bool = false`: Whether to sort the recovered sources by variance after fitting.
 - `kwargs...`: Additional keyword arguments passed to `amica!()` (e.g., `lrate`, `do_sphering`, `remove_mean`,`show_progress`,`show_timing``).
 
 # Returns
@@ -42,28 +43,27 @@ julia> model = fit(SingleModelAmica, data; m=4, maxiter=200, num_threads=4)
 """
 function StatsAPI.fit(
     amicaType::Type{AmicaKind},
-    data::Array{T,2};
+    data::ArrayType;
     m = 3,
     maxiter = 500,
     location = nothing,
     scale = nothing,
     A = nothing,
-    ArrayType::Type{<:DenseArray} = Array,
+    #ArrayType::Type{<:DenseArray} = Array,
     block_size = 10_000,
     num_threads = 1,
     do_fit = true,
     kwargs...,
-) where {AmicaKind<:AbstractAmica,T<:Real}
+) where {AmicaKind<:AbstractAmica,ArrayType<:AbstractArray}
     (N, n) = size(data)
     amica = AmicaKind(
-        T,
+        data,
         m = m,
         ncomps = n,
         nsamples = N,
         location = location,
         scale = scale,
         A = A,
-        ArrayType = ArrayType,
         block_size = block_size,
         num_threads = num_threads,
     )
@@ -250,6 +250,7 @@ function sort_according_to_var!(
     myAmica::Amica.SingleModelAmica,
     data::AbstractMatrix{T},
 ) where {T<:Real}
+    @warn "It is unclear right now whether this function works correctly, as the calculated variances are all very close to 1 - we might have missed a normalisation step somwhere. Your mileage might vary"
     # Get the variances of the recovered sources
     winv = (mixing(myAmica))
     #meanvar = sum(winv.^2).*sum((data').^2)/((chans*frames)-1); % from Rey Ramirez 8/07
@@ -259,23 +260,29 @@ function sort_according_to_var!(
     # svar(i,h) = svar(i,h) * norm(A(:,i,h))^2;
     svar = similar(variances)
     N, n, m = myAmica.dims
+    A = Matrix(myAmica.A)
+    proportions = Matrix(myAmica.proportions)
+    location = Matrix(myAmica.location)
+    scale = Matrix(myAmica.scale)
+    shape = Matrix(myAmica.shape)
+
     for i = 1:n # go over components
         svar[i] = sum(
-            myAmica.proportions[i, :] .* (
-                myAmica.location[i, :] .^ 2 .+
-                (gamma.(3 ./ myAmica.shape[i, :]) ./ gamma.(1 ./ myAmica.shape[i, :])) ./ myAmica.scale[i, :] .^ 2
+            proportions[i, :] .* (
+                location[i, :] .^ 2 .+
+                (gamma.(3 ./ shape[i, :]) ./ gamma.(1 ./ shape[i, :])) ./ scale[i, :] .^ 2
             ),
         )
-        svar[i] *= norm(myAmica.A[:, i])^2
+        svar[i] *= norm(A[:, i])^2
     end
 
-    @info "variances" variances, svar
+    #@info "variances" variances, svar
     # from eeglab / rey Ramirez - ommitted constant normalization
     #variances = sum((data * S').^2, dims=1) ./ (size(data, 1) - 1)
 
     # Get the sorting indices based on variances (descending order)
     sorted_indices = sortperm(svar, rev = true)
-    @info sorted_indices
+    #@info sorted_indices
     # Sort the unmixing matrix and other parameters according to the sorted indices
     # Sort the unmixing matrix and other parameters according to the sorted indices
     myAmica = deepcopy(myAmica)
