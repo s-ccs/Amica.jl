@@ -320,11 +320,11 @@ The mixing matrix / spatial map, y = A * s
 
 From sources to sensors.
 
-Sphering is already included.
+Inverse sphering is already included.
 
 # See also
 [`unmixing`](@ref) [`recover_sources`](@ref)
 """
-mixing(x::AbstractAmica) = inv(sphering(x) * Matrix(x.A))
+mixing(x::AbstractAmica) = Matrix(x.A)' * inv(sphering(x))
 
 sphering(myAmica) = Matrix(myAmica.S)
