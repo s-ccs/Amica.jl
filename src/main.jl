@@ -325,6 +325,6 @@ Sphering is already included.
 # See also
 [`unmixing`](@ref) [`recover_sources`](@ref)
 """
-mixing(x::AbstractAmica) = inv(sphering(x) * inv(Matrix(x.A)))
+mixing(x::AbstractAmica) = inv(sphering(x) * Matrix(x.A))
 
 sphering(myAmica) = Matrix(myAmica.S)
