@@ -245,63 +245,86 @@ Fit `myAmica` on `data` and return the model.
     return myAmica
 end
 
-begin
-    function sort_according_to_var!(
-        myAmica::Amica.SingleModelAmica,
-        data::AbstractMatrix{T},
-    ) where {T<:Real}
-        # Get the variances of the recovered sources
-        winv = (mixing(myAmica))
-        #meanvar = sum(winv.^2).*sum((data').^2)/((chans*frames)-1); % from Rey Ramirez 8/07
-        variances = dropdims(sum(winv .^ 2, dims = 1) .* sum(data, dims = 1) .^ 2, dims = 1)
-        @info variances
-        # from eeglab / rey Ramirez - ommitted constant normalization
-        #variances = sum((data * S').^2, dims=1) ./ (size(data, 1) - 1)
 
-        # Get the sorting indices based on variances (descending order)
-        sorted_indices = sortperm(variances, rev = true)
-        @info sorted_indices
-        # Sort the unmixing matrix and other parameters according to the sorted indices
-        # Sort the unmixing matrix and other parameters according to the sorted indices
-        myAmica = deepcopy(myAmica)
-        myAmica.A = myAmica.A[:, sorted_indices]
-        myAmica.proportions = myAmica.proportions[sorted_indices, :]
-        myAmica.scale = myAmica.scale[sorted_indices, :]
-        myAmica.location = myAmica.location[sorted_indices, :]
-        myAmica.shape = myAmica.shape[sorted_indices, :]
-        #myAmica.S = myAmica.S[:,sorted_indices]
-
-        return myAmica
+function sort_according_to_var!(
+    myAmica::Amica.SingleModelAmica,
+    data::AbstractMatrix{T},
+) where {T<:Real}
+    # Get the variances of the recovered sources
+    winv = (mixing(myAmica))
+    #meanvar = sum(winv.^2).*sum((data').^2)/((chans*frames)-1); % from Rey Ramirez 8/07
+    variances = dropdims(sum(winv .^ 2, dims = 1) .* sum(data, dims = 1) .^ 2, dims = 1)
+    #        svar(i,h) = sum( alpha(1:num_mix_used(i,h),i,h) .* (mu(1:num_mix_used(i,h),i,h).^2 + ...
+    #    (gamma(3./rho(1:num_mix_used(i,h),i,h))./gamma(1./rho(1:num_mix_used(i,h),i,h)))./sbeta(1:num_mix_used(i,h),i,h).^2) );
+    # svar(i,h) = svar(i,h) * norm(A(:,i,h))^2;
+    svar = similar(variances)
+    N, n, m = myAmica.dims
+    for i = 1:n # go over components
+        svar[i] = sum(
+            myAmica.proportions[i, :] .* (
+                myAmica.location[i, :] .^ 2 .+
+                (gamma.(3 ./ myAmica.shape[i, :]) ./ gamma.(1 ./ myAmica.shape[i, :])) ./ myAmica.scale[i, :] .^ 2
+            ),
+        )
+        svar[i] *= norm(myAmica.A[:, i])^2
     end
 
+    @info "variances" variances, svar
+    # from eeglab / rey Ramirez - ommitted constant normalization
+    #variances = sum((data * S').^2, dims=1) ./ (size(data, 1) - 1)
 
-    """
-        recover_sources(data, myAmica)
+    # Get the sorting indices based on variances (descending order)
+    sorted_indices = sortperm(svar, rev = true)
+    @info sorted_indices
+    # Sort the unmixing matrix and other parameters according to the sorted indices
+    # Sort the unmixing matrix and other parameters according to the sorted indices
+    myAmica = deepcopy(myAmica)
+    myAmica.A = myAmica.A[:, sorted_indices]
+    myAmica.proportions = myAmica.proportions[sorted_indices, :]
+    myAmica.scale = myAmica.scale[sorted_indices, :]
+    myAmica.location = myAmica.location[sorted_indices, :]
+    myAmica.shape = myAmica.shape[sorted_indices, :]
+    #myAmica.S = myAmica.S[:,sorted_indices]
 
-    Recover sources from mixtures `data` using a fitted `SingleModelAmica`.
-    # See also
-    [`mixing`](@ref) [`unmixing`](@ref)
-    """
-    recover_sources(data, myAmica::AbstractAmica) = data * unmixing(myAmica)
-
-    """
-        unmixing(myAmica::SingleModelAmica)
-    Get the unmixing matrix from the fitted `SingleModelAmica` model.
-    S * inv(mixing) = S * inv(A) with S: sphering matrix
-
-    # See also
-    [`mixing`](@ref) [`recover_sources`](@ref)
-    """
-    unmixing(myAmica::AbstractAmica) = sphering(myAmica) * inv(mixing(myAmica))'
-
-    """
-        mixing(myAmica::SingleModelAmica)
-    The mixing matrix, y = A * s, with s: sources, y: eeg-data
-
-    # See also
-    [`unmixing`](@ref) [`recover_sources`](@ref)
-    """
-    mixing(myAmica::AbstractAmica) = Matrix(myAmica.A)
-
-    sphering(myAmica) = Matrix(myAmica.S)
+    return myAmica
 end
+
+
+"""
+    recover_sources(data, myAmica)
+
+Recover sources from mixtures `data` using a fitted `SingleModelAmica`.
+
+sources = data * unmixing
+
+[`mixing`](@ref) [`unmixing`](@ref)
+"""
+recover_sources(data, myAmica::AbstractAmica) = data * unmixing(myAmica)
+
+"""
+    unmixing(myAmica::SingleModelAmica)
+The unmixing matrix / spatial filter, W*y=s
+
+From sensors to sources.
+
+Sphering is already included.
+
+# See also
+[`mixing`](@ref) [`recover_sources`](@ref)
+"""
+unmixing(x::AbstractAmica) = sphering(x) * inv(Matrix(x.A))'
+
+"""
+    mixing(myAmica::SingleModelAmica)
+The mixing matrix / spatial map, y = A * s
+
+From sources to sensors.
+
+Inverse sphering is already included.
+
+# See also
+[`unmixing`](@ref) [`recover_sources`](@ref)
+"""
+mixing(x::AbstractAmica) = Matrix(x.A)' * inv(sphering(x))
+
+sphering(myAmica) = Matrix(myAmica.S)
