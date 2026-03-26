@@ -21,6 +21,7 @@ and fits it to the input data using the `amica!()` function.
 - `ArrayType::Type{<:DenseArray} = Array`: Array type to use (e.g., `Array` for CPU, `CuArray` for GPU).
 - `block_size::Int = 10_000`: Number of samples to process in each block for memory efficiency.
 - `num_threads::Int = 1`: Number of threads for parallel block processing.
+- `do_fit::Bool = true`: Whether to perform fitting immediately. If `false`, returns uninitialized model. Use amica!(myAmica,data) to fit
 - `kwargs...`: Additional keyword arguments passed to `amica!()` (e.g., `lrate`, `do_sphering`, `remove_mean`,`show_progress`,`show_timing``).
 
 # Returns
@@ -50,6 +51,7 @@ function StatsAPI.fit(
     ArrayType::Type{<:DenseArray} = Array,
     block_size = 10_000,
     num_threads = 1,
+    do_fit = true,
     kwargs...,
 ) where {AmicaKind<:AbstractAmica,T<:Real}
     (N, n) = size(data)
@@ -65,7 +67,9 @@ function StatsAPI.fit(
         block_size = block_size,
         num_threads = num_threads,
     )
-    amica!(amica, data; maxiter = maxiter, kwargs...)
+    if do_fit
+        amica!(amica, data; maxiter, kwargs...)
+    end
     return amica
 end
 
