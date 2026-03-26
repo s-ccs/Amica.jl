@@ -266,7 +266,7 @@ function sort_according_to_var!(
                 (gamma.(3 ./ myAmica.shape[i, :]) ./ gamma.(1 ./ myAmica.shape[i, :])) ./ myAmica.scale[i, :] .^ 2
             ),
         )
-        svar[i] *= norm(myAmica.A[i, :])^2
+        svar[i] *= norm(myAmica.A[:, i])^2
     end
 
     @info "variances" variances, svar
