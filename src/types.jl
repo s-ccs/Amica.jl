@@ -67,7 +67,6 @@ mutable struct SingleModelAmica{
     Array2<:DenseArray{T,2},
     Array3<:DenseArray{T,3},
 } <: AbstractAmica
-    dims::NTuple{3,Int}
     block_size::Int
     num_threads::Int
     proportions::Array2                                         # source density mixture proportions
@@ -93,6 +92,18 @@ mutable struct SingleModelAmica{
 
     pools::Vector{ObjectPool{T,Array1}}                         # one pool per thread
     acc::BlockAccumulators{T,Array2,Array3}
+end
+
+# Computed `dims` property for SingleModelAmica
+function Base.getproperty(m::SingleModelAmica, s::Symbol)
+    if s === :dims
+        return (
+            size(getfield(m, :Lt), 1),
+            size(getfield(m, :A), 2),
+            size(getfield(m, :scale), 2),
+        )
+    end
+    return getfield(m, s)
 end
 
 """
@@ -161,7 +172,6 @@ Create a single-model AMICA object.
         [ObjectPool{T,Array1}(block_size * n * m, 7) for _ = 1:num_threads]
 
     return SingleModelAmica{T,Array1,Array2,Array3}(
-        (N, n, m),
         block_size,
         num_threads,
         Array2(proportions),                       # proportions
