@@ -108,6 +108,9 @@ end
 
 Create a single-model AMICA object.
 """
+function SingleModelAmica(data::AbstractArray{T,2}; kwargs...) where {T}
+    return SingleModelAmica(T; ArrayType = typeof(data).name.wrapper, kwargs...)
+end
 @views function SingleModelAmica(
     T::Type{<:Real} = Float64;
     nsamples::Int,

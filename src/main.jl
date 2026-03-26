@@ -43,28 +43,27 @@ julia> model = fit(SingleModelAmica, data; m=4, maxiter=200, num_threads=4)
 """
 function StatsAPI.fit(
     amicaType::Type{AmicaKind},
-    data::Array{T,2};
+    data::ArrayType;
     m = 3,
     maxiter = 500,
     location = nothing,
     scale = nothing,
     A = nothing,
-    ArrayType::Type{<:DenseArray} = Array,
+    #ArrayType::Type{<:DenseArray} = Array,
     block_size = 10_000,
     num_threads = 1,
     do_fit = true,
     kwargs...,
-) where {AmicaKind<:AbstractAmica,T<:Real}
+) where {AmicaKind<:AbstractAmica,ArrayType<:AbstractArray}
     (N, n) = size(data)
     amica = AmicaKind(
-        T,
+        data,
         m = m,
         ncomps = n,
         nsamples = N,
         location = location,
         scale = scale,
         A = A,
-        ArrayType = ArrayType,
         block_size = block_size,
         num_threads = num_threads,
     )
