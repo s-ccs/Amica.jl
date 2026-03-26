@@ -30,7 +30,7 @@ the identity matrix. This preprocessing step decorrelates the input data and nor
 variance, which improves the numerical stability and convergence of ICA algorithms.
 
 calculates svd(x'*x), then constructs the sphering matrix S = U * Diagonal(1 ./ sqrt.(max.(S, 1e-15))) * U'
-Applies the sphering to x inplace
+Applies the sphering to x inplace.
 
 # Arguments
 - `x::AbstractMatrix{T}`: A matrix of shape (num_samples, num_features) containing multivariate data.
