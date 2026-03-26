@@ -6,6 +6,11 @@ CurrentModule = Amica
 
 Documentation for [AMICA.jl](https://github.com/s-ccs/Amica.jl) - a well performing [AMICA Fortran](https://sccn.ucsd.edu/~jason/amica_web.html) reimplementation with additional GPU support.
 
+## Tutorials
+
+- [Getting Started](getting_started.md): synthetic source separation with the minimal API.
+- [EEG Tutorial](eeg-example.md): a full EEG-style workflow covering fitting, source recovery, spatial maps, and reconstruction.
+
 ## Contributors
 
 ```@raw html
