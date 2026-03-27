@@ -18,7 +18,8 @@ makedocs(;
         "Home" => "index.md",
         "Introduction" => "introduction.md",
         "Getting Started" => "getting_started.md",
-        "Configuration" => "configuration.md",
+        "EEG Tutorial" => "eeg-example.md",
+        "Configuration / GPU" => "configuration.md",
         "Performance" => "performance.md",
         "Contribution?" => [
             "Contribution!" => "90-contributing.md",

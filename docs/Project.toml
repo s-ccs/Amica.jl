@@ -2,3 +2,5 @@
 Amica = "5c2eb853-6fc5-4f26-86bb-b4eb873bb098"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+UnfoldMakie = "69a5ce3b-64fb-4f22-ae69-36dd4416af2a"
+UnfoldSim = "ed8ae6d2-84d3-44c6-ab46-0baf21700804"

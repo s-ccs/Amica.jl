@@ -81,7 +81,6 @@ julia> update_parameters!(myAmica, data, lrate, true, true)
 # See also
 [`process_blocks!`](@ref), [`update_mixing!`](@ref), [`reparameterize!`](@ref)
 """
-#Updates Gaussian mixture parameters. It also returns g, kappa and lamda which are needed to apply the newton method.
 @views function update_parameters!(
     myAmica::AbstractAmica,
     data,
