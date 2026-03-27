@@ -48,5 +48,5 @@ jobs:
       - name: Run pre-commit
         run: SKIP=no-commit-to-branch pre-commit run -a
       - name: Debug git status
-        if: always()  # Run EVEN IF previous steps failed
+        if: always() # Run EVEN IF previous steps failed
         run: git status && git diff
