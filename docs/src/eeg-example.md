@@ -8,7 +8,7 @@ This tutorial shows an EEG-style workflow with `Amica.jl`
 
 ## Setup and Channel Selection
 
-```julia
+```@example synthetic_workflow
 using Amica
 using UnfoldSim
 using CairoMakie
@@ -26,7 +26,7 @@ nothing #hide
 
 Note that in difference to e.g. eeglab, or Unfold.jl, we need `samples x channels` in `Amica.jl`. Transpose if necessary!
 
-```julia
+```@example synthetic_workflow
 eeg, evts = UnfoldSim.predef_eeg(; multichannel=true)
 eeg = eeg[ch_ix, 1:10_000]' # sample x channel
 
@@ -34,6 +34,7 @@ model_sim = fit(
  SingleModelAmica,
  Float32.(eeg);
  maxiter=500,
+ show_progress=false,
  sort_by_variance=true,
 )
 nothing #hide
@@ -41,7 +42,7 @@ nothing #hide
 
 ## Inspect Recovered Sources
 
-```julia
+```@example synthetic_workflow
 ica_activations = recover_sources(eeg, model_sim)[1:1000, :]
 series(
  (ica_activations') .- range(0, 400, length=length(ch_ix)),
@@ -57,7 +58,7 @@ One can clearly spot the three simulated EEG traces! Nice!
 
 ## Plot Mixing Topographies
 
-```julia
+```@example synthetic_workflow
 f = Figure()
 
 A = mixing(model_sim)
