@@ -34,6 +34,7 @@ model_sim = fit(
  SingleModelAmica,
  Float32.(eeg);
  maxiter=500,
+ show_progress=false,
  sort_by_variance=true,
 )
 nothing #hide
