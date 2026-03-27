@@ -1,43 +1,3 @@
-"""
-    LearningRate{T} <: Real
-
-Structure holding learning rate parameters and state for AMICA optimization.
-
-Maintains both the current learning rates for the mixing matrix and shape parameters,
-as well as their base values and associated schedule parameters. Also tracks statistics
-like the number of decreases and increases for adaptive learning rate adjustment.
-
-# Fields
-- `lrate::T`: Current learning rate for mixing matrix updates (A and B parameters).
-- `lrate0::T`: Base learning rate for mixing matrix (used when resetting).
-- `shapelrate::T`: Current learning rate for shape parameters.
-- `shapelrate0::T`: Base learning rate for shape parameters.
-- `shape0::T`: Initial scaling factor for shape parameters.
-- `lratefact::T`: Factor by which to multiply learning rates when decreasing (e.g., 0.5).
-- `shapelratefact::T`: Factor for shape learning rate decrease (e.g., 0.1).
-- `min::T`: Minimum learning rate threshold below which optimization stops.
-- `maxdecs::T`: Maximum number of consecutive decreases before resetting base rate.
-- `max_incs::Int`: Maximum number of consecutive increases allowed.
-- `use_min_dll::Bool`: Whether to use minimum change in log-likelihood threshold.
-- `min_dll::T`: Minimum required change in log-likelihood per iteration.
-- `min_nd::T`: Minimum numerical deviation threshold.
-- `numdecs::Int`: Counter for consecutive learning rate decreases.
-- `numincs::Int`: Counter for consecutive learning rate increases.
-- `newtrate::T`: Learning rate for Newton's method updates.
-- `newt_ramp::Int`: Number of iterations over which to ramp up Newton learning rate.
-- `minrho::T`: Minimum value for shape parameter (default 1.0).
-- `maxrho::T`: Maximum value for shape parameter (default 2.0).
-
-# Examples
-```julia-repl
-julia> lrate = LearningRate{Float64}(lrate=0.1, shapelrate=0.05)
-julia> lrate.lrate
-0.1
-```
-
-# See also
-[`calculate_lrate!`](@ref)
-"""
 mutable struct LearningRate{T}
     lrate::T
     lrate0::T
@@ -178,7 +138,6 @@ julia> should_stop = calculate_lrate!(myAmica, 50, 50, true, lrate)
 # See also
 [`update_mixing!`](@ref), [`LearningRate`](@ref)
 """
-#Adjusts learning rate depending on log-likelihood growth during past iterations. How many depends on iterwin. Uses LearningRate type from types.jl
 function calculate_lrate!(
     myAmica::SingleModelAmica{T},
     iter::Int,
