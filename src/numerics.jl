@@ -89,7 +89,7 @@ julia> gpuDigamma(2.0)  # digamma(2) = 0.4227...
     if x < X
         # shift using recurrence formula
         n = X - unsafe_trunc(Int, x)
-        for ν = 1:n-1
+        for ν = 1:(n-1)
             ψ -= inv(z + ν)
         end
         ψ -= inv(z)

@@ -162,18 +162,16 @@ julia> update_parameters!(myAmica, data, lrate, true, true)
 
     # rho / shape
     @timeit_debug to "shape" if upd_shape
-        myAmica.shape .=
-            clamp.(
-                myAmica.shape .+ (
-                    lrate.shapelrate .* (
-                        1 .-
-                        (myAmica.shape ./ gpuDigamma.(1 .+ 1 ./ myAmica.shape)) .*
-                        drho_numer ./ sum_z
-                    )
-                ),
-                lrate.minrho,
-                lrate.maxrho,
-            )
+        myAmica.shape .= clamp.(
+            myAmica.shape .+ (
+                lrate.shapelrate .* (
+                    1 .-
+                    (myAmica.shape ./ gpuDigamma.(1 .+ 1 ./ myAmica.shape)) .* drho_numer ./ sum_z
+                )
+            ),
+            lrate.minrho,
+            lrate.maxrho,
+        )
     end
 
 end

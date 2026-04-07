@@ -145,8 +145,7 @@ end
     end
 
     @timeit_debug to "init proportions" begin
-        proportions = Array2(undef, n, m)
-        proportions .= one(T) * (1 / m)
+        proportions = fill(inv(T(m)), n, m)
     end
 
     @timeit_debug to "init location" if isnothing(location)
