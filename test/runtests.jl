@@ -1,17 +1,13 @@
 using Amica
 using Test
 
+#=
+Don't add your tests to runtests.jl. Instead, create files named
 
+    test-title-for-my-test.jl
 
-
-if  Sys.isapple()
-    # for metal, we need to have an apple system ;-)
-    @info "Running Metal Integration Suite..."
-    include("metal-integration.jl")
-end
-
-
-
+The file will be automatically included inside a `@testset` with title "Title For My Test".
+=#
 for (root, dirs, files) in walkdir(@__DIR__)
     for file in files
         if isnothing(match(r"^test-.*\.jl$", file))
@@ -23,4 +19,3 @@ for (root, dirs, files) in walkdir(@__DIR__)
         end
     end
 end
-
