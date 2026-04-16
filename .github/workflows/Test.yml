@@ -9,6 +9,21 @@ on:
 
 jobs:
   test:
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - "1"
+        os:
+          - ubuntu-latest
+          - macos-15
+        # This logic ensures x64 for Linux and arm64 for Apple Silicon
+        include:
+          - os: ubuntu-latest
+            arch: x64
+          - os: macos-15
+            arch: arm64
+    
     uses: ./.github/workflows/ReusableTest.yml
     with:
       os: ${{ matrix.os }}
