@@ -11,18 +11,25 @@ on:
     types: [opened, synchronize, reopened]
 
 concurrency:
-  # Skip intermediate builds: always.
-  # Cancel intermediate builds: only if it is a pull request build.
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
 
 jobs:
   test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x64
+          - os: macos-15
+            arch: arm64
+
     uses: ./.github/workflows/ReusableTest.yml
     with:
-      os: ubuntu-latest
+      os: ${{ matrix.os }}
       version: "1"
-      arch: x64
+      arch: ${{ matrix.arch }}
       allow_failure: false
       run_codecov: true
     secrets:
