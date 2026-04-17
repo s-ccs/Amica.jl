@@ -34,12 +34,25 @@ jobs:
     continue-on-error: ${{ inputs.allow_failure }}
 
     steps:
+    
       - uses: actions/checkout@v6
-      - name: Install Fortran/MPI/BLAS toolchain
+
+      - name: "Install Toolchain (Linux)"
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y gfortran make openmpi-bin libopenmpi-dev libopenblas-dev
 
+      - name: "Install Toolchain (macOS)"
+        if: runner.os == 'macOS'
+        run: |
+          brew install gcc open-mpi openblas
+          gcc_bin="$(brew --prefix gcc)/bin"
+          gfortran_bin="$(find "$gcc_bin" -maxdepth 1 -type f -name 'gfortran-*' | sort | tail -n 1)"
+          mkdir -p "$RUNNER_TEMP/compiler-bin"
+          ln -sf "$gfortran_bin" "$RUNNER_TEMP/compiler-bin/gfortran"
+          echo "$RUNNER_TEMP/compiler-bin" >> "$GITHUB_PATH"
+      
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ inputs.version }}

@@ -214,7 +214,7 @@ Fit `myAmica` on `data` and return the model.
 
             # Checks termination criterion
             if iter > iterwin
-                sdll = sum(dLL[iter-iterwin+1:iter]) / iterwin
+                sdll = sum(dLL[(iter-iterwin+1):iter]) / iterwin
                 if (sdll > 0) && (sdll < mindll)
                     break
                 end

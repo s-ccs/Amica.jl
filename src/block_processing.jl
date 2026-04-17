@@ -217,12 +217,11 @@ julia> process_blocks!(myAmica, data, W, true, 1, 10)  # Thread 1 processes its 
         # rho <= 2 ? sum(z * fp / y) : sum(z * fp * fp)
         @timeit_debug lto "dmu_denom" begin
             scratch = pool_acquire!("scratch", pool, (n_samples, n, m))
-            scratch .=
-                ifelse.(
-                    push_dimension(myAmica.shape) .<= T(2),
-                    z .* fp ./ notzero.(y),
-                    z .* fp .* fp,
-                )
+            scratch .= ifelse.(
+                push_dimension(myAmica.shape) .<= T(2),
+                z .* fp ./ notzero.(y),
+                z .* fp .* fp,
+            )
 
 
             dmu_denom_t .+= sum(scratch, dims = 1)[1, :, :] .* myAmica.scale
