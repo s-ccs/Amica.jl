@@ -52,7 +52,8 @@ function run_fortran(config::String, out_path::String)
 
     base_cmd = `$amica_exe $full_filename`
     cmd = Cmd(base_cmd; dir = script_dir)
-    run(setenv(cmd, "OUT_PATH" => resolved_out_path, "OMPI_MCA_plm" => "isolated"))
+    # addenv (not setenv): Open MPI needs HOME et al. from the parent env
+    run(addenv(cmd, "OUT_PATH" => resolved_out_path, "OMPI_MCA_plm" => "isolated"))
 end
 
 function read_fdt(

@@ -240,32 +240,39 @@ Fit `myAmica` on `data` and return the model.
     end
     finish!(p)
     if sort_by_variance
-        sort_according_to_var!(myAmica, data)
+        sort_according_to_var!(myAmica)
     end
     return myAmica
 end
 
 
-function sort_according_to_var!(
-    myAmica::Amica.SingleModelAmica,
-    data::AbstractMatrix{T},
-) where {T<:Real}
-    @warn "It is unclear right now whether this function works correctly, as the calculated variances are all very close to 1 - we might have missed a normalisation step somwhere. Your mileage might vary"
-    # Get the variances of the recovered sources
-    winv = (mixing(myAmica))
-    #meanvar = sum(winv.^2).*sum((data').^2)/((chans*frames)-1); % from Rey Ramirez 8/07
-    variances = dropdims(sum(winv .^ 2, dims = 1) .* sum(data, dims = 1) .^ 2, dims = 1)
-    #        svar(i,h) = sum( alpha(1:num_mix_used(i,h),i,h) .* (mu(1:num_mix_used(i,h),i,h).^2 + ...
-    #    (gamma(3./rho(1:num_mix_used(i,h),i,h))./gamma(1./rho(1:num_mix_used(i,h),i,h)))./sbeta(1:num_mix_used(i,h),i,h).^2) );
-    # svar(i,h) = svar(i,h) * norm(A(:,i,h))^2;
-    svar = similar(variances)
-    N, n, m = myAmica.dims
-    A = Matrix(myAmica.A)
+"""
+    sort_according_to_var!(myAmica::Amica.SingleModelAmica)
+
+Sort the components of `myAmica` in-place by decreasing variance of each
+component's contribution to the (pre-sphering) data.
+
+The component variance is the model source variance (generalized Gaussian
+mixture) multiplied by the squared norm of the component's sensor-space mixing
+map (`mixing(myAmica)`). The internal unmixing matrix `A` is reparameterized to
+unit column norm during fitting, so the raw-data scale is only recovered
+through the sensor-space map. Same formula as EEGlab's `loadmodout15.m`:
+`A = pinv(W*S); svar = modelvar * norm(A(:,i))^2` (in EEGlab's column
+convention that is the column norm; in this row-convention code it is the row
+norm of `mixing()`).
+"""
+function sort_according_to_var!(myAmica::Amica.SingleModelAmica)
+    n = size(myAmica.A, 2)
     proportions = Matrix(myAmica.proportions)
     location = Matrix(myAmica.location)
     scale = Matrix(myAmica.scale)
     shape = Matrix(myAmica.shape)
 
+    # squared norms of the sensor-space mixing maps (rows of mixing())
+    mix = mixing(myAmica)
+    map_norms = dropdims(sum(mix .^ 2, dims = 2), dims = 2)
+
+    svar = similar(map_norms)
     for i = 1:n # go over components
         svar[i] = sum(
             proportions[i, :] .* (
@@ -273,26 +280,15 @@ function sort_according_to_var!(
                 (gamma.(3 ./ shape[i, :]) ./ gamma.(1 ./ shape[i, :])) ./ scale[i, :] .^ 2
             ),
         )
-        svar[i] *= norm(A[:, i])^2
+        svar[i] *= map_norms[i]
     end
 
-    #@info "variances" variances, svar
-    # from eeglab / rey Ramirez - ommitted constant normalization
-    #variances = sum((data * S').^2, dims=1) ./ (size(data, 1) - 1)
-
-    # Get the sorting indices based on variances (descending order)
     sorted_indices = sortperm(svar, rev = true)
-    #@info sorted_indices
-    # Sort the unmixing matrix and other parameters according to the sorted indices
-    # Sort the unmixing matrix and other parameters according to the sorted indices
-    myAmica = deepcopy(myAmica)
     myAmica.A = myAmica.A[:, sorted_indices]
     myAmica.proportions = myAmica.proportions[sorted_indices, :]
     myAmica.scale = myAmica.scale[sorted_indices, :]
     myAmica.location = myAmica.location[sorted_indices, :]
     myAmica.shape = myAmica.shape[sorted_indices, :]
-    #myAmica.S = myAmica.S[:,sorted_indices]
-
     return myAmica
 end
 
