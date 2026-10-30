@@ -1,5 +1,3 @@
-const Dims{N} = NTuple{N,Integer} where {N}
-
 # Set to true to detect use-after-release bugs (fills released arrays with NaN)
 const DEBUG_POOL = false
 
