@@ -15,6 +15,12 @@ and fits it to the input data using the `amica!()` function.
 # Keyword Arguments
 - `m::Int = 3`: Number of mixture components in the generalized Gaussian model.
 - `maxiter::Int = 500`: Maximum number of iterations.
+- `ncomps::Union{Nothing,Int} = nothing`: Number of components. When less than the number of
+  channels, the data is PCA-reduced to `ncomps` dimensions (and whitened in that subspace)
+  before fitting, as typically done for EEG analysis (MNE's `ICA(n_components=...)`, eeglab's
+  `runica ... 'pca'`). Values outside `1:#channels` are clamped; `nothing` keeps the full
+  rank (one component per channel). The sensor-space maps from
+  `mixing`/`unmixing`/`recover_sources` still refer to the original channels.
 - `location::Union{Nothing, Array} = nothing`: Initial location parameters. If `nothing`, initialized automatically.
 - `scale::Union{Nothing, Array} = nothing`: Initial scale parameters. If `nothing`, initialized automatically.
 - `A::Union{Nothing, Array} = nothing`: Initial unmixing matrix. If `nothing`, initialized as random near-identity.
@@ -36,6 +42,8 @@ julia> typeof(model)
 SingleModelAmica{Float64, Vector{Float64}, Matrix{Float64}, Array{Float64, 3}}
 
 julia> model = fit(SingleModelAmica, data; m=4, maxiter=200, num_threads=4)
+
+julia> model = fit(SingleModelAmica, data; ncomps=16)  # PCA-reduce 32 channels to 16 before ICA
 ```
 
 # See also
@@ -46,6 +54,7 @@ function StatsAPI.fit(
     data::ArrayType;
     m = 3,
     maxiter = 500,
+    ncomps = nothing,
     location = nothing,
     scale = nothing,
     A = nothing,
@@ -56,10 +65,11 @@ function StatsAPI.fit(
     kwargs...,
 ) where {AmicaKind<:AbstractAmica,ArrayType<:AbstractArray}
     (N, n) = size(data)
+    ncomps = isnothing(ncomps) ? n : clamp(ncomps, 1, n)
     amica = AmicaKind(
         data,
         m = m,
-        ncomps = n,
+        ncomps = ncomps,
         nsamples = N,
         location = location,
         scale = scale,
@@ -68,7 +78,7 @@ function StatsAPI.fit(
         num_threads = num_threads,
     )
     if do_fit
-        amica!(amica, data; maxiter, kwargs...)
+        amica!(amica, data; maxiter, ncomps, kwargs...)
     end
     return amica
 end
@@ -119,9 +129,13 @@ end
     amica!(myAmica, data; lrate=LearningRate(), remove_mean=true, do_sphering=true,
            show_progress=true, maxiter=50, do_newton=true, newt_start_iter=50,
            iterwin=10, update_shape=true, data_inplace=false, mindll=1e-8,
-           dump_dir=nothing, show_timing=false)
+           dump_dir=nothing, show_timing=false, ncomps=nothing)
 
 Fit `myAmica` on `data` and return the model.
+
+When `ncomps` is less than the number of channels, the data is PCA-reduced to
+`ncomps` dimensions (and whitened in that subspace) before fitting; requires
+`do_sphering=true`.
 """
 @views function amica!(
     myAmica::AbstractAmica,
@@ -129,6 +143,7 @@ Fit `myAmica` on `data` and return the model.
     lrate::LearningRate{T} = LearningRate{T}(),
     remove_mean::Bool = true,
     do_sphering::Bool = true,
+    ncomps::Union{Nothing,Int} = nothing,
     show_progress::Bool = true,
     maxiter::Int = 50,
     do_newton::Bool = true,
@@ -156,9 +171,9 @@ Fit `myAmica` on `data` and return the model.
     end
 
     @timeit_debug to "sphering" if do_sphering
-        S = sphering!(working_data)
+        S, lldet, working_data = sphering!(working_data; ncomps)
         myAmica.S = S
-        myAmica.LLdetS = logabsdet(S |> Array)[1]
+        myAmica.LLdetS = lldet
     else
         myAmica.S = I
         myAmica.LLdetS = 0
@@ -310,7 +325,9 @@ The unmixing matrix / spatial filter, W*y=s
 
 From sensors to sources.
 
-Sphering is already included.
+Sphering is already included. For a model fit after PCA reduction
+(`ncomps < #channels`) this has shape (num_channels, ncomps), so applying it to
+the original all-channel data back-projects onto the retained components.
 
 # See also
 [`mixing`](@ref) [`recover_sources`](@ref)
@@ -323,11 +340,12 @@ The mixing matrix / spatial map, y = A * s
 
 From sources to sensors.
 
-Inverse sphering is already included.
+Inverse sphering is already included. For a model fit after PCA reduction
+(`ncomps < #channels`) this has shape (ncomps, num_channels).
 
 # See also
 [`unmixing`](@ref) [`recover_sources`](@ref)
 """
-mixing(x::AbstractAmica) = Matrix(x.A)' * inv(sphering(x))
+mixing(x::AbstractAmica) = Matrix(x.A)' * pinv(sphering(x))
 
 sphering(myAmica) = Matrix(myAmica.S)
