@@ -53,9 +53,6 @@ series(
 
 One can clearly spot the three simulated EEG traces! Nice!
 
-!!! important
-    One can also see, that sorting by variance currently doesnt work properly.
-
 ## Plot Mixing Topographies
 
 ```@example synthetic_workflow
