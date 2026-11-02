@@ -167,7 +167,7 @@ end
 
 
     @timeit_debug to "init pools" pools =
-        [ObjectPool{T,Array1}(block_size * n * m, 7) for _ = 1:num_threads]
+        [ObjectPool{T,Array1}(block_size * n * m, 8) for _ = 1:num_threads]
 
     return SingleModelAmica{T}(
         block_size,

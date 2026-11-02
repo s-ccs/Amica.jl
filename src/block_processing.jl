@@ -59,6 +59,11 @@ julia> process_blocks!(myAmica, data, W, true, 1, 10)  # Thread 1 processes its 
     newton_sigma2_t = myAmica.acc.newton_sigma2[:, tid]
     Lt_accum_t = myAmica.acc.Lt_accum[:, tid]
 
+    # Q = qconst * abs(y)^rho; depends only on model parameters, invariant across blocks
+    @timeit_debug lto "qconst" QConst =
+        .-log(T(2)) .- (loggamma.(T(1) .+ T(1) ./ myAmica.shape)) .+
+        log.(myAmica.proportions) .+ log.(myAmica.scale)
+
     for block = start_block:end_block
         lower = (1 + ((block - 1) * myAmica.block_size))
         upper = (min(N, block * myAmica.block_size))
@@ -81,21 +86,17 @@ julia> process_blocks!(myAmica, data, W, true, 1, 10)  # Thread 1 processes its 
 
         @timeit_debug lto "y_rho" begin
             y_rho = pool_acquire!("y_rho", pool, (n_samples, n, m))
+            # log(|y|) with zeros replaced by eps; reused by drho_numer below
+            logabsy = pool_acquire!("logabsy", pool, (n_samples, n, m))
+            logabsy .= log.(abs.(notzero.(y)))
 
             # calculate y_rho
             # y_rho = abs(y) ^ (rho - 1)
-            y_rho .=
-                exp.((push_dimension(myAmica.shape .- T(1.0))) .* log.(abs.(notzero.(y))))
+            y_rho .= exp.((push_dimension(myAmica.shape .- T(1.0))) .* logabsy)
         end
 
         # q and u
         begin
-            # Q = qconst * abs(y)^rho
-            # Q = qconst * abs(y)^(rho - 1) * abs(y)
-            @timeit_debug lto "qconst" QConst =
-                .-log(T(2)) .- (loggamma.(T(1) .+ T(1) ./ myAmica.shape)) .+
-                log.(myAmica.proportions) .+ log.(myAmica.scale)
-
             Q = pool_acquire!("Q", pool, (n_samples, n, m))
 
             @timeit_debug lto "Q" Q .= push_dimension(QConst) .- (y_rho .* abs.(y))
@@ -156,12 +157,18 @@ julia> process_blocks!(myAmica, data, W, true, 1, 10)  # Thread 1 processes its 
         @timeit_debug lto "drho_numer" begin
             scratch = pool_acquire!("scratch", pool, (n_samples, n, m))
             @timeit_debug lto "abs" scratch .= y_rho .* abs.(y)
+            # log(scratch) == shape .* logabsy; reuses the log from the y_rho step
             @timeit_debug lto "log" scratch .=
-                ifelse.(scratch .>= T(1.0e-16), z .* log.(scratch) .* scratch, T(0.0))
+                ifelse.(
+                    scratch .>= T(1.0e-16),
+                    z .* (push_dimension(myAmica.shape) .* logabsy) .* scratch,
+                    T(0.0),
+                )
             @timeit_debug lto "sum" drho_numer_t .+= sum(scratch, dims = 1)[1, :, :]
             pool_release!("scratch", pool, scratch)
         end
         pool_release!("y_rho", pool, y_rho)
+        pool_release!("logabsy", pool, logabsy)
 
         # g = sum(scale * z * fp, dims=3)
         # accumulate g' * source_signals
