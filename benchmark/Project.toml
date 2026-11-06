@@ -1,0 +1,15 @@
+name = "benchmark"
+uuid = "a8e06661-c4c4-4d47-b2a6-8bd689ef1261"
+version = "0.1.0"
+authors = ["Valentin Morlock", "Alexander Lulkin", "Benedikt V. Ehinger"]
+
+[deps]
+Amica = "5c2eb853-6fc5-4f26-86bb-b4eb873bb098"
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+
+[sources]
+Amica = {path = "/home/agent/dev/Amica/"}
+
+[compat]
+JSON3 = "1.14.4"

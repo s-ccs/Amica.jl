@@ -20,3 +20,11 @@ Using multithreading and a GPU backend should be avoided, the GPU already parall
 Increasing thread count effectively reduces runtime, given a sufficient number of CPU cores, but benchmarks have shown that results diminish around 16 threads. It might therefore be more efficient to choose a smaller number of threads and instead run multiple AMICAs in parallel.
 
 ![barplot of runtime vs. thread count](runtime_vs_threadcount.svg)
+
+## Benchmarking against other implementations
+
+`benchmark/` contains a harness (ported from the MSc thesis scripts) for
+timing Amica.jl against the JAX-based Python implementation
+[jamica](https://github.com/snesmaeili/jamica) on CPU and CUDA, including a
+log-likelihood agreement check. See `benchmark/README.md`; setup on a CUDA
+machine is one script: `./benchmark/install_cuda_machine.sh`.
