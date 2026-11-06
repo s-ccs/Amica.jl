@@ -61,8 +61,12 @@ julia --project=benchmark benchmark/compare.jl
   settings — Newton stays off because `newt_start=50 > 40` iterations), same
   data, same block size.
 - Sphering matched: both do ZCA whitening on mean-removed data, full rank.
-- Init is seeded per side (`Random.seed!(42)` / `random_state=42`); RNG streams
-  differ across languages, so final LLs agree only approximately.
+- Single-core CPU runs: julia uses `--threads=1` with BLAS pinned to 1 thread
+  (OpenBLAS otherwise spins a pool on the small gemms — measured ~4x user time
+  vs wall); jamica is pinned to one core via `os.sched_setaffinity` (XLA's
+  thread pool ignores `--xla_cpu_multi_thread_eigen` on jax 0.12).
+- Init is seeded per side (`Random.seed!(42)` / `random_state=42`); final LLs
+  agree to ~1e-4 on the same data, and `compare.jl` warns above 0.25.
 
 ## Results
 

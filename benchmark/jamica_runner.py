@@ -93,6 +93,11 @@ def main():
     # force CPU before jax is imported, so cpu runs stay on CPU on CUDA machines
     if cfg["device"] == "cpu":
         os.environ["JAX_PLATFORMS"] = "cpu"
+        # pin to 1 core: XLA spins a thread pool across all cores on jax 0.12
+        # (--xla_cpu_multi_thread_eigen is ignored there), which would make the
+        # CPU comparison unfair vs julia threads=1
+        if hasattr(os, "sched_setaffinity"):
+            os.sched_setaffinity(0, {0})
 
     import jax
     from jamica import Amica

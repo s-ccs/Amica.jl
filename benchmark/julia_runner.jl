@@ -1,6 +1,11 @@
 using Amica
 using JSON3
+using LinearAlgebra
 using Random
+
+# the runner's threads config is julia Threads; BLAS would otherwise spin its
+# own pool on the small gemms (measured ~4x user time vs wall) - keep 1 thread
+BLAS.set_num_threads(1)
 
 include(joinpath(@__DIR__, "..", "test", "util.jl"))
 
