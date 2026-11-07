@@ -137,7 +137,7 @@ def main():
     path.write_text(json.dumps(out, indent=2) + "\n")
 
     ll_str = "nothing" if out["ll_final"] is None else f"{out['ll_final']:.4f}"
-    print(f"jamica fit_time_s={fit_time:.3f} n_iter_run={out['n_iter_run']} ll_final={ll_str} -> {path}")
+    print(f"jamica [{jax.default_backend()}] fit_time_s={fit_time:.3f} n_iter_run={out['n_iter_run']} ll_final={ll_str} -> {path}")
 
 
 if __name__ == "__main__":

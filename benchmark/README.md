@@ -14,8 +14,10 @@ records the same result schema as
 ```
 
 Creates the `benchmark` Julia project (local Amica + CUDA + JSON3) and a Python
-venv at `benchmark/.venv` with jamica + JAX-CUDA. Requires an NVIDIA GPU with
-CUDA 12.
+uv venv at `benchmark/.venv` with jamica + JAX-CUDA. Requires `uv` and an
+NVIDIA GPU with CUDA 12; the installer fails loudly if jax falls back to CPU
+(then run `uv pip install --python .venv/bin/python "jax[cuda12]"` and check
+the driver, which must be >= CUDA 12 capable, i.e. >= 525).
 
 ## Run
 
