@@ -6,7 +6,7 @@ Takes the same 7-field config as julia_runner.jl:
     dataset implementation device block_size precision threads n_iter
 
 Does a 1-iteration JIT warm-up fit (excluded from timing), then the timed
-max_iter fit, and writes benchmark/ll/jamica_<dataset>_<device>_<precision>.json
+max_iter fit, and writes benchmark/ll/jamica_<dataset>_<device>_<precision>_t<threads>.json
 with fit_time_s, ll_final and the full log-likelihood history (same schema as
 snesmaeili/jamica-benchmark's runners).
 """
@@ -133,7 +133,7 @@ def main():
 
     ll_dir = BENCH_DIR / "ll"
     ll_dir.mkdir(exist_ok=True)
-    path = ll_dir / f"jamica_{cfg['dataset']}_{cfg['device']}_{cfg['precision']}.json"
+    path = ll_dir / f"jamica_{cfg['dataset']}_{cfg['device']}_{cfg['precision']}_t{cfg['threads']}.json"
     path.write_text(json.dumps(out, indent=2) + "\n")
 
     ll_str = "nothing" if out["ll_final"] is None else f"{out['ll_final']:.4f}"

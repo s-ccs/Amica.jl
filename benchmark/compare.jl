@@ -34,8 +34,8 @@ function load_bench(path)
     return JSON3.read(read(path, String))
 end
 
-function load_ll(implementation::String, dataset::String, device::String, precision::String)
-    path = joinpath(BENCH_DIR, "ll", "$(implementation)_$(dataset)_$(device)_$(precision).json")
+function load_ll(implementation::String, dataset::String, device::String, precision::String, threads::Int)
+    path = joinpath(BENCH_DIR, "ll", "$(implementation)_$(dataset)_$(device)_$(precision)_t$(threads).json")
     isfile(path) || return nothing
     return JSON3.read(read(path, String))
 end
@@ -49,7 +49,7 @@ function gather_rows()
         for s in samples
             cfg = s.params
             impl = String(cfg.implementation)
-            ll = load_ll(impl, String(cfg.dataset), String(cfg.device), String(cfg.precision))
+            ll = load_ll(impl, String(cfg.dataset), String(cfg.device), String(cfg.precision), Int(cfg.threads))
             ll_final = ll === nothing ? nothing : (ll.ll_final === nothing ? nothing : Float64(ll.ll_final))
             n_iter_run = ll === nothing ? -1 : Int(ll.n_iter_run)
             fit_time_s = ll === nothing ? NaN : Float64(ll.fit_time_s)

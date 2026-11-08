@@ -47,7 +47,7 @@ julia --project=benchmark benchmark/compare.jl
   everything in `benchmark/benchmarks.json` (suite mode resumes/prunes).
 - Both runners do a **1-iteration warm-up fit** (JIT/compile excluded) and
   report `fit_time_s` for the timed run only; ms/iter = `fit_time_s / n_iter`.
-- Each runner writes `benchmark/ll/<impl>_<dataset>_<device>_<precision>.json`
+- Each runner writes `benchmark/ll/<impl>_<dataset>_<device>_<precision>_t<threads>.json`
   with the final log-likelihood and full LL history.
 - `compare.jl` joins timings and LL results and warns when final LLs drift
   apart between implementations — in that case the timing comparison is not

@@ -134,7 +134,8 @@ function run_benchmark(dataset, device, block_size, precision, precision_str, nu
 
     ll_dir = joinpath(BENCH_DIR, "ll")
     mkpath(ll_dir)
-    open(joinpath(ll_dir, "julia_$(dataset)_$(device)_$(precision_str).json"), "w") do io
+    # threads in the key: julia t1 and t16 must not overwrite each other's timing
+    open(joinpath(ll_dir, "julia_$(dataset)_$(device)_$(precision_str)_t$(num_threads).json"), "w") do io
         JSON3.write(io, result)
         write(io, '\n')
     end
